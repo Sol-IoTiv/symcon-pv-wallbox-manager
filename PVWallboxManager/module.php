@@ -303,11 +303,15 @@ class PVWallboxManager extends IPSModule
 
     public function RequestAction($Ident, $Value)
     {
-        switch ($Ident) {
+            switch ($Ident) {
             case 'ModulAktiv_Switch':
                 $this->SetValue('ModulAktiv_Switch', $Value);
                 IPS_SetProperty($this->InstanceID, 'ModulAktiv', $Value);
                 IPS_ApplyChanges($this->InstanceID);
+            if (!$Value) {
+                $this->SetForceState(1);
+                $this->LogTemplate('info', 'Modul deaktiviert – Wallbox auf Nicht Laden gestellt (FRC=1).');
+            }
             break;
 
             case "UpdateStatus":
@@ -1713,9 +1717,9 @@ class PVWallboxManager extends IPSModule
         // Modus-Text bleibt wie bisher (wegen Prozent und Emojis!)
         $modus = '☀️ PVonly (nur PV-Überschuss)';
         if ($this->GetValue('ManuellLaden')) {
-            $phasen = $this->GetValue('ManuellPhasen');
-            $ampere = $this->GetValue('ManuellAmpere');
-            $modus = "🔌 Manuell: Vollladen ({$phasen}-phasig, {$ampere} A)";
+            $phasenIst = $this->GetValue('Phasenmodus');   
+            $ampere    = $this->GetValue('ManuellAmpere');
+            $modus     = "🔌 Manuell: Vollladen ({$phasenIst}-phasig, {$ampere} A)";
         } elseif ($this->GetValue('PV2CarModus')) {
             $prozent = $this->GetValue('PVAnteil');
             $modus = "🌞 PV-Anteil laden ({$prozent} %)";
