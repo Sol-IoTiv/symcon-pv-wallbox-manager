@@ -309,8 +309,7 @@ class PVWallboxManager extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'ModulAktiv', $Value);
                 IPS_ApplyChanges($this->InstanceID);
             if (!$Value) {
-////                $this->SetForceState(1);
-                $this->SetChargingEnabled(false);
+                $this->SetForceState(1);
                 $this->LogTemplate('info', 'Modul deaktiviert – Wallbox auf Nicht Laden gestellt (FRC=1).');
             }
             break;
@@ -742,8 +741,7 @@ class PVWallboxManager extends IPSModule
 
             if ($startZaehler >= $startHysterese && !$aktFreigabe) {
                 $this->LogTemplate('ok', "Ladefreigabe: Start-Hysterese erreicht ($startZaehler x >= $minLadeWatt W). Ladefreigabe aktivieren.");
-////                $this->SetForceState(2);
-                $this->SetChargingEnabled(true);
+                $this->SetForceState(2);
             }
         } else {
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
@@ -758,8 +756,7 @@ class PVWallboxManager extends IPSModule
             if ($stopZaehler >= $stopHysterese && $aktFreigabe) {
                 $this->LogTemplate('warn', "Ladefreigabe: Stop-Hysterese erreicht ($stopZaehler x <= $minStopWatt W). Ladefreigabe deaktivieren.");
                 if ($this->GetValue('AccessStateV2') != 1) {
-////                    $this->SetForceState(1);
-                    $this->SetChargingEnabled(false);
+                $this->SetForceState(1);
                 }
             }
         } else {
@@ -817,8 +814,7 @@ class PVWallboxManager extends IPSModule
 
         // 7. Wallbox steuern: Laden erzwingen + Ampere setzen
 ////        $this->SetPhaseMode($anzPhasenGewuenscht);
-////        $this->SetForceState(2);
-        $this->SetChargingEnabled(true);
+        $this->SetForceState(2);
         $this->SetChargingCurrent($ampereGewuenscht);
 
         // 8. Logging
@@ -916,8 +912,7 @@ class PVWallboxManager extends IPSModule
 
             if ($startZaehler >= $startHysterese && !$aktFreigabe) {
                 $this->LogTemplate('ok', "PV2Car: Start-Hysterese erreicht ({$startZaehler} x >= {$minLadeWatt} W). Ladefreigabe aktivieren.");
-////                $this->SetForceState(2);
-                $this->SetChargingEnabled(true);
+                $this->SetForceState(2);
                 IPS_Sleep(500);
                 $aktFreigabe = true;
             }
@@ -1442,8 +1437,7 @@ class PVWallboxManager extends IPSModule
 
         // --- NUR EINMAL zentral alles erledigen ---
         if ($this->GetValue('AccessStateV2') != 1) {
-////            $this->SetForceState(1);
-            $this->SetChargingEnabled(false);
+            $this->SetForceState(1);
             $this->LogTemplate('info', "Kein Fahrzeug verbunden – Wallbox bleibt gesperrt.");
         }
         $this->SetTimerNachModusUndAuto($car);
@@ -1688,8 +1682,7 @@ class PVWallboxManager extends IPSModule
                     'ok',
                     "Ziel-SoC erreicht (Aktuell: {$socAktuell}%, Ziel: {$socZiel}%) – beende Ladung."
                 );
-////                $this->SetForceState(1);
-                $this->SetChargingEnabled(false);
+                $this->SetForceState(1);
                 $this->ResetModiNachLadeende();
                 return;
             }
@@ -1708,8 +1701,7 @@ class PVWallboxManager extends IPSModule
                         'ok',
                         "Keine Ladeleistung mehr – beende Ladung nach {$cnt} Versuchen."
                     );
-////                    $this->SetForceState(1);
-                    $this->SetChargingEnabled(false);
+                    $this->SetForceState(1);
                     $this->ResetModiNachLadeende();
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                 }
