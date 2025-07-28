@@ -758,131 +758,58 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        // Phasen aus Benutzer-Vorgabe (1 = 1-phasig, 2 = 3-phasig)
-        $anzPhasenGewuenscht = $this->GetValue('ManuellPhasen');  // 1 oder 2 (2 = 3-phasig)
-        $ampereGewuenscht = $this->GetValue('ManuellAmpere');
+        // 1. Benutzervorgaben einlesen
+        $anzPhasenGewuenscht = $this->GetValue('ManuellPhasen') == 2 ? 2 : 1; // 1 = einphasig, 2 = dreiphasig
+        $ampereGewuenscht    = $this->GetValue('ManuellAmpere');
 
-        // Sicherstellen, dass Werte im erlaubten Bereich liegen (Notbremse, falls jemand im Backend Quatsch setzt)
-        $ampereGewuenscht = max($this->ReadPropertyInteger('MinAmpere'), min($this->ReadPropertyInteger('MaxAmpere'), $ampereGewuenscht));
-        $anzPhasenGewuenscht = ($anzPhasenGewuenscht == 2) ? 2 : 1;
+        // 2. Werte auf erlaubten Bereich beschränken
+        $minAmp = $this->ReadPropertyInteger('MinAmpere');
+        $maxAmp = $this->ReadPropertyInteger('MaxAmpere');
+        $ampereGewuenscht = max($minAmp, min($maxAmp, $ampereGewuenscht));
 
-        // Umschaltung auf gewünschte Phasen (1 oder 3)
+        // 3. Phasenmodus umschalten
         $this->PruefeUndSetzePhasenmodus($anzPhasenGewuenscht);
 
-        // Aktuellen Phasenmodus auslesen, falls Umschaltung nicht sofort möglich war
+        // 4. Tatsächliche Phasen auslesen (kann durch Fahrzeug abweichen)
         $anzPhasenIst = max(1, $this->GetValue('Phasenmodus'));
 
-        // Überschuss für die Visualisierung mit korrekter Phasenanzahl berechnen
+        // 5. Überschuss neu berechnen für Visualisierung
         $werte = $this->BerechnePVUeberschussKomplett($anzPhasenIst);
-
-        // Felder absichern, nie "Undefined array key"!
-        $pv            = $werte['pv']            ?? 0;
-        $haus          = $werte['haus']          ?? 0;
-        $wallbox       = $werte['wallbox']       ?? 0;
-        $batterie      = $werte['batterie']      ?? 0;
+        $pv            = $werte['pv']           ?? 0;
+        $haus          = $werte['haus']         ?? 0;
+        $wallbox       = $werte['wallbox']      ?? 0;
+        $batterie      = $werte['batterie']     ?? 0;
         $ueberschuss_w = $werte['ueberschuss_w'] ?? 0;
         $ueberschuss_a = $werte['ueberschuss_a'] ?? 0;
 
-        // Visualisierungswerte setzen
-        $this->SetValue('PV_Ueberschuss', $ueberschuss_w);
+        $this->SetValue('PV_Ueberschuss',   $ueberschuss_w);
         $this->SetValue('PV_Ueberschuss_A', $ueberschuss_a);
-        $this->SetValueAndLogChange('Phasenmodus', $anzPhasenIst, 'Genutzte Phasen', '', 'debug');
 
-        // Wallbox: Manuellen Ampere-Wert setzen (immer mit "force"-Funktion!)
-////        $this->SetForceStateAndAmpereIfChanged($anzPhasenGewuenscht, $ampereGewuenscht);
+        // 6. Status-Variable „Genutzte Phasen“ korrekt setzen
+        $this->SetValueAndLogChange(
+            'Phasenmodus',
+            $anzPhasenIst,
+            'Genutzte Phasen (Fahrzeug)',
+            '',
+            'debug'
+        );
+
+        // 7. Wallbox steuern: Laden erzwingen + Ampere setzen
         $this->SetPhaseMode($anzPhasenGewuenscht);
-        // forceState = 2 (laden), ampere = $ampereGewuenscht
-        $this->SetForceStateAndAmpereIfChanged(2, $ampereGewuenscht);
+        $this->SetForceState(2);
+        $this->SetChargingCurrent($ampereGewuenscht);
 
-
-        // Logging
+        // 8. Logging
         $this->LogTemplate(
             'ok',
-            "🔌 Manuelles Vollladen aktiv (Phasen: $anzPhasenGewuenscht, {$ampereGewuenscht}A, feste Vorgabe). PV={$pv}W, HausOhneWB={$haus}W, Wallbox={$wallbox}W, Batterie={$batterie}W, Überschuss={$ueberschuss_w}W / {$ueberschuss_a}A"
+            "🔌 Manuelles Vollladen aktiv ({$anzPhasenIst}-phasig, {$ampereGewuenscht}A). " .
+            "PV={$pv}W, Haus={$haus}W, Wallbox={$wallbox}W, Batterie={$batterie}W, " .
+            "Überschuss={$ueberschuss_w}W / {$ueberschuss_a}A"
         );
 
-        // Timer prüfen/setzen – falls Auto abgesteckt wird, InitialCheck aktivieren
+        // 9. Timer prüfen/setzen
         $this->SetTimerNachModusUndAuto();
     }
-    /* old private function ModusManuellVollladen($data)
-    private function ModusManuellVollladen($data)
-    {
-        if (!$this->FahrzeugVerbunden($data)) {
-            $this->ResetLademodiWennKeinFahrzeug();
-            return;
-        }
-
-        // Phasen anhand nrg-Array zählen (wie bisher)
-        $anzPhasenAlt = 1;
-        if (isset($data['nrg'][4], $data['nrg'][5], $data['nrg'][6])) {
-            $phasenAmpere = [
-                abs(floatval($data['nrg'][4])),
-                abs(floatval($data['nrg'][5])),
-                abs(floatval($data['nrg'][6]))
-            ];
-            $anzPhasenAlt = 0;
-            foreach ($phasenAmpere as $a) {
-                if ($a > 1.5) $anzPhasenAlt++;
-            }
-            if ($anzPhasenAlt === 0) $anzPhasenAlt = 1;
-        }
-
-        // Werte berechnen für aktuelle Phasenanzahl (Visualisierung)
-        $werte = $this->BerechnePVUeberschussKomplett($anzPhasenAlt);
-
-        // Prüfen, ob $werte ein gültiges Array ist
-        if (!is_array($werte)) {
-            $this->LogTemplate('warn', 'BerechnePVUeberschussKomplett: Kein Array zurückgegeben!');
-            $werte = [];
-        }
-
-        // Felder absichern, nie "Undefined array key"!
-        $pv            = $werte['pv']            ?? 0;
-        $haus          = $werte['haus']          ?? 0;
-        $wallbox       = $werte['wallbox']       ?? 0;
-        $batterie      = $werte['batterie']      ?? 0;
-        $ueberschuss_w = $werte['ueberschuss_w'] ?? 0;
-        $ueberschuss_a = $werte['ueberschuss_a'] ?? 0;
-
-        $this->PruefeUndSetzePhasenmodus(null, true); // immer 3-phasig im Manuellen Modus
-
-
-//        // Phasenumschaltung prüfen (maximale Leistung → immer 3-phasig, wenn verfügbar)
-//        $this->PruefeUndSetzePhasenmodus($ueberschuss_w);
-//        $this->PruefeUndSetzePhasenmodus($werte['ueberschuss_w']); // Im Zweifel kann hier immer auch ein fixer hoher Wert gesetzt werden
-
-        // Prüfen, ob sich der Phasenmodus durch Umschaltung geändert hat – dann neu berechnen!
-        $anzPhasenNeu = max(1, $this->GetValue('Phasenmodus'));
-        if ($anzPhasenNeu !== $anzPhasenAlt) {
-            $werte = $this->BerechnePVUeberschussKomplett($anzPhasenNeu);
-                // Felder erneut absichern!
-                $pv            = $werte['pv']            ?? 0;
-                $haus          = $werte['haus']          ?? 0;
-                $wallbox       = $werte['wallbox']       ?? 0;
-                $batterie      = $werte['batterie']      ?? 0;
-                $ueberschuss_w = $werte['ueberschuss_w'] ?? 0;
-                $ueberschuss_a = $werte['ueberschuss_a'] ?? 0;
-        }
-
-        // Visualisierungswerte setzen (ohne Fehler)
-        $this->SetValue('PV_Ueberschuss', $ueberschuss_w);
-        $this->SetValue('PV_Ueberschuss_A', $ueberschuss_a);
-        $this->SetValueAndLogChange('Phasenmodus', $anzPhasenNeu, 'Genutzte Phasen', '', 'debug');
-
-        // Maximalen Ampere-Wert aus Property holen und setzen
-        $maxAmp = $this->ReadPropertyInteger('MaxAmpere');
-        $this->SetForceStateAndAmpereIfChanged(2, $maxAmp);
-
-        // Logging
-        $this->LogTemplate(
-            'ok',
-            "🔌 Manuelles Vollladen aktiv (Phasen: $anzPhasenNeu, $maxAmp A, max. Leistung auf Fahrzeug). PV={$pv} W, HausOhneWB={$haus} W, Wallbox={$wallbox} W, Batterie={$batterie} W, Überschuss={$ueberschuss_w} W / {$ueberschuss_a} A"
-        );
-
-        // Timer prüfen/setzen – falls Auto abgesteckt wird, InitialCheck aktivieren
-        $this->SetTimerNachModusUndAuto();
-    }
-*/
 
     private function ModusPV2CarLaden($data)
     {
