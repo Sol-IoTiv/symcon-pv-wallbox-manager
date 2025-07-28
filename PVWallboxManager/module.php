@@ -784,7 +784,9 @@ class PVWallboxManager extends IPSModule
         $ampereGewuenscht = max($minAmp, min($maxAmp, $ampereGewuenscht));
 
         // 3. Phasenmodus umschalten
-        $this->PruefeUndSetzePhasenmodus($anzPhasenGewuenscht);
+////        $this->PruefeUndSetzePhasenmodus($anzPhasenGewuenscht);
+        $ok = $this->SetPhaseMode($anzPhasenGewuenscht);
+
 
         // 4. Tatsächliche Phasen auslesen (kann durch Fahrzeug abweichen)
         $anzPhasenIst = max(1, $this->GetValue('Phasenmodus'));
@@ -811,7 +813,7 @@ class PVWallboxManager extends IPSModule
         );
 
         // 7. Wallbox steuern: Laden erzwingen + Ampere setzen
-        $this->SetPhaseMode($anzPhasenGewuenscht);
+////        $this->SetPhaseMode($anzPhasenGewuenscht);
         $this->SetForceState(2);
         $this->SetChargingCurrent($ampereGewuenscht);
 
