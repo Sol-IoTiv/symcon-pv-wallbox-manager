@@ -7,7 +7,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
 - Börsenpreis wird anhand der Werte berechnet
 - Börsenpreis-Vorscha (HTML) angepasst
-- Ladezeit Berechnen im WF als Variable angelget und Info im Log
+- Ladezeit berechnen und im WF in der Variable "⏳ Ladezeit" anzeigen
+- Ladeende Uhrzeit wird errechnet und als Info im Log angezeigt
 
 ## [1.3b] - 2025-07-29
 ### Hinzugefügt
