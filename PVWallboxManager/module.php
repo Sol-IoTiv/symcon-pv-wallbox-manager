@@ -492,10 +492,12 @@ class PVWallboxManager extends IPSModule
         // 10) Ladezeit Anzeige
         $restTime = $this->BerechneVerbleibendeLadezeit();
         $this->SetValueAndLogChange('ChargeTime', $restTime, '⏳ Geschätzte Ladezeit:');
-        
+
         if ($restTime === 'n/a') {
             $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende SOC-, Kapazitäts- oder Leistungs-Variable)');
-        } else {
+        }
+        elseif ($restTime !== '00h 00min') {
+            // Nur loggen, wenn tatsächliche Restzeit > 0
             $this->LogTemplate('info', "Geschätzte verbleibende Ladezeit: {$restTime}");
         }
     }
@@ -1972,26 +1974,41 @@ class PVWallboxManager extends IPSModule
 
     private function BerechneVerbleibendeLadezeit(): string
     {
+        // SOC prüfen
         $socID       = $this->ReadPropertyInteger('CarSOCID');
         $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
         if ($socID <= 0 || $socTargetID <= 0 || !IPS_VariableExists($socID) || !IPS_VariableExists($socTargetID)) {
             return 'n/a';
         }
+
         $socAktuell = GetValue($socID);
         $socZiel    = GetValue($socTargetID);
         $deltaSoc   = $socZiel - $socAktuell;
         if ($deltaSoc <= 0) {
-            return '00:00';
+            // Ziel erreicht
+            return '00h 00min';
         }
-        $kapazitaet = $this->ReadPropertyFloat('CarBatteryCapacity'); // in kWh
-        $leistungW  = $this->GetValue('Leistung');
-        if ($leistungW <= 0) {
+
+        // Batteriekapazität prüfen
+        $kapazitaet = $this->ReadPropertyFloat('CarBatteryCapacity');
+        if ($kapazitaet <= 0) {
             return 'n/a';
         }
+
+        // Ladeleistung holen
+        $leistungW = $this->GetValue('Leistung');
+        if ($leistungW <= 0) {
+            // kein Strom zum Auto → Ladezeit = 0
+            return '00h 00min';
+        }
+
+        // kWh-Bedarf berechnen
         $bedarfKwh = ($deltaSoc / 100) * $kapazitaet;
         $hours     = $bedarfKwh / ($leistungW / 1000);
+
         $h = floor($hours);
         $m = floor(($hours - $h) * 60);
+
         return sprintf('%02dh %02dmin', $h, $m);
     }
 
