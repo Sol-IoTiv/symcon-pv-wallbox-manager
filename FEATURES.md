@@ -34,7 +34,8 @@ Hier werden geplante Features gesammelt, Community-Wünsche, Ideen und größere
 - [ ] Forecast Kalender Ort Tremin
 - [ ] Pushbenachrichtigung am Handy beim Fahrzeug Connect -> Auswahl Lademodi
 - [ ] Sommer- / Wintermodus notwendig? wie verhält sich das Modul im Sommer vs Übergangszeit vs Winter
-- [ ] Strompreis Tibber erweitern, Grundpreis, Aufschlag, Steuersatz
+- [ ] Strompreis Tibber erweitern
+- [x] Strompreis: Grundpreis, Aufschlag, Steuersatz -> **Umgesetzt in: v1.4b**
 - [ ] Ladezeit Berechnen anhand Auto Batteriekapazität Ziel SOC und aktueller Ladeleistung
 
 ---
