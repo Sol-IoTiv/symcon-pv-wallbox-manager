@@ -2013,21 +2013,29 @@ class PVWallboxManager extends IPSModule
 
         // Zusätzliche Kosten aus den Modul‐Properties
         $grundpreis   = $this->ReadPropertyFloat('MarketPriceBasePrice');    // ct/kWh
-        $aufschlag    = $this->ReadPropertyFloat('MarketPriceSurcharge');    // ct/kWh
-        $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100; // z.B. 0.19 für 19%
+        $aufschlagPct = $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;  // z.B. 0.05 für 5 %
+        $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;    // z.B. 0.19 für 19%
 
-        // Aktuellen Preis (netto) holen und auf Bruttopreis mit 3 Nachkommastellen berechnen
+        // Aktuellen Preis (netto) holen
         $aktuellerNetto = $preise[0]['price'];
-        $preisNetto     = $aktuellerNetto + $grundpreis + $aufschlag;
-        $preisBrutto    = round($preisNetto * (1 + $steuersatz), 3);
+
+        // Netto-Gesamtpreis vor Steuern: Spot + Grundpreis
+        $preisVorAufschlag = $aktuellerNetto + $grundpreis;
+
+        // Aufschlag in Prozent anwenden
+        $preisNachAufschlag = $preisVorAufschlag * (1 + $aufschlagPct);
+
+        // Brutto-Preis berechnen (inkl. Steuer) und auf 3 Nachkommastellen runden
+        $preisBrutto = round($preisNachAufschlag * (1 + $steuersatz), 3);
 
         // In Variable schreiben
         $this->SetValueAndLogChange('CurrentSpotPrice', $preisBrutto);
 
-        // Forecast-Daten ebenfalls anpassen (preis-Feld wird brutto mit 3 Nachkommastellen)
+        // Forecast-Daten ebenfalls anpassen
         foreach ($preise as &$p) {
-            $netto      = $p['price'] + $grundpreis + $aufschlag;
-            $p['price'] = round($netto * (1 + $steuersatz), 3);
+            $nettoVor = $p['price'] + $grundpreis;
+            $nettoMitAufschlag = $nettoVor * (1 + $aufschlagPct);
+            $p['price'] = round($nettoMitAufschlag * (1 + $steuersatz), 3);
         }
         unset($p);
 
