@@ -495,6 +495,7 @@ class PVWallboxManager extends IPSModule
         } else {
             $this->LogTemplate('info', "Geschätzte verbleibende Ladezeit: {$restTime}");
         }
+    }
 
     private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, string $mode = 'pvonly')
     {
