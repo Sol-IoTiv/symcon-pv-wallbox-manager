@@ -490,16 +490,7 @@ class PVWallboxManager extends IPSModule
         $this->UpdateStatusAnzeige();
 
         // 10) Ladezeit Anzeige
-        $restTime = $this->BerechneVerbleibendeLadezeit();
-        $this->SetValueAndLogChange('ChargeTime', $restTime, '⏳ Geschätzte Ladezeit:');
-
-        if ($restTime === 'n/a') {
-            $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende SOC-, Kapazitäts- oder Leistungs-Variable)');
-        }
-        elseif ($restTime !== '00h 00min') {
-            // Nur loggen, wenn tatsächliche Restzeit > 0
-            $this->LogTemplate('info', "Geschätzte verbleibende Ladezeit: {$restTime}");
-        }
+        $this->HandleLadezeitLogging();
     }
 
     private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, string $mode = 'pvonly')
@@ -2010,6 +2001,48 @@ class PVWallboxManager extends IPSModule
         $m = floor(($hours - $h) * 60);
 
         return sprintf('%02dh %02dmin', $h, $m);
+    }
+
+    /**
+     * Berechnet die Uhrzeit, zu der das Laden voraussichtlich beendet ist.
+     *
+     * @param string $restTime Restzeit-String im Format "HHh MMmin"
+     * @return string Fertig-Zeit im Format "HH:MM" oder "n/a"
+     */
+    private function BerechneFertigZeit(string $restTime): string
+    {
+        if ($restTime === 'n/a' || $restTime === '00h 00min') {
+            return 'n/a';
+        }
+        list($h, $m) = sscanf($restTime, '%dh %dmin');
+        $finish = new \DateTime();
+        $finish->add(new \DateInterval(sprintf('PT%dH%dM', $h, $m)));
+        return $finish->format('H:i');
+    }
+
+    /**
+     * Berechnet Rest-Ladezeit, schreibt sie in die Variable und loggt einen einzigen Eintrag.
+     */
+    private function HandleLadezeitLogging(): void
+    {
+        // Restzeit berechnen und in Variable speichern
+        $restTime = $this->BerechneVerbleibendeLadezeit();
+        $this->SetValueAndLogChange('ChargeTime', $restTime, '⏳ Geschätzte Ladezeit:');
+
+        // einen einzigen Log-Eintrag erzeugen
+        if ($restTime === 'n/a') {
+            $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende Daten)');
+        }
+        elseif ($restTime === '00h 00min') {
+            $this->LogTemplate('info', '⏳ Geschätzte Ladezeit: 00h 00min');
+        }
+        else {
+            $finishTime = $this->BerechneFertigZeit($restTime);
+            $this->LogTemplate(
+                'info',
+                "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertig­zeit: {$finishTime}"
+            );
+        }
     }
 
     //=========================================================================
