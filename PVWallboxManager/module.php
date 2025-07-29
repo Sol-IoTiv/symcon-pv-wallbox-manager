@@ -66,6 +66,9 @@ class PVWallboxManager extends IPSModule
             'UseMarketPrices'       => ['type'=>'boolean', 'default'=>false],
             'MarketPriceProvider'   => ['type'=>'string',  'default'=>'awattar_at'],
             'MarketPriceAPI'        => ['type'=>'string',  'default'=>''],
+            'MarketPriceBasePrice'  => ['type'=>'float',   'default'=>0.00],  // Grundpreis in ct/kWh
+            'MarketPriceSurcharge'  => ['type'=>'float',   'default'=>0.00],  // Aufschlag in ct/kWh
+            'MarketPriceTaxRate'    => ['type'=>'float',   'default'=>0.00],  // Steuersatz in %
         ]);
 
         // 3) Modul-Aktiv Switch
@@ -1957,7 +1960,7 @@ class PVWallboxManager extends IPSModule
         return $desiredFRC;
     }
 
-//=========================================================================
+    //=========================================================================
     // 10. EXTERNE SCHNITTSTELLEN & FORECAST
     // =========================================================================
     private function AktualisiereMarktpreise()
@@ -2004,23 +2007,42 @@ class PVWallboxManager extends IPSModule
         $preise = array_map(function($item) {
             return [
                 'timestamp' => intval($item['start_timestamp'] / 1000),
-                'price'     => floatval($item['marketprice'] / 10.0)
+                'price'     => floatval($item['marketprice'] / 10.0)  // netto ct/kWh
             ];
         }, $data['data']);
 
-        // Aktuellen Preis setzen (erster Datensatz)
-        $aktuellerPreis = $preise[0]['price'];
-        $this->SetValueAndLogChange('CurrentSpotPrice', $aktuellerPreis);
+        // Zusätzliche Kosten aus den Modul‐Properties
+        $grundpreis   = $this->ReadPropertyFloat('MarketPriceBasePrice');    // ct/kWh
+        $aufschlag    = $this->ReadPropertyFloat('MarketPriceSurcharge');    // ct/kWh
+        $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100; // z.B. 0.19 für 19%
+
+        // Aktuellen Preis (netto) holen und auf Bruttopreis mit 3 Nachkommastellen berechnen
+        $aktuellerNetto = $preise[0]['price'];
+        $preisNetto     = $aktuellerNetto + $grundpreis + $aufschlag;
+        $preisBrutto    = round($preisNetto * (1 + $steuersatz), 3);
+
+        // In Variable schreiben
+        $this->SetValueAndLogChange('CurrentSpotPrice', $preisBrutto);
+
+        // Forecast-Daten ebenfalls anpassen (preis-Feld wird brutto mit 3 Nachkommastellen)
+        foreach ($preise as &$p) {
+            $netto      = $p['price'] + $grundpreis + $aufschlag;
+            $p['price'] = round($netto * (1 + $steuersatz), 3);
+        }
+        unset($p);
 
         // Forecast als JSON speichern
         $this->SetValueAndLogChange('MarketPrices', json_encode($preise));
-        $this->LogTemplate('debug', "MarketPrices wurde gesetzt: " . substr(json_encode($preise), 0, 100) . "..."); // Nur die ersten Zeichen fürs Log
+        $this->LogTemplate('debug', "MarketPrices wurde gesetzt: " . substr(json_encode($preise), 0, 100) . "...");
 
-        // HTML-Vorschau speichern
+        // HTML-Vorschau speichern (optional unverändert)
         $this->SetValue('MarketPricesPreview', $this->FormatMarketPricesPreviewHTML(24));
 
-        // Nur eine Logmeldung am Ende!
-        $this->LogTemplate('ok', "Börsenpreise aktualisiert: Aktuell {$aktuellerPreis} ct/kWh – " . count($preise) . " Preispunkte gespeichert.");
+        // Abschluss-Log
+        $this->LogTemplate('ok',
+            "Börsenpreise aktualisiert: Aktuell {$preisBrutto} ct/kWh – " .
+            count($preise) . " Preispunkte gespeichert."
+        );
     }
 
     private function FormatMarketPricesPreviewHTML($max = 24)
