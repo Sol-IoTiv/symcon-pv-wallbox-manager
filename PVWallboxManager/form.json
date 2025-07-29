@@ -164,15 +164,12 @@
           "default": ""
         },
         { "type": "Label", "caption": "    " },
-        {
-      "type": "Label",
-      "caption": "Grundpreis für Netzentgelte, Umlagen, Abgaben, Steuern"
-    },
-    { "type": "NumberSpinner", "name": "MarketPriceBasePrice", "caption": "Grundpreis (Netzentgelte, Umlagen, Abgaben, fixe Kosten)", "default": 0.00, "suffix": " cent/kWh", "minimum": 0, "maximum": 100 },
-    { "type": "Label", "caption": "Aufschlag zum Marktpreis" },
-    { "type": "NumberSpinner", "name": "MarketPriceSurcharge", "caption": "Aufschlag (Versorger-Marge, Bilanzierungs- und Beschaffungs­kosten)", "default": 0.00, "suffix": " %", "minimum": 0, "maximum": 100 },
-    { "type": "Label", "caption": "Steuersatz" },
-    { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz (AT 20% / DE 19%) ", "default": 20, "suffix": " %", "minimum": 0, "maximum": 100 },
+        { "type": "Label", "caption": "Grundpreis für Netzentgelte, Umlagen, Abgaben, Steuern"  },
+        { "type": "NumberSpinner", "name": "MarketPriceBasePrice", "caption": "Grundpreis", "default": 0.00, "suffix": " cent/kWh", "minimum": 0, "maximum": 100 },
+        { "type": "Label", "caption": "Aufschlag zum Marktpreis für Versorger-Marge, Bilanzierungs- und Beschaffungskosten" },
+        { "type": "NumberSpinner", "name": "MarketPriceSurcharge", "caption": "Aufschlag", "default": 0.00, "suffix": " %", "minimum": 0, "maximum": 100 },
+        { "type": "Label", "caption": "Steuersatz" },
+        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 20, "suffix": " %", "minimum": 0, "maximum": 100 },
         {
           "type": "Label",
           "label": "Börsenpreise und Vorschau erscheinen im WebFront und werden in die Variable 'CurrentSpotPrice' geschrieben."
