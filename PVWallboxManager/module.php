@@ -487,8 +487,14 @@ class PVWallboxManager extends IPSModule
 
         // 9) Anzeige aktualisieren
         $this->UpdateStatusAnzeige();
-    }
 
+        // 10) Ladezeit im Log
+        $restTime = $this->BerechneVerbleibendeLadezeit();
+        if ($restTime === 'n/a') {
+            $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende SOC-, Kapazitäts- oder Leistungs-Variable)');
+        } else {
+            $this->LogTemplate('info', "Geschätzte verbleibende Ladezeit: {$restTime}");
+        }
 
     private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, string $mode = 'pvonly')
     {
@@ -1958,6 +1964,31 @@ class PVWallboxManager extends IPSModule
         }
 
         return $desiredFRC;
+    }
+
+    private function BerechneVerbleibendeLadezeit(): string
+    {
+        $socID       = $this->ReadPropertyInteger('CarSOCID');
+        $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
+        if ($socID <= 0 || $socTargetID <= 0 || !IPS_VariableExists($socID) || !IPS_VariableExists($socTargetID)) {
+            return 'n/a';
+        }
+        $socAktuell = GetValue($socID);
+        $socZiel    = GetValue($socTargetID);
+        $deltaSoc   = $socZiel - $socAktuell;
+        if ($deltaSoc <= 0) {
+            return '00:00';
+        }
+        $kapazitaet = $this->ReadPropertyFloat('CarBatteryCapacity'); // in kWh
+        $leistungW  = $this->GetValue('Leistung');
+        if ($leistungW <= 0) {
+            return 'n/a';
+        }
+        $bedarfKwh = ($deltaSoc / 100) * $kapazitaet;
+        $hours     = $bedarfKwh / ($leistungW / 1000);
+        $h = floor($hours);
+        $m = floor(($hours - $h) * 60);
+        return sprintf('%02d:%02d', $h, $m);
     }
 
     //=========================================================================
