@@ -102,6 +102,7 @@ class PVWallboxManager extends IPSModule
             ['integer', 'PhasenmodusEinstellung',       '🟢 Wallbox-Phasen Soll (Einstellung)',     'PVWM.PSM',                 50, 'Lightning'],
             ['integer', 'Phasenmodus',                  '🔵 Genutzte Phasen (Fahrzeug)',            'PVWM.PhasenText',          51, 'Lightning'],
             ['string',  'StatusInfo',                   'ℹ️ Status-Info',                            '~HTMLBox',                70,  null],
+            ['string',  'ChargeTime',                   '⏳ Ladezeit',                              '',                         80 , null],
         ]);
 
         // 5) Timer für Updates
@@ -488,8 +489,10 @@ class PVWallboxManager extends IPSModule
         // 9) Anzeige aktualisieren
         $this->UpdateStatusAnzeige();
 
-        // 10) Ladezeit im Log
+        // 10) Ladezeit Anzeige
         $restTime = $this->BerechneVerbleibendeLadezeit();
+        $this->SetValueAndLogChange('ChargeTime', $restTime, '⏳ Geschätzte Ladezeit:');
+        
         if ($restTime === 'n/a') {
             $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende SOC-, Kapazitäts- oder Leistungs-Variable)');
         } else {
@@ -1989,7 +1992,7 @@ class PVWallboxManager extends IPSModule
         $hours     = $bedarfKwh / ($leistungW / 1000);
         $h = floor($hours);
         $m = floor(($hours - $h) * 60);
-        return sprintf('%02d:%02d', $h, $m);
+        return sprintf('%02dh %02dmin', $h, $m);
     }
 
     //=========================================================================
