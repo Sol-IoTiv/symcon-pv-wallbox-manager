@@ -9,156 +9,104 @@ class PVWallboxManager extends IPSModule
 
     public function Create()
     {
-        // Immer zuerst
         parent::Create();
 
+        // 1) Custom Profiles & Attribute defaults
         $this->RegisterCustomProfiles();
-        $this->RegisterAttributeInteger('MarketPricesTimerInterval', 0);
-        $this->RegisterAttributeBoolean('MarketPricesActive', false);
+        $this->registerAttributes([
+            'MarketPricesTimerInterval'      => 0,
+            'MarketPricesActive'             => false,
+            'PV2CarStartZaehler'             => 0,
+            'PV2CarStopZaehler'              => 0,
+            'Phasen1Zaehler'                 => 0,
+            'Phasen3Zaehler'                 => 0,
+            'LadeStartZaehler'               => 0,
+            'LadeStopZaehler'                => 0,
+            'HausverbrauchAbzWallboxBuffer'  => '[]',
+            'HausverbrauchAbzWallboxLast'    => 0.0,
+            'NoPowerCounter'                 => 0,
+            'LastFRCState'                   => 0,
+            'LastTimerStatus'                => -1,
+            'NeutralModeUntil'               => 0,
+            'LetztePhasenUmschaltung'        => 0,
+            'LastStatusInfoHTML'            => '',
+        ]);
 
-        // Properties aus form.json
-        $this->RegisterPropertyString('WallboxIP', '0.0.0.0');
-        $this->RegisterPropertyString('WallboxAPIKey', '');
-        $this->RegisterPropertyInteger('RefreshInterval', 30);
-        $this->RegisterPropertyBoolean('ModulAktiv', true);
-        $this->RegisterPropertyBoolean('DebugLogging', false);
-        $this->RegisterPropertyInteger('MinAmpere', 6);   // Minimal möglicher Ladestrom
-        $this->RegisterPropertyInteger('MaxAmpere', 16);  // Maximal möglicher Ladestrom
-        $this->RegisterPropertyInteger('Phasen1Schwelle', 3680); // Beispiel: 1-phasig ab < 1.400 W
-        $this->RegisterPropertyInteger('Phasen3Schwelle', 4140); // Beispiel: 3-phasig ab > 3.700 W
-        $this->RegisterAttributeInteger('PV2CarStartZaehler', 0);
-        $this->RegisterAttributeInteger('PV2CarStopZaehler', 0);
+        // 2) Properties from form.json
+        $this->registerProperties([
+            'WallboxIP'             => ['type'=>'string',  'default'=>'0.0.0.0'],
+            'WallboxAPIKey'         => ['type'=>'string',  'default'=>''],
+            'RefreshInterval'       => ['type'=>'integer', 'default'=>30],
+            'ModulAktiv'            => ['type'=>'boolean', 'default'=>true],
+            'DebugLogging'          => ['type'=>'boolean', 'default'=>false],
+            'MinAmpere'             => ['type'=>'integer', 'default'=>6],
+            'MaxAmpere'             => ['type'=>'integer', 'default'=>16],
+            'Phasen1Schwelle'       => ['type'=>'integer', 'default'=>3680],
+            'Phasen3Schwelle'       => ['type'=>'integer', 'default'=>4140],
+            'HausakkuSOCID'         => ['type'=>'integer', 'default'=>0],
+            'HausakkuSOCVollSchwelle'=>['type'=>'integer',  'default'=>95],
+            'CarSOCID'              => ['type'=>'integer', 'default'=>0],
+            'CarTargetSOCID'        => ['type'=>'integer', 'default'=>0],
+            'CarBatteryCapacity'    => ['type'=>'float',   'default'=>0],
+            'Phasen1Limit'          => ['type'=>'integer', 'default'=>3],
+            'Phasen3Limit'          => ['type'=>'integer', 'default'=>3],
+            'MinLadeWatt'           => ['type'=>'integer', 'default'=>1400],
+            'MinStopWatt'           => ['type'=>'integer', 'default'=>1100],
+            'StartLadeHysterese'    => ['type'=>'integer', 'default'=>3],
+            'StopLadeHysterese'     => ['type'=>'integer', 'default'=>3],
+            'InitialCheckInterval'  => ['type'=>'integer', 'default'=>10],
+            'PVErzeugungID'         => ['type'=>'integer', 'default'=>0],
+            'PVErzeugungEinheit'    => ['type'=>'string',  'default'=>'W'],
+            'HausverbrauchID'       => ['type'=>'integer', 'default'=>0],
+            'HausverbrauchEinheit'  => ['type'=>'string',  'default'=>'W'],
+            'InvertHausverbrauch'   => ['type'=>'boolean', 'default'=>false],
+            'BatterieladungID'      => ['type'=>'integer', 'default'=>0],
+            'BatterieladungEinheit' => ['type'=>'string',  'default'=>'W'],
+            'InvertBatterieladung'  => ['type'=>'boolean', 'default'=>false],
+            'UseMarketPrices'       => ['type'=>'boolean', 'default'=>false],
+            'MarketPriceProvider'   => ['type'=>'string',  'default'=>'awattar_at'],
+            'MarketPriceAPI'        => ['type'=>'string',  'default'=>''],
+        ]);
 
-        // Property für Hausakku SoC und Schwelle
-        $this->RegisterPropertyInteger('HausakkuSOCID', 0); // VariableID für SoC des Hausakkus (Prozent)
-        $this->RegisterPropertyInteger('HausakkuSOCVollSchwelle', 95); // Schwelle ab wann als „voll“ gilt (Prozent)
-
-        // Fahrzeugdaten
-        $this->RegisterPropertyInteger('CarSOCID', 0);           // Variable-ID aktueller SoC
-        $this->RegisterPropertyInteger('CarTargetSOCID', 0);     // Variable-ID Ziel-SoC
-        $this->RegisterPropertyFloat('CarBatteryCapacity', 0); // Standardwert für z.B. ID.3 Pure (52 kWh)
-
-        // Hysterese-Zyklen als Properties
-        $this->RegisterPropertyInteger('Phasen1Limit', 3); // z.B. 3 = nach 3x Umschalten
-        $this->RegisterPropertyInteger('Phasen3Limit', 3);
-        $this->RegisterPropertyInteger('MinLadeWatt', 1400);      // Schwelle zum Starten (W)
-        $this->RegisterPropertyInteger('MinStopWatt', 1100);      // Schwelle zum Stoppen (W)
-        $this->RegisterPropertyInteger('StartLadeHysterese', 3);  // Zyklen Start-Hysterese
-        $this->RegisterPropertyInteger('StopLadeHysterese', 3);   // Zyklen Stop-Hysterese
-        $this->RegisterPropertyInteger('InitialCheckInterval', 10); // 0 = deaktiviert, 5–60 Sek.
-
+        // 3) Modul-Aktiv Switch
         $this->RegisterVariableBoolean('ModulAktiv_Switch', '✅ Modul aktiv', '~Switch', 900);
         $this->EnableAction('ModulAktiv_Switch');
-    
-        // Hysterese-Zähler (werden NICHT im WebFront angezeigt)
-        $this->RegisterAttributeInteger('Phasen1Zaehler', 0);
-        $this->RegisterAttributeInteger('Phasen3Zaehler', 0);
-        $this->RegisterAttributeInteger('LadeStartZaehler', 0);
-        $this->RegisterAttributeInteger('LadeStopZaehler', 0);
-        $this->RegisterAttributeString('HausverbrauchAbzWallboxBuffer', '[]');
-        $this->RegisterAttributeFloat('HausverbrauchAbzWallboxLast', 0.0);
-        $this->RegisterAttributeInteger('NoPowerCounter', 0);
-        $this->RegisterAttributeInteger('LastTimerStatus', -1);
-        $this->RegisterAttributeInteger('NeutralModeUntil', 0);
 
-        // Variablen nach API v2
-        $this->RegisterVariableInteger('Status',        'Status',                                   'PVWM.CarStatus',       1);
-        $this->RegisterVariableInteger('AccessStateV2', 'Wallbox Modus',                            'PVWM.AccessStateV2',   2);
-        $this->RegisterVariableFloat('Leistung',        'Aktuelle Ladeleistung zum Fahrzeug (W)',   'PVWM.Watt',            3);
-        IPS_SetIcon($this->GetIDForIdent('Leistung'),   'Flash');
-        $this->RegisterVariableInteger('Ampere',        'Max. Ladestrom (A)',                       'PVWM.Ampere',          4);
-        IPS_SetIcon($this->GetIDForIdent('Ampere'),     'Energy');
+        // 4) API- & Status-Variablen
+        $this->registerVariables([
+            ['integer', 'Status',                       'Status',                                   'PVWM.CarStatus',            1,  'Car'],
+            ['integer', 'AccessStateV2',                'Wallbox Modus',                            'PVWM.AccessStateV2',        2,  'LockOpen'],
+            ['float',   'Leistung',                     'Aktuelle Ladeleistung zum Fahrzeug (W)',   'PVWM.Watt',                 3,  'Flash'],
+            ['integer', 'Ampere',                       'Max. Ladestrom (A)',                       'PVWM.Ampere',               4,  'Energy'],
+            ['boolean', 'Freigabe',                     'Ladefreigabe',                             'PVWM.ALW',                  6,  'Power'],
+            ['integer', 'Kabelstrom',                   'Kabeltyp (A)',                             'PVWM.AmpereCable',          7,  'Energy'],
+            ['float',   'Energie',                      'Geladene Energie (Wh)',                    'PVWM.Wh',                   8,  null],
+            ['integer', 'Fehlercode',                   'Fehlercode',                               'PVWM.ErrorCode',            9,  null],
+            ['float',   'PV_Ueberschuss',               '☀️ PV-Überschuss (W)',                     'PVWM.Watt',                10, 'solar-panel'],
+            ['integer', 'PV_Ueberschuss_A',             '⚡ PV-Überschuss (A)',                     'PVWM.Ampere',              12, 'Energy'],
+            ['float',   'Hausverbrauch_W',              '🏠 Hausverbrauch (W)',                     'PVWM.Watt',                13, 'home'],
+            ['float',   'Hausverbrauch_abz_Wallbox',    '🏠 Hausverbrauch abzügl. Wallbox (W)',     'PVWM.Watt',                15, 'home'],
+            ['float',   'CurrentSpotPrice',             'Aktueller Börsenpreis (ct/kWh)',           'PVWM.CentPerKWh',          30, 'Euro'],
+            ['string',  'MarketPrices',                 'Börsenpreis-Vorschau',                     '',                         31, null],
+            ['string',  'MarketPricesPreview',          '📊 Börsenpreis-Vorschau (HTML)',           '~HTMLBox',                 32, null],
+            ['integer', 'TargetTime',                   'Zielzeit',                                 '~UnixTimestampTime',       20, 'clock'],
+            ['boolean', 'ManuellLaden',                 '🔌 Manuell: Vollladen aktiv',              '~Switch',                  40, null],
+            ['boolean', 'PV2CarModus',                  '🌞 PV-Anteil laden',                       '~Switch',                  41, 'SolarPanel'],
+            ['boolean', 'ZielzeitLaden',                '⏰ Zielzeit-Ladung',                       '~Switch',                  42, null],
+            ['integer', 'PVAnteil',                     'PV-Anteil (%)',                            'PVWM.Percent',             43, 'Percent'],
+            ['integer', 'ManuellAmpere',                '🔌 Ampere (manuell)',                      'PVWM.Ampere',              44, null],
+            ['integer', 'ManuellPhasen',                '🔀 Phasen (manuell)',                      'PVWM.PSM',                 45, null],
+            ['integer', 'PhasenmodusEinstellung',       '🟢 Wallbox-Phasen Soll (Einstellung)',     'PVWM.PSM',                 50, 'Lightning'],
+            ['integer', 'Phasenmodus',                  '🔵 Genutzte Phasen (Fahrzeug)',            'PVWM.PhasenText',          51, 'Lightning'],
+            ['string',  'StatusInfo',                   'ℹ️ Status-Info',                            '~HTMLBox',                70,  null],
+        ]);
 
-        $this->RegisterVariableBoolean('Freigabe',      'Ladefreigabe',                             'PVWM.ALW',             6);
-        $this->RegisterVariableInteger('Kabelstrom',    'Kabeltyp (A)',                             'PVWM.AmpereCable',     7);
-        IPS_SetIcon($this->GetIDForIdent('Kabelstrom'), 'Energy');
-        $this->RegisterVariableFloat('Energie',         'Geladene Energie (Wh)',                    'PVWM.Wh',              8);
-        $this->RegisterVariableInteger('Fehlercode',    'Fehlercode',                               'PVWM.ErrorCode',       9);
+        // 5) Timer für Updates
+        $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
+        $this->RegisterTimer('PVWM_UpdateMarketPrices', 0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateMarketPrices","");');
+        $this->RegisterTimer('PVWM_InitialCheck',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
 
-        // === 3. Energiequellen ===
-        $this->RegisterPropertyInteger('PVErzeugungID', 0);
-        $this->RegisterPropertyString('PVErzeugungEinheit', 'W');
-        //$this->RegisterPropertyInteger('NetzeinspeisungID', 0);
-        $this->RegisterPropertyString('NetzeinspeisungEinheit', 'W');
-        $this->RegisterPropertyBoolean('InvertNetzeinspeisung', false);
-        $this->RegisterPropertyInteger('HausverbrauchID', 0);
-        $this->RegisterPropertyString('HausverbrauchEinheit', 'W');
-        $this->RegisterPropertyBoolean('InvertHausverbrauch', false);
-        $this->RegisterPropertyInteger('BatterieladungID', 0);
-        $this->RegisterPropertyString('BatterieladungEinheit', 'W');
-        $this->RegisterPropertyBoolean('InvertBatterieladung', false);
-
-        $this->RegisterPropertyBoolean('UseMarketPrices', false);
-        $this->RegisterPropertyString('MarketPriceProvider', 'awattar_at');
-        $this->RegisterPropertyString('MarketPriceAPI', '');
-
-        $this->RegisterVariableFloat('CurrentSpotPrice','Aktueller Börsenpreis (ct/kWh)',                   'PVWM.CentPerKWh', 30);
-        $this->RegisterVariableString('MarketPrices', 'Börsenpreis-Vorschau', '', 31);
-
-        $this->RegisterVariableString('MarketPricesPreview', '📊 Börsenpreis-Vorschau (HTML)', '~HTMLBox', 32);
-
-        // Zielzeit für Zielzeitladung
-        $this->RegisterVariableInteger('TargetTime', 'Zielzeit', '~UnixTimestampTime', 20);
-        IPS_SetIcon($this->GetIDForIdent('TargetTime'), 'clock');
-
-        // === Modul-Variablen für Visualisierung, Status, Lademodus etc. ===
-        $this->RegisterVariableFloat('PV_Ueberschuss','☀️ PV-Überschuss (W)',                               'PVWM.Watt', 10);
-        IPS_SetIcon($this->GetIDForIdent('PV_Ueberschuss'), 'solar-panel');
-
-        $this->RegisterVariableInteger('PV_Ueberschuss_A', '⚡ PV-Überschuss (A)',                             'PVWM.Ampere', 12);
-        IPS_SetIcon($this->GetIDForIdent('PV_Ueberschuss_A'), 'Energy');
-
-        // Hausverbrauch (W)
-        $this->RegisterVariableFloat('Hausverbrauch_W','🏠 Hausverbrauch (W)',                              'PVWM.Watt', 13);
-        IPS_SetIcon($this->GetIDForIdent('Hausverbrauch_W'), 'home');
-
-        // Hausverbrauch abzügl. Wallbox (W) – wie vorher empfohlen
-        $this->RegisterVariableFloat('Hausverbrauch_abz_Wallbox','🏠 Hausverbrauch abzügl. Wallbox (W)',    'PVWM.Watt',15);
-        IPS_SetIcon($this->GetIDForIdent('Hausverbrauch_abz_Wallbox'), 'home');
-
-        // Lademodi
-        $this->RegisterVariableBoolean('ManuellLaden', '🔌 Manuell: Vollladen aktiv', '~Switch', 40);
-        $this->EnableAction('ManuellLaden');
-        $this->RegisterVariableBoolean('PV2CarModus', '🌞 PV-Anteil laden', '~Switch', 41);
-        IPS_SetIcon($this->GetIDForIdent('PV2CarModus'), 'SolarPanel');
-        $this->EnableAction('PV2CarModus');
-        $this->RegisterVariableBoolean('ZielzeitLaden', '⏰ Zielzeit-Ladung', '~Switch', 42);
-        $this->RegisterVariableInteger('PVAnteil',    'PV-Anteil (%)',                                      'PVWM.Percent',43);
-        IPS_SetIcon($this->GetIDForIdent('PVAnteil'), 'Percent');
-        $this->EnableAction('PVAnteil');
-
-        // Im Create()-Bereich, nach den anderen Variablen
-        $this->RegisterVariableInteger('PhasenmodusEinstellung', '🟢 Wallbox-Phasen Soll (Einstellung)', 'PVWM.PSM', 50);
-        IPS_SetIcon($this->GetIDForIdent('PhasenmodusEinstellung'), 'Lightning');
-
-        $this->RegisterVariableInteger('Phasenmodus', '🔵 Genutzte Phasen (Fahrzeug)', 'PVWM.PhasenText', 51);
-        IPS_SetIcon($this->GetIDForIdent('Phasenmodus'), 'Lightning');
-
-        // --- Manuell: Ampere und Phasen einstellbar machen ---
-        $this->RegisterVariableInteger('ManuellAmpere', '🔌 Ampere (manuell)', 'PVWM.Ampere', 44);
-        $this->EnableAction('ManuellAmpere');
-        if ($this->GetValue('ManuellAmpere') < $this->ReadPropertyInteger('MinAmpere')) {
-            $this->SetValue('ManuellAmpere', $this->ReadPropertyInteger('MaxAmpere')); // Default = MaxAmpere
-        }
-
-        $this->RegisterVariableInteger('ManuellPhasen', '🔀 Phasen (manuell)', 'PVWM.PSM', 45);
-        $this->EnableAction('ManuellPhasen');
-        if (!in_array($this->GetValue('ManuellPhasen'), [1, 2])) {
-            $this->SetValue('ManuellPhasen', 2); // Default = 3-phasig
-        }
-
-        $this->RegisterVariableString('StatusInfo', 'ℹ️ Status-Info', '~HTMLBox', 70);
-        $this->RegisterAttributeString('LastStatusInfoHTML', '');
-
-        $this->RegisterAttributeInteger('LetztePhasenUmschaltung', 0);
-
-        // Timer für zyklische Abfrage (z.B. alle 30 Sek.)
-        $this->RegisterTimer('PVWM_UpdateStatus', 0, 'IPS_RequestAction(' . $this->InstanceID . ', "UpdateStatus", "pvonly");');
-        $this->RegisterTimer('PVWM_UpdateMarketPrices', 0, 'IPS_RequestAction(' . $this->InstanceID . ', "UpdateMarketPrices", "");');
-        
-        // Schnell-Poll-Timer für Initialcheck
-        $this->RegisterTimer('PVWM_InitialCheck', 0, 'IPS_RequestAction(' . $this->InstanceID . ', "UpdateStatus", "pvonly");');
-
+        // 6) Initialisierung Timer/Events
         $this->SetTimerNachModusUndAuto();
     }
 
@@ -306,10 +254,28 @@ class PVWallboxManager extends IPSModule
                 IPS_SetProperty($this->InstanceID, 'ModulAktiv', $Value);
                 IPS_ApplyChanges($this->InstanceID);
             if (!$Value) {
-                $this->SetForceState(1);
-                $this->LogTemplate('info', 'Modul deaktiviert – Wallbox auf Nicht Laden gestellt (FRC=1).');
-            }
-            break;
+                // 1) Wallbox sperren
+                    $this->SetForceState(1);
+
+                    // 2) Lademodi zurücksetzen (wiederverwendbar)
+                    $this->ResetModiNachLadeende();
+
+                    // 3) Daten-Anzeige zurücksetzen
+                    $this->SetValue('PV_Ueberschuss',   0);
+                    $this->SetValue('PV_Ueberschuss_A', 0);
+                    $this->SetValue('Hausverbrauch_W',  0);
+                    $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
+
+                    // 4) Timer abschalten
+                    $this->SetTimerInterval('PVWM_UpdateStatus',     0);
+                    $this->SetTimerInterval('PVWM_InitialCheck',     0);
+                    $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
+
+                    $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
+                }
+                // Anzeige immer aktualisieren
+                $this->UpdateStatusAnzeige();
+                break;
 
             case "UpdateStatus":
                 $this->UpdateStatus($Value);
@@ -345,6 +311,11 @@ class PVWallboxManager extends IPSModule
                     // Neutralmodus aktivieren (z.B. 30 Sek)
                     $this->WriteAttributeInteger('NeutralModeUntil', time() + 30);
                     $this->LogTemplate('debug', 'Neutralmodus nach Moduswechsel: Ladefreigabe gesperrt bis ' . date("H:i:s", time() + 30));
+
+                    // sofortige Aktualisierung der Wallbox-Werte
+                    IPS_Sleep(1000);
+                    $this->refreshChargerData();
+
                 }
                 $this->SetTimerNachModusUndAuto();
                 $this->UpdateStatus('manuell');
@@ -471,110 +442,50 @@ class PVWallboxManager extends IPSModule
     // =========================================================================
     public function UpdateStatus(string $mode = 'pvonly')
     {
-        $car = 0;
-        
-        // 0) Start-Log
+        // Start-Log
         $this->LogTemplate('debug', "UpdateStatus getriggert (Modus: $mode, Zeit: " . date("H:i:s") . ")");
-        
-        $neutralUntil = $this->ReadAttributeInteger('NeutralModeUntil');
-        if ($neutralUntil > time()) {
-            $this->LogTemplate('debug', 'Neutralmodus aktiv – Ladevorgänge blockiert bis ' . date("H:i:s", $neutralUntil));
-            $this->SetForceState(1); // Wallbox gesperrt, falls nicht eh schon
+
+        // 0) Neutralmodus?
+        if ($this->handleNeutralMode()) {
             return;
         }
 
-        // 1) Status von der Wallbox holen
-        $data = $this->getStatusFromCharger();
+        // 1) Initial-Check?
+        $inInitial = $this->handleInitialCheck();
+
+        // 2) Status von der Wallbox holen
+        $data = $this->fetchChargerStatus();
         if ($data === false) {
-            $this->ResetWallboxVisualisierungKeinFahrzeug();
-            $this->LogTemplate('debug', "Wallbox nicht erreichbar – Visualisierungswerte zurückgesetzt.");
-            $this->UpdateStatusAnzeige();
+            $this->handleChargerUnavailable();
             return;
         }
 
-        // 2) Phasenzahl ermitteln (für spätere Modus-Methoden)
-        $psm    = isset($data['psm']) ? intval($data['psm']) : 0;
-        $phasen = 1;
-        if (isset($data['nrg'][4], $data['nrg'][5], $data['nrg'][6])) {
-            $schluss = 1.5;
-            $cnt = 0;
-            foreach ([$data['nrg'][4], $data['nrg'][5], $data['nrg'][6]] as $strom) {
-                if (abs(floatval($strom)) > $schluss) {
-                    $cnt++;
-                }
-            }
-            $phasen = max(1, $cnt);
-        }
+        // 3) Phasenanzahl ermitteln
+        $phasen = $this->determinePhases($data);
 
-        // 3) Hausverbrauch für WebFront aktualisieren (ohne Überschuss)
+        // 4) Hausverbrauch & WebFront aktualisieren
         $energyRaw = $this->gatherEnergyData();
-        $this->SetValueAndLogChange('Hausverbrauch_W',           $energyRaw['haus'],                           'Hausverbrauch (W)');
-        $this->SetValueAndLogChange(
-            'Hausverbrauch_abz_Wallbox',
-            max(0, $energyRaw['haus'] - $energyRaw['wallbox']),
-            'Hausverbrauch abzgl. Wallbox (W)'
-        );
+        $this->updateHousePower($energyRaw);
 
-        if ($car <= 1) {
-            // KEIN Auto erkannt → PV-Überschuss im Hauptteil setzen
-            $filtered = $this->applyFilters($energyRaw);
-            $surplus  = $this->calculateSurplus($filtered, 1, false); // Phasen=1 für Anzeige
-            $this->SetValue('PV_Ueberschuss',   $surplus['ueberschuss_w']);
-            $this->SetValue('PV_Ueberschuss_A', $surplus['ueberschuss_a']);
+        // 5) PV-Überschuss anzeigen, wenn kein Fahrzeug verbunden
+        if (!$this->isCarConnected($data)) {
+            $this->updateSurplusDisplayWithoutCar($energyRaw);
         }
 
-        // 4) Wallbox-Status-Variablen auslesen & schreiben
-        $car        = isset($data['car'])  ? intval($data['car'])  : 0;
-        $leistung   = $data['nrg'][11]     ?? 0.0;
-        $ampereWB   = $data['amp']         ?? 0;
-        $energie    = $data['wh']          ?? 0;
-        $freigabe   = (bool)($data['alw']   ?? false);
-        $kabelstrom = $data['cbl']         ?? 0;
-        $fehlercode = $data['err']         ?? 0;
+        // 6) Charger-Status synchronisieren
+        $vars = $this->extractChargerVariables($data);
+        $this->syncChargerVariables($vars, $phasen);
 
-        $frcRaw     = $data['frc']             ?? null;
-        $stateRaw   = $data['accessStateV2']   ?? null;
-        $accessStateV2 = ($frcRaw === 2 || $stateRaw === 2) ? 2 : 1;
-
-        $this->SetValueAndLogChange('PhasenmodusEinstellung', $psm,     'Phasenmodus (Einstellung)', '', 'debug');
-        $this->SetValueAndLogChange('Phasenmodus',           $phasen, 'Genutzte Phasen',            '', 'debug');
-        $this->SetValueAndLogChange('Status',                $car,        'Status');
-        $this->SetValueAndLogChange('AccessStateV2',         $accessStateV2, 'Wallbox Modus');
-        $this->SetValueAndLogChange('Leistung',              $leistung,   'Aktuelle Ladeleistung zum Fahrzeug', 'W');
-        $this->SetValueAndLogChange('Ampere',                $ampereWB,   'Maximaler Ladestrom',             'A');
-        $this->SetValueAndLogChange('Energie',               $energie,    'Geladene Energie',                'Wh');
-        $this->SetValueAndLogChange('Freigabe',              $freigabe,   'Ladefreigabe');
-        $this->SetValueAndLogChange('Kabelstrom',            $kabelstrom,'Kabeltyp');
-        $this->SetValueAndLogChange('Fehlercode',            $fehlercode,'Fehlercode','', 'warn');
-
-        // optional: SOC-Logging wenn gerade geladen
-        if ($accessStateV2 === 2) {
-            // … SOC-Logging wie bisher …
-        }
-
-        // 5) Automatisches Ladeende prüfen
+        // 7) Automatisches Ladeende prüfen
         $this->PruefeLadeendeAutomatisch();
 
-        // 6) Modi-Steuerung: hier wird jeweils in der Modus-Methode die Überschuss-Berechnung gemacht
-        if ($car > 1 && $this->FahrzeugVerbunden($data)) {
-            if ($this->GetValue('ManuellLaden')) {
-                $this->ModusManuellVollladen($data);
-            }
-            elseif ($this->GetValue('PV2CarModus')) {
-                $this->ModusPV2CarLaden($data);
-            }
-            else {
-                $this->ModusPVonlyLaden($data, $phasen, $mode);
-            }
-        }
-        else {
-            $this->ResetLademodiWennKeinFahrzeug();
-            $this->SetTimerNachModusUndAuto();
-        }
+        // 8) Lademodus steuern
+        $this->routeChargingMode($data, $mode, $phasen);
 
-        // 7) WebFront-Anzeige aktualisieren
+        // 9) Anzeige aktualisieren
         $this->UpdateStatusAnzeige();
     }
+
 
     private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, string $mode = 'pvonly')
     {
@@ -1329,54 +1240,70 @@ class PVWallboxManager extends IPSModule
 
     private function PruefeLadeendeAutomatisch()
     {
-        // 1) Lese SOC-Properties
+        // 0) Status aller Modi und Force-State loggen
+        $currentFRC = $this->GetValue('AccessStateV2'); // 2 = laden erzwungen
+        $manuell    = $this->GetValue('ManuellLaden')   ? 'ja' : 'nein';
+        $pv2car     = $this->GetValue('PV2CarModus')    ? 'ja' : 'nein';
+        $zielzeit   = $this->GetValue('ZielzeitLaden')  ? 'ja' : 'nein';
+        $this->LogTemplate('debug', "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Manuell={$manuell}, PV2Car={$pv2car}, Zielzeit={$zielzeit}");
+
+        // 1) SOC-Werte einlesen
         $socID       = $this->ReadPropertyInteger('CarSOCID');
         $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
+        $socAktuell  = ($socID > 0 && IPS_VariableExists($socID))              ? GetValue($socID)        : null;
+        $socZiel     = ($socTargetID > 0 && IPS_VariableExists($socTargetID)) ? GetValue($socTargetID) : null;
+        $this->LogTemplate('debug', "SOC-Aktuell={$socAktuell}, SOC-Ziel={$socZiel}");
 
-        $socAktuell = ($socID > 0 && IPS_VariableExists($socID))
-            ? GetValue($socID)
-            : null;
-        $socZiel = ($socTargetID > 0 && IPS_VariableExists($socTargetID))
-            ? GetValue($socTargetID)
-            : null;
+        // 2) Prüfen, ob gerade geladen wird (erzwungen ODER einer der Modi aktiv)
+        $loadActive = (
+            $currentFRC === 2
+            || $this->GetValue('ManuellLaden')
+            || $this->GetValue('PV2CarModus')
+            || $this->GetValue('ZielzeitLaden')
+        );
+        $this->LogTemplate('debug', 'Ladefreigabe/Modus aktiv: ' . ($loadActive ? 'ja' : 'nein'));
 
-        // 2) Lade-Freigabe aktuell?
-        $aktFreigabe = ($this->GetValue('AccessStateV2') == 2);
-
-        // 3) Wenn SOC-Properties gültig sind, nutze Ziel-SOC-Logik
-        if ($socAktuell !== null && $socZiel !== null && $aktFreigabe) {
+        // 3) Primäre Erkennung per SOC
+        if ($loadActive && $socAktuell !== null && $socZiel !== null) {
             if ($socAktuell >= $socZiel) {
-                $this->LogTemplate(
-                    'ok',
-                    "Ziel-SoC erreicht (Aktuell: {$socAktuell}%, Ziel: {$socZiel}%) – beende Ladung."
-                );
+                $this->LogTemplate('ok', "🔌 Ziel-SOC erreicht ({$socAktuell}% ≥ {$socZiel}%) – beende Ladung.");
                 $this->SetForceState(1);
                 $this->ResetModiNachLadeende();
+                // Counter zurücksetzen
+                $this->WriteAttributeInteger('NoPowerCounter', 0);
                 return;
             }
-            // Wenn SOC-Logik greift, überspringe No-Power
-            return;
+            // SOC noch nicht erreicht → weiter zum Fallback
+            $this->LogTemplate('debug', "SOC ({$socAktuell}%) < Ziel ({$socZiel}%) – Fallback wird geprüft.");
         }
 
-        // 4) Fallback: No-Power-Counter, wenn keine SOC-Properties gesetzt
-        if ($aktFreigabe) {
-            $ladeleistung = $this->GetValue('Leistung');
-            if ($ladeleistung < 100) {
-                $cnt = $this->ReadAttributeInteger('NoPowerCounter') + 1;
+        // 4) Fallback: No-Power-Counter
+        if ($loadActive) {
+            $leistung  = $this->GetValue('Leistung');
+            $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
+            $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
+
+            if ($leistung < 100) {
+                // kein Strom → Counter hochzählen
+                $cnt = $cntVorher + 1;
                 $this->WriteAttributeInteger('NoPowerCounter', $cnt);
-                if ($cnt >= 6) {
-                    $this->LogTemplate(
-                        'ok',
-                        "Keine Ladeleistung mehr – beende Ladung nach {$cnt} Versuchen."
-                    );
+                $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
+
+                if ($cnt >= 3) {
+                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates (3 Intervalle) – beende Ladung.");
                     $this->SetForceState(1);
                     $this->ResetModiNachLadeende();
+                    // Counter zurücksetzen
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
+                    $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
             } else {
-                // Leistung wieder vorhanden → Counter zurücksetzen
+                // Leistung wieder da → Counter sofort zurücksetzen
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
+                $this->LogTemplate('debug', 'Leistung ≥100 W → NoPowerCounter zurückgesetzt');
             }
+        } else {
+            $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
         }
     }
 
@@ -1403,80 +1330,379 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    private function UpdateStatusAnzeige()
+    /**
+     * Liest alle Variablen, Attribute und Profile aus
+     * und packt sie in ein assoziatives Array.
+     */
+    private function collectStatusData(): array
     {
-        // === 1. Daten sammeln & vorbereiten ===
+        // --- SoC-Werte aus Properties, nicht aus Idents! ---
+        $socVarID    = $this->ReadPropertyInteger('CarSOCID');
+        $socAktuell  = ($socVarID > 0 && @IPS_VariableExists($socVarID))
+            ? GetValue($socVarID) . '%'
+            : 'n/a';
 
-        // SoC-Werte
-        $socID       = $this->ReadPropertyInteger('CarSOCID');
-        $targetID    = $this->ReadPropertyInteger('CarTargetSOCID');
-        $socAktuell  = ($socID > 0 && @IPS_VariableExists($socID))       ? GetValue($socID)       . '%' : 'n/a';
-        $socZiel     = ($targetID > 0 && @IPS_VariableExists($targetID)) ? GetValue($targetID)    . '%' : 'n/a';
+        $targetVarID = $this->ReadPropertyInteger('CarTargetSOCID');
+        $socZiel     = ($targetVarID > 0 && @IPS_VariableExists($targetVarID))
+            ? GetValue($targetVarID) . '%'
+            : 'n/a';
 
-        // No-Power-Counter (Versuche ohne Leistung)
-        $noPowerCounter = $this->ReadAttributeInteger('NoPowerCounter');
+        // --- Status / Initial-Check ---
+        $status     = $this->GetValue('Status');
+        $inInitial  = ($status === false || $status <= 1);
+        $initialInt = $this->ReadPropertyInteger('InitialCheckInterval');
 
-        // Neutralmodus (nur wenn aktiv)
-        $neutralUntil = intval($this->ReadAttributeInteger('NeutralModeUntil'));
-        $neutralActive = ($neutralUntil > time());
+        // --- Neutralmodus ---
+        $until        = intval($this->ReadAttributeInteger('NeutralModeUntil'));
+        $neutralActive = ($until > time());
 
-        // Initial-Check (nur wenn aktiv)
-        $status       = $this->GetValue('Status');
-        $inInitial    = ($status === false || $status <= 1);
-        $initialIntvl = $this->ReadPropertyInteger('InitialCheckInterval');
-
-        // Lademodus-Text
-        $modus = '☀️ PVonly (nur PV-Überschuss)';
+        // --- Lademodus-Text ---
         if ($this->GetValue('ManuellLaden')) {
-            $phasenIst = $this->GetValue('Phasenmodus');
-            $ampere    = $this->GetValue('ManuellAmpere');
-            $modus     = "🔌 Manuell: Vollladen ({$phasenIst}-phasig, {$ampere} A)";
-        } elseif ($this->GetValue('PV2CarModus')) {
-            $prozent = $this->GetValue('PVAnteil');
-            $modus = "🌞 PV-Anteil laden ({$prozent} %)";
-        } elseif ($this->GetValue('ZielzeitLaden')) {
-            $modus = '⏰ Zielzeitladung';
+            $modusText = sprintf(
+                '🔌 Manuell: Vollladen (%d-phasig, %d A)',
+                $this->GetValue('Phasenmodus'),
+                $this->GetValue('ManuellAmpere')
+            );
+        }
+        elseif ($this->GetValue('PV2CarModus')) {
+            $modusText = '🌞 PV-Anteil laden (' . $this->GetValue('PVAnteil') . '%)';
+        }
+        elseif ($this->GetValue('ZielzeitLaden')) {
+            $modusText = '⏰ Zielzeitladung';
+        }
+        else {
+            $modusText = '☀️ PVonly (nur PV-Überschuss)';
         }
 
-        // Text aus Profil lesen
-        $psmSollTxt   = $this->GetProfileText('PhasenmodusEinstellung'); // z.B. "1-phasig"
-        $psmIstTxt    = $this->GetProfileText('Phasenmodus');            // z.B. "1-phasig", "2-phasig", "3-phasig"
-        $statusTxt    = $this->GetProfileText('Status');                 // z.B. "Fahrzeug lädt"
-        $frcTxt       = $this->GetProfileText('AccessStateV2');          // z.B. "Laden (erzwungen)"
+        // --- Modul aktiv/inaktiv ---
+        $moduleActive = $this->ReadPropertyBoolean('ModulAktiv');
 
-        // === 2. HTML-Block bauen ===
+        // --- Profiltexte ---
+        $psmSollTxt = $this->GetProfileText('PhasenmodusEinstellung');
+        $psmIstTxt  = $this->GetProfileText('Phasenmodus');
+        $statusTxt  = $this->GetProfileText('Status');
+        $frcTxt     = $this->GetProfileText('AccessStateV2');
 
-        $html = '<div style="font-size:15px; line-height:1.7em;">';
+        return [
+            'socAktuell'    => $socAktuell,
+            'socZiel'       => $socZiel,
+            'inInitial'     => $inInitial,
+            'initialInt'    => $initialInt,
+            'neutralActive' => $neutralActive,
+            'neutralUntil'  => $until,
+            'modusText'     => $modusText,
+            'psmSollTxt'    => $psmSollTxt,
+            'psmIstTxt'     => $psmIstTxt,
+            'statusTxt'     => $statusTxt,
+            'frcTxt'        => $frcTxt,
+            'moduleActive'  => $moduleActive,
+        ];
+    }
 
-        if ($inInitial) {
-            $html .= "<b>Initial-Check:</b> Aktiv (Intervall: {$initialIntvl} s)<br>";
+    /** Helfer: liest Variable-ID aus und hängt Einheit an oder gibt 'n/a' */
+    private function getValueOrNa(string $ident, string $unit = ''): string
+    {
+        $vid = $this->GetIDForIdent($ident);
+        if ($vid && @IPS_VariableExists($vid)) {
+            return GetValue($vid) . $unit;
+        }
+        return 'n/a';
+    }
+
+    /**
+     * Nimmt das Data-Array und liefert den fertigen HTML-Block zurück.
+     */
+    private function renderStatusHtml(array $d): string
+    {
+        $html  = '<div style="font-size:15px; line-height:1.7em;">';
+        if (!$d['moduleActive']) {
+            $html .= "<span style=\"color:red; font-weight:bold;\">● Modul deaktiviert</span><br>";
         }
 
-        if ($neutralActive) {
-            $html .= "<b>Neutralmodus:</b> aktiv bis " . date("H:i:s", $neutralUntil) . "<br>";
+        if ($d['inInitial']) {
+            $html .= "<b>Initial-Check:</b> Aktiv (Intervall: {$d['initialInt']} s)<br>";
         }
-
-        $html .= "<b>Lademodus:</b> $modus<br>";
-        $html .= "<b>Status:</b> $statusTxt<br>";
-        $html .= "<b>Wallbox Modus:</b> $frcTxt<br>";
-        $html .= "<b>SOC Auto (Ist / Ziel):</b> {$socAktuell} / {$socZiel}<br>";
-
-        //$html .= "<b>No-Power-Counter:</b> {$noPowerCounter}×<hr>"; // Optional: für Debug
-
-        $html .= "<b>Phasen Wallbox-Einstellung:</b> $psmSollTxt<br>";
-        $html .= "<b>Genutzte Phasen (Fahrzeug):</b> $psmIstTxt<br>";
-
+        if ($d['neutralActive']) {
+            $t = date("H:i:s", $d['neutralUntil']);
+            $html .= "<b>Neutralmodus:</b> aktiv bis {$t}<br>";
+        }
+        $html .= "<b>Lademodus:</b> {$d['modusText']}<br>";
+        $html .= "<b>Status:</b> {$d['statusTxt']}<br>";
+        $html .= "<b>Wallbox Modus:</b> {$d['frcTxt']}<br>";
+        $html .= "<b>SOC Auto (Ist / Ziel):</b> {$d['socAktuell']} / {$d['socZiel']}<br>";
+        $html .= "<b>Phasen Wallbox-Einstellung:</b> {$d['psmSollTxt']}<br>";
+        $html .= "<b>Genutzte Phasen (Fahrzeug):</b> {$d['psmIstTxt']}<br>";
         $html .= '</div>';
+        return $html;
+    }
 
-        // === 3. Nur bei Änderung setzen ===
-        $lastHtml = $this->ReadAttributeString('LastStatusInfoHTML');
-        if ($lastHtml !== $html) {
+    private function UpdateStatusAnzeige(): void
+    {
+        $data = $this->collectStatusData();
+        $html = $this->renderStatusHtml($data);
+
+        // nur setzen, wenn sich was geändert hat
+        $last = $this->ReadAttributeString('LastStatusInfoHTML');
+        if ($last !== $html) {
             SetValue($this->GetIDForIdent('StatusInfo'), $html);
             $this->WriteAttributeString('LastStatusInfoHTML', $html);
             $this->LogTemplate('debug', "Status-Info HTMLBox aktualisiert.");
-        } else {
+        }
+        else {
             $this->LogTemplate('debug', "Status-Info HTMLBox unverändert, kein Update.");
         }
+    }
+
+    private function registerAttributes(array $list): void
+    {
+        foreach ($list as $ident => $default) {
+            switch (gettype($default)) {
+                case 'boolean': $this->RegisterAttributeBoolean($ident, $default); break;
+                case 'integer': $this->RegisterAttributeInteger($ident, $default); break;
+                case 'double':  $this->RegisterAttributeFloat($ident,   $default); break;
+                case 'string':  $this->RegisterAttributeString($ident,  $default); break;
+            }
+        }
+    }
+
+    private function registerProperties(array $list): void
+    {
+        foreach ($list as $ident => $cfg) {
+            switch ($cfg['type']) {
+                case 'string':  $this->RegisterPropertyString($ident, $cfg['default']); break;
+                case 'integer': $this->RegisterPropertyInteger($ident, $cfg['default']); break;
+                case 'boolean': $this->RegisterPropertyBoolean($ident, $cfg['default']); break;
+                case 'float':   $this->RegisterPropertyFloat($ident,   $cfg['default']); break;
+            }
+        }
+    }
+
+    private function registerVariables(array $list): void
+    {
+        foreach ($list as $cfg) {
+            list($type, $ident, $name, $profile, $position, $icon) = $cfg + [null,null,null,null,null,null];
+            switch ($type) {
+                case 'integer': $this->RegisterVariableInteger($ident, $name, $profile, $position); break;
+                case 'float':   $this->RegisterVariableFloat($ident,   $name, $profile, $position); break;
+                case 'boolean': $this->RegisterVariableBoolean($ident, $name, $profile, $position); break;
+                case 'string':  $this->RegisterVariableString($ident,  $name, $profile, $position); break;
+            }
+            if (!empty($icon)) {
+                IPS_SetIcon($this->GetIDForIdent($ident), $icon);
+            }
+        }
+    }
+
+    // 1) Neutral-Modus prüfen
+    private function isNeutralModeActive(): bool
+    {
+        return intval($this->ReadAttributeInteger('NeutralModeUntil')) > time();
+    }
+
+    // 2) Wallbox-Status holen & auf Fehler prüfen
+    private function fetchChargerStatus()
+    {
+        $data = $this->getStatusFromCharger();
+        return $data === false ? false : $data;
+    }
+    private function handleChargerUnavailable(): void
+    {
+        $this->ResetWallboxVisualisierungKeinFahrzeug();
+        $this->LogTemplate('debug', 'Wallbox nicht erreichbar – Visualisierung zurückgesetzt');
+        $this->UpdateStatusAnzeige();
+    }
+
+    // 3) Phasenanzahl bestimmen
+    private function determinePhases(array $data): int
+    {
+        $cnt = 0;
+        foreach ([$data['nrg'][4] ?? 0, $data['nrg'][5] ?? 0, $data['nrg'][6] ?? 0] as $strom) {
+            if (abs(floatval($strom)) > 1.5) {
+                $cnt++;
+            }
+        }
+        return max(1, $cnt);
+    }
+
+    // 4) Hausverbrauch updaten
+    private function updateHousePower(array $energyRaw): void
+    {
+        $this->SetValueAndLogChange('Hausverbrauch_W', $energyRaw['haus'], 'Hausverbrauch (W)');
+        $this->SetValueAndLogChange(
+            'Hausverbrauch_abz_Wallbox',
+            max(0, $energyRaw['haus'] - $energyRaw['wallbox']),
+            'Hausverbrauch abzgl. Wallbox (W)'
+        );
+    }
+
+    // 5) Fahrzeug-Status
+    private function isCarConnected(array $data): bool
+    {
+        return isset($data['car']) && intval($data['car']) > 1;
+    }
+    private function updateSurplusDisplayWithoutCar(array $energyRaw): void
+    {
+        $filtered = $this->applyFilters($energyRaw);
+        $surplus  = $this->calculateSurplus($filtered, 1, false);
+        $this->SetValue('PV_Ueberschuss',   $surplus['ueberschuss_w']);
+        $this->SetValue('PV_Ueberschuss_A', $surplus['ueberschuss_a']);
+    }
+
+    // 6) Charger-Variablen synchronisieren
+    private function extractChargerVariables(array $data): array
+    {
+        return [
+            'psm'      => intval($data['psm']   ?? 0),
+            'car'      => intval($data['car']   ?? 0),
+            'leistung' => $data['nrg'][11]      ?? 0.0,
+            'ampereWB' => $data['amp']          ?? 0,
+            'energie'  => $data['wh']           ?? 0,
+            'freigabe' => (bool)($data['alw']   ?? false),
+            'kabel'    => $data['cbl']          ?? 0,
+            'err'      => $data['err']          ?? 0,
+            'frcRaw'   => $data['frc']          ?? null,
+            'stateRaw' => $data['accessStateV2']?? null,
+        ];
+    }
+
+    private function syncChargerVariables(array $vars, int $phasen): void
+    {
+        // 1) Soll-Phasenmodus aus API
+        $this->SetValueAndLogChange(
+            'PhasenmodusEinstellung',
+            $vars['psm'],
+            'Wallbox-Phasen Soll',
+            '',
+            'debug'
+        );
+
+        // 2) Tatsächliche genutzte Phasen
+        $this->SetValueAndLogChange(
+            'Phasenmodus',
+            $phasen,
+            'Genutzte Phasen',
+            '',
+            'debug'
+        );
+
+        $accessStateV2 = ($vars['frcRaw'] === 2 || $vars['stateRaw'] === 2) ? 2 : 1;
+        $this->SetValueAndLogChange('PhasenmodusEinstellung', $vars['psm'] ?? 0, 'Phasenmodus (Einstellung)', '', 'debug');
+        $this->SetValueAndLogChange('Phasenmodus',           $phasen,                    'Genutzte Phasen',            '', 'debug');
+        $this->SetValueAndLogChange('Status',                $vars['car'],               'Status');
+        $this->SetValueAndLogChange('AccessStateV2',         $accessStateV2,             'Wallbox Modus');
+        $this->SetValueAndLogChange('Leistung',              $vars['leistung'],          'Aktuelle Ladeleistung (W)',  'W');
+        $this->SetValueAndLogChange('Ampere',                $vars['ampereWB'],          'Max. Ladestrom',             'A');
+        $this->SetValueAndLogChange('Energie',               $vars['energie'],           'Geladene Energie',           'Wh');
+        $this->SetValueAndLogChange('Freigabe',              $vars['freigabe'],          'Ladefreigabe');
+        $this->SetValueAndLogChange('Kabelstrom',            $vars['kabel'],             'Kabeltyp');
+        $this->SetValueAndLogChange('Fehlercode',            $vars['err'],               'Fehlercode', '', 'warn');
+    }
+
+    // 8) Modus-Routing
+    private function routeChargingMode(array $data, string $mode, int $phasen): void
+    {
+        // Map Modus-Schlüssel auf Handler-Methoden
+        $handlers = [
+            'manuell' => 'ModusManuellVollladen',
+            'pv2car'  => 'ModusPV2CarLaden',
+            'pvonly'  => 'ModusPVonlyLaden',
+            // später z.B. 'zielzeit' => 'ModusZielzeitLaden',
+        ];
+
+        // 1) Prüfe: Fahrzeug verbunden?
+        if (!$this->isCarConnected($data) || !$this->FahrzeugVerbunden($data)) {
+            $this->ResetLademodiWennKeinFahrzeug();
+            $this->SetTimerNachModusUndAuto();
+            return;
+        }
+
+        // 2) Bestimme aktuellen Modus-Key
+        if ($this->GetValue('ManuellLaden')) {
+            $key = 'manuell';
+        }
+        elseif ($this->GetValue('PV2CarModus')) {
+            $key = 'pv2car';
+        }
+        else {
+            // Default: PVonly (egal ob $mode übergeben wird)
+            $key = 'pvonly';
+        }
+
+        // 3) Handler-Methode aus Map holen
+        if (!isset($handlers[$key])) {
+            $this->LogTemplate('warn', "Unbekannter Lademodus: {$key}");
+            return;
+        }
+        $method = $handlers[$key];
+
+        // 4) Modus-Methode aufrufen
+        switch ($key) {
+            case 'pvonly':
+                // braucht noch Phasen und $mode
+                $this->$method($data, $phasen, $mode);
+                break;
+            default:
+                // manuell und pv2car nur mit $data
+                $this->$method($data);
+                break;
+        }
+    }
+
+    private function handleNeutralMode(): bool
+    {
+        $until = $this->ReadAttributeInteger('NeutralModeUntil');
+        if ($until > time()) {
+            $this->LogTemplate('debug', 'Neutralmodus aktiv – Ladefreigabe gesperrt bis ' . date('H:i:s', $until));
+            $this->SetForceState(1);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Prüft, ob wir aktuell im Initial-Check sind und setzt ggf. den Schnell-Poll-Timer.
+     * Gibt true zurück, wenn Initial-Check aktiv ist.
+     */
+    private function handleInitialCheck(): bool
+    {
+        $status    = $this->GetValue('Status');
+        $inInitial = ($status === false || $status <= 1);
+        if ($inInitial) {
+            $this->LogTemplate('debug', "Initial-Check aktiv (Status={$status})");
+        }
+        return $inInitial;
+    }
+
+    /**
+     * Holt direkt die aktuellen Wallbox-Daten, synchronisiert alle Werte und updatet die Anzeige.
+     */
+    private function refreshChargerData(): void
+    {
+        // 1) Daten holen
+        $data = $this->getStatusFromCharger();
+        if ($data === false) {
+            // Wallbox nicht erreichbar – wir könnten hier noch Reset einbauen
+            return;
+        }
+
+        // 2) Phasen ermitteln
+        $phasen = $this->determinePhases($data);
+
+        // 3) Charger-Variablen synchronisieren
+        $vars = $this->extractChargerVariables($data);
+        $this->syncChargerVariables($vars, $phasen);
+
+        // 4) Hausverbrauch aktualisieren
+        $energyRaw = $this->gatherEnergyData();
+        $this->updateHousePower($energyRaw);
+
+        // 5) PV-Überschuss anzeigen, wenn kein Fahrzeug da
+        if (!$this->isCarConnected($data)) {
+            $this->updateSurplusDisplayWithoutCar($energyRaw);
+        }
+
+        // 6) UI aktualisieren
+        $this->UpdateStatusAnzeige();
     }
 
     // =========================================================================
@@ -1629,8 +1855,11 @@ class PVWallboxManager extends IPSModule
                 $this->ReadPropertyInteger('MinAmpere'),
                 min($this->ReadPropertyInteger('MaxAmpere'), $amp)
             );
-        } elseif ($log) {
-            $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W ({$rawSurplus}W) → setze auf 0");
+        } else {
+            $rawSurplus = 0;
+            if ($log) {
+                $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → nicht angezeigt (auf 0 gesetzt)");
+            }
         }
 
         // Logging & Visualisierung
@@ -1659,6 +1888,24 @@ class PVWallboxManager extends IPSModule
             'ueberschuss_a' => $amp,
         ];
     }
+
+    private function VerhindereStopHystereseKurzNachModuswechsel(int $cooldownSekunden): bool
+        {
+            $letzte = $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+            if ($letzte <= 0) {
+                // nie umgeschaltet → kein Cooldown
+                return false;
+            }
+            $vergangen = time() - $letzte;
+            if ($vergangen < $cooldownSekunden) {
+                $this->LogTemplate(
+                    'debug',
+                    "Stop-Hysterese unterdrückt ({$vergangen}s seit Phasenwechsel < {$cooldownSekunden}s)"
+                );
+                return true;
+            }
+            return false;
+        }
 
     private function BerechneLadefreigabeMitHysterese(int $pvUeberschuss): int
     {
