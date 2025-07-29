@@ -2067,6 +2067,8 @@ class PVWallboxManager extends IPSModule
         $grundpreis  = $this->ReadPropertyFloat('MarketPriceBasePrice');
         $aufschlagPct= $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
         $steuersatz  = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
+        $provider    = $this->ReadPropertyString('MarketPriceProvider');
+
 
         // Zwischenpreise berechnen
         $preisVorAufschlag  = $netto + $grundpreis;
@@ -2123,11 +2125,7 @@ class PVWallboxManager extends IPSModule
     </style>
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
         <div style="font-size:1.07em;">
-        Netto: {$fmt($netto)} ct/kWh /
-        Grundpreis: {$fmt($grundpreis)} ct/kWh /
-        Aufschlag: {$fmt($preisVorAufschlag * $aufschlagPct)} ct/kWh /
-        MWST: {$fmt($preisNachAufschlag * $steuersatz)} ct/kWh /
-        Brutto: {$fmt($brutto)} ct/kWh
+        Aktuell: {$fmt($brutto)} ct/kWh - {$provider}
     </div>
     EOT;
 
