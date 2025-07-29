@@ -4,7 +4,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
 ## [1.4b] - 🚧 in Vorbereitung 🚧
-- Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt -> wird anhand der Werte berechnet
+- Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
+- Börsenpreis wird anhand der Werte berechnet
 
 ## [1.3b] - 2025-07-29
 ### Hinzugefügt
