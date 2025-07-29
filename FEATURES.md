@@ -29,14 +29,16 @@ Hier werden geplante Features gesammelt, Community-Wünsche, Ideen und größere
 
 - [ ] Ladestatistik als HTMLBox
 - [ ] Chart-Darstellung für Ladevorgänge
+- [ ] Testladung um mx Ladeleistung zu bestimmen
+- [ ] 
 
 ---
 ## 🛠️ Technische Verbesserungen
 
 - [x] Konfigurierbare Hysterese und Phasenumschaltung -> **Umgesetzt in: v1.0b**
-- [ ] Mehr Visualisierung/Logging im WebFront
+- [x] Mehr Visualisierung/Logging im WebFront -> **Umgesetzt in: v1.3b**
 - [ ] Automatisches Reset nach Stromausfall
-- [x] PV-Überschuss immer berechnen
+- [x] PV-Überschuss immer berechnen -> **Umgesetzt in: v1.3b**
 - [x] Modul über die Visu abschalten (Button) -> **Umgesetzt in: v1.2b**
 - [x] Bug 🏠 Hausverbrauch abzügl. Wallbox (W) wird beim Modulintervall 0 W berechnet -> **Umgesetzt in: v1.2b**
 - [x] Börsenpreise sollen zur vollen Stunde aktualisiert werden -> **Umgesetzt in: v1.1b**
