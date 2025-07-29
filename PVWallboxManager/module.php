@@ -2029,20 +2029,20 @@ class PVWallboxManager extends IPSModule
         $restTime = $this->BerechneVerbleibendeLadezeit();
         $this->SetValueAndLogChange('ChargeTime', $restTime, '⏳ Geschätzte Ladezeit:');
 
-        // einen einzigen Log-Eintrag erzeugen
+        // Log nur bei echten Fehlern oder wenn Ladezeit > 0
         if ($restTime === 'n/a') {
+            // fehlende Daten → Warnung
             $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende Daten)');
         }
-        elseif ($restTime === '00h 00min') {
-            $this->LogTemplate('info', '⏳ Geschätzte Ladezeit: 00h 00min');
-        }
-        else {
+        elseif ($restTime !== '00h 00min') {
+            // Ladezeit > 0 → Info mit Rest- und Fertigzeit
             $finishTime = $this->BerechneFertigZeit($restTime);
             $this->LogTemplate(
                 'info',
                 "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertig­zeit: {$finishTime}"
             );
         }
+        // elseif $restTime === '00h 00min' → kein Log
     }
 
     //=========================================================================
