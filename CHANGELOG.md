@@ -6,7 +6,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 ## [1.4b] - 🚧 in Vorbereitung 🚧
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
 - Börsenpreis wird anhand der Werte berechnet
-- Börsenpreis-Vorscha (HTML) angepasst 
+- Börsenpreis-Vorscha (HTML) angepasst
+- Ladezeit Berechnen und als Info im Log ausgeben
 
 ## [1.3b] - 2025-07-29
 ### Hinzugefügt
