@@ -2122,14 +2122,13 @@ class PVWallboxManager extends IPSModule
     }
     </style>
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
-        <b style="font-size:1.07em;">
-        Börsenpreis-Vorschau:
+        <div style="font-size:1.07em;">
         Netto: {$fmt($netto)} ct/kWh /
         Grundpreis: {$fmt($grundpreis)} ct/kWh /
         Aufschlag: {$fmt($preisVorAufschlag * $aufschlagPct)} ct/kWh /
         MWST: {$fmt($preisNachAufschlag * $steuersatz)} ct/kWh /
         Brutto: {$fmt($brutto)} ct/kWh
-    </b>
+    </div>
     EOT;
 
         foreach ($preise as $i => $dat) {
