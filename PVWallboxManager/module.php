@@ -2061,6 +2061,21 @@ class PVWallboxManager extends IPSModule
             return '<span style="color:#888;">Keine Preisdaten verfügbar.</span>';
         }
 
+        // Aktuellen Netto-Spotpreis
+        $netto       = $this->GetValue('CurrentSpotPrice') 
+                    / (1 + $this->ReadPropertyFloat('MarketPriceTaxRate')/100); // Rückrechnung
+        $grundpreis  = $this->ReadPropertyFloat('MarketPriceBasePrice');
+        $aufschlagPct= $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
+        $steuersatz  = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
+
+        // Zwischenpreise berechnen
+        $preisVorAufschlag  = $netto + $grundpreis;
+        $preisNachAufschlag = $preisVorAufschlag * (1 + $aufschlagPct);
+        $brutto             = round($preisNachAufschlag * (1 + $steuersatz), 3);
+
+        // Schön formatieren (3 Nachkommastellen, Komma als Dezimalpunkt)
+        $fmt = function(float $v) { return number_format($v, 3, ',', '.'); };
+
         $now = time();
         // 1) nur zukünftige oder aktuelle Zeitpunkte behalten
         $future = array_filter($preise, function($p) use ($now) {
@@ -2107,7 +2122,14 @@ class PVWallboxManager extends IPSModule
     }
     </style>
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
-    <b style="font-size:1.07em;">Börsenpreis-Vorschau:</b>
+        <b style="font-size:1.07em;">
+        Börsenpreis-Vorschau:
+        Netto: {$fmt($netto)} ct/kWh /
+        Grundpreis: {$fmt($grundpreis)} ct/kWh /
+        Aufschlag: {$fmt($preisVorAufschlag * $aufschlagPct)} ct/kWh /
+        MWST: {$fmt($preisNachAufschlag * $steuersatz)} ct/kWh /
+        Brutto: {$fmt($brutto)} ct/kWh
+    </b>
     EOT;
 
         foreach ($preise as $i => $dat) {
