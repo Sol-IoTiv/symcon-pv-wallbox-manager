@@ -19,7 +19,7 @@ Hier werden geplante Features gesammelt, Community-Wünsche, Ideen und größere
       **Beispiel:** Haus braucht 6kW, dann bleiben nur noch 1kW (1-phasig) für die Wallbox übrig.  
 
 - [ ] **Weitere Lademodi und Features**
-    - [ ] Zeitgesteuertes Laden (z.B. Zielzeit, günstige Börsenzeiten)
+    - [ ] Zeitgesteuertes Laden (z.B. Zielzeit, günstige Börsenzeiten) Errechnete Zeitfenster in der Anzeige-Info anzeigen
     - [x] PV2Car mit Prozentsteuerung -> **Umgesetzt in: v1.1b**
     - [x] neuer Lademodi (Laden Manuell steuern) -> Start/Stop, Amperevorgabe, Phasenvorgabe
 
@@ -29,7 +29,13 @@ Hier werden geplante Features gesammelt, Community-Wünsche, Ideen und größere
 
 - [ ] Ladestatistik als HTMLBox
 - [ ] Chart-Darstellung für Ladevorgänge
-- [ ] Testladung um mx Ladeleistung zu bestimmen
+- [ ] Testladung um max Ladeleistung zu bestimmen
+- [ ] Forecast Sonnenstunden
+- [ ] Forecast Kalender Ort Tremin
+- [ ] Pushbenachrichtigung am Handy beim Fahrzeug Connect -> Auswahl Lademodi
+- [ ] Sommer- / Wintermodus notwendig? wie verhält sich das Modul im Sommer vs Übergangszeit vs Winter
+- [ ] Strompreis Tibber erweitern, Grundpreis, Aufschlag, Steuersatz
+- [ ] Ladezeit Berechnen anhand Auto Batteriekapazität Ziel SOC und aktueller Ladeleistung
 - [ ] 
 
 ---
