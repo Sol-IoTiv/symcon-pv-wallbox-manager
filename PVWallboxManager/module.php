@@ -1077,7 +1077,17 @@ class PVWallboxManager extends IPSModule
     {
         // Robust, egal ob false oder Array kommt
         $car = (is_array($data) && isset($data['car'])) ? intval($data['car']) : 0;
-        if ($car > 1) return true;
+        if ($car > 1) {
+        // 🚀 Push-Notification an die WebFront Push-Instanz schicken
+        $pushInstID = 12594; // <-- hier deine WFC Push-Instanz-ID eintragen
+        WFC_PushNotification(
+            $pushInstID,
+            '🚗 Fahrzeug verbunden!',
+            'Bitte wähle jetzt den Lademodus.',
+            'Car'
+        );
+        return true;
+    }
 
         // --- NUR EINMAL zentral alles erledigen ---
         if ($this->GetValue('AccessStateV2') != 1) {
