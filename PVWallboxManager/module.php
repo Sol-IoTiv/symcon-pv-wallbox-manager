@@ -2123,9 +2123,9 @@ class PVWallboxManager extends IPSModule
         transition: width 0.35s;
     }
     </style>
-    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
-        <div style="font-size:1.07em;">
-        Aktuell: {$fmt($brutto)} ct/kWh - {$provider}
+    <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;margin:0 auto;">
+    <div style="font-size:1.07em;font-weight:bold;text-align:center;margin-bottom:8px;">
+        Aktuell: {$fmt($brutto)} ct/kWh – {$provider}
     </div>
     EOT;
 
