@@ -71,7 +71,7 @@ class PVWallboxManager extends IPSModule
             'MarketPriceBasePrice'  => ['type'=>'float',   'default'=>0.00],  // Grundpreis in ct/kWh
             'MarketPriceSurcharge'  => ['type'=>'float',   'default'=>0.00],  // Aufschlag in ct/kWh
             'MarketPriceTaxRate'    => ['type'=>'float',   'default'=>0.00],  // Steuersatz in %
-            'SmoothingAlpha'   => ['type'=>'float',   'default'=>0.2],  // α für exp. Glättung
+            'SmoothingAlpha'   => ['type'=>'float',   'default'=>0.0],  // α für exp. Glättung
             'MaxRampDeltaAmp'  => ['type'=>'integer', 'default'=>2],    // max. A-Änderung pro Zyklus
         ]);
 
