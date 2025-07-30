@@ -2039,7 +2039,7 @@ class PVWallboxManager extends IPSModule
         }
 
         // 3) Zusammensetzen des Strings
-        $chargeString = "{$restTime} – {$finishTime} Uhr";
+        $chargeString = "{$restTime} –> {$finishTime} Uhr";
 
         // 4) In die Variable schreiben
         $this->SetValueAndLogChange('ChargeTime', $chargeString, '⏳ Ladezeit/Fertigzeit:');
