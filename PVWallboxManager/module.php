@@ -2039,7 +2039,7 @@ class PVWallboxManager extends IPSModule
             $finishTime = $this->BerechneFertigZeit($restTime);
             $this->LogTemplate(
                 'info',
-                "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertig­zeit: {$finishTime}"
+                "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertigzeit: {$finishTime} Uhr"
             );
         }
         // elseif $restTime === '00h 00min' → kein Log
