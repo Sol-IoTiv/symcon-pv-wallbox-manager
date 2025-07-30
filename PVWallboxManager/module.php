@@ -29,7 +29,9 @@ class PVWallboxManager extends IPSModule
             'LastTimerStatus'                => -1,
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
-            'LastStatusInfoHTML'            => '',
+            'LastStatusInfoHTML'             => '',
+            'LastChargingCurrent'            => 0,    // zuletzt gesetzter Ampere-Wert
+            'SmoothedSurplus'                => 0.0,  // für exponentialle Glättung
         ]);
 
         // 2) Properties from form.json
@@ -69,6 +71,8 @@ class PVWallboxManager extends IPSModule
             'MarketPriceBasePrice'  => ['type'=>'float',   'default'=>0.00],  // Grundpreis in ct/kWh
             'MarketPriceSurcharge'  => ['type'=>'float',   'default'=>0.00],  // Aufschlag in ct/kWh
             'MarketPriceTaxRate'    => ['type'=>'float',   'default'=>0.00],  // Steuersatz in %
+            'SmoothingAlpha'   => ['type'=>'float',   'default'=>0.2],  // α für exp. Glättung
+            'MaxRampDeltaAmp'  => ['type'=>'integer', 'default'=>2],    // max. A-Änderung pro Zyklus
         ]);
 
         // 3) Modul-Aktiv Switch
@@ -1843,7 +1847,7 @@ class PVWallboxManager extends IPSModule
         // Nur Batterie­ladung (positiv) berücksichtigen
         $batLoad = max(0, $data['batt']);
 
-        // Gesamtverbrauch
+        // Gesamtverbrauch (gefilterter Hausverbrauch + Batterie)
         $cons = $data['hausFiltered'] + $batLoad;
 
         // Roh-Überschuss
@@ -1852,45 +1856,61 @@ class PVWallboxManager extends IPSModule
             $rawSurplus = 0;
         }
 
-        // Cutoff-Threshold
-        $cutoff = 250;
-        $amp    = 0;
-        if ($rawSurplus >= $cutoff) {
-            $amp = ceil($rawSurplus / (230 * $anzPhasen));
-            $amp = max(
+        // 1) Exponentielle Glättung
+        $alpha        = $this->ReadPropertyFloat('SmoothingAlpha');
+        $lastSmooth   = $this->ReadAttributeFloat('SmoothedSurplus');
+        $smoothed     = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        $this->WriteAttributeFloat('SmoothedSurplus', $smoothed);
+        $useSurplus   = $smoothed;
+
+        // 2) Cutoff-Threshold
+        $cutoff     = 250;
+        $desiredAmp = 0;
+        if ($useSurplus >= $cutoff) {
+            $desiredAmp = (int)ceil($useSurplus / (230 * $anzPhasen));
+            $desiredAmp = max(
                 $this->ReadPropertyInteger('MinAmpere'),
-                min($this->ReadPropertyInteger('MaxAmpere'), $amp)
+                min($this->ReadPropertyInteger('MaxAmpere'), $desiredAmp)
             );
         } else {
-            $rawSurplus = 0;
             if ($log) {
                 $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → nicht angezeigt (auf 0 gesetzt)");
             }
         }
 
-        // Logging & Visualisierung
+        // 3) Ramp-Rate-Limiting
+        $lastAmp    = $this->ReadAttributeInteger('LastChargingCurrent');
+        $maxDelta   = $this->ReadPropertyInteger('MaxRampDeltaAmp');
+        $delta      = $desiredAmp - $lastAmp;
+        // Limitiere die Änderung pro Zyklus
+        $delta      = max(-$maxDelta, min($maxDelta, $delta));
+        $amp        = $lastAmp + $delta;
+        $this->WriteAttributeInteger('LastChargingCurrent', $amp);
+
+        // 4) Logging & Visualisierung
         if ($log) {
             $this->LogTemplate(
                 'debug',
                 sprintf(
-                    "Berechnung: PV=%dW, Haus=%dW, Batt=%dW → Überschuss=%dW, Ampere=%dA, Phasen=%d",
+                    "Berechnung (geglättet): PV=%dW, Haus=%dW, Batt=%dW → Überschuss≈%.0fW, Amp=%dA (Δ%+dA), Phasen=%d",
                     $data['pv'],
                     $data['hausFiltered'],
                     $batLoad,
-                    $rawSurplus,
+                    $useSurplus,
                     $amp,
+                    $delta,
                     $anzPhasen
                 )
             );
-            $this->SetValueAndLogChange('PV_Ueberschuss', $rawSurplus,   'PV-Überschuss',   'W', 'debug');
-            $this->SetValueAndLogChange('PV_Ueberschuss_A', $amp,        'PV-Überschuss (A)','A', 'debug');
+            $this->SetValueAndLogChange('PV_Ueberschuss',   round($useSurplus),   'PV-Überschuss',     'W', 'debug');
+            $this->SetValueAndLogChange('PV_Ueberschuss_A', $amp,                 'PV-Überschuss (A)', 'A', 'debug');
         } else {
-            $this->SetValue('PV_Ueberschuss',   $rawSurplus);
+            $this->SetValue('PV_Ueberschuss',   round($useSurplus));
             $this->SetValue('PV_Ueberschuss_A', $amp);
         }
 
         return [
-            'ueberschuss_w' => $rawSurplus,
+            'ueberschuss_w' => round($useSurplus),
             'ueberschuss_a' => $amp,
         ];
     }
