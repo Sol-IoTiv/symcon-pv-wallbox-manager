@@ -1871,7 +1871,6 @@ class PVWallboxManager extends IPSModule
         ];
         }
     }
-
     /**
      * 3) Überschuss und Ampere berechnen (inkl. Threshold und Hysterese-Logging)
      */
