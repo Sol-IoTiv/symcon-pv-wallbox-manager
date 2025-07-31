@@ -1306,7 +1306,7 @@ class PVWallboxManager extends IPSModule
 
         // 4) Fallback: No-Power-Counter
         if ($loadActive) {
-            $leistung  = round($this->GetValue('Leistung'));
+            $leistung  = $this->GetValue('Leistung');
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
             $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
 
@@ -1318,9 +1318,12 @@ class PVWallboxManager extends IPSModule
 
                 if ($cnt >= 3) {
                     $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates (3 Intervalle) – beende Ladung.");
+//                    $this->SetForceState(1);
+//                    $this->ResetModiNachLadeende();
+                    // 1) Wallbox sperren
                     $this->SetForceState(1);
-                    $this->ResetModiNachLadeende();
-                    // Counter zurücksetzen
+                    // 2) Modus NICHT zurücksetzen – bleibt erhalte
+                    // 3) Counter zurücksetzen
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                     $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
@@ -1328,6 +1331,9 @@ class PVWallboxManager extends IPSModule
                 // Leistung wieder da → Counter sofort zurücksetzen
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
                 $this->LogTemplate('debug', 'Leistung ≥100 W → NoPowerCounter zurückgesetzt');
+                if ($this->GetValue('AccessStateV2') !== 2) {
+                    $this->SetForceState(2);
+                }
             }
         } else {
             $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
@@ -1835,7 +1841,7 @@ class PVWallboxManager extends IPSModule
         return $data;
     }
 
-    /**
+        /**
      * 2.5) Anteilsberechnung für PV2Car-Modus
      *
      * @param array $data         Ergebnis von applyFilters(): ['pv','wallbox','hausFiltered','batt']
@@ -1844,6 +1850,15 @@ class PVWallboxManager extends IPSModule
      */
     private function calculatePV2Car(array $data, int $anteilProzent): array
     {
+        
+        // wenn Hausakku voll ist, dann 100 % PV2Car ***
+        $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
+        $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
+        $soc    = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
+        if ($soc !== null && $soc >= $voll) {
+            $this->LogTemplate('info', "Hausakku voll ({$soc} % ≥ {$voll} %) → PV-Anteil override auf 100 %");
+            $anteilProzent = 100;
+
         // Roh-Überschuss = PV minus gefiltertem Hausverbrauch
         $rohUeberschuss = max(0, $data['pv'] - $data['hausFiltered']);
 
