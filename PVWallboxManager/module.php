@@ -1322,7 +1322,7 @@ class PVWallboxManager extends IPSModule
 //                    $this->ResetModiNachLadeende();
                     // 1) Wallbox sperren
                     $this->SetForceState(1);
-                    // 2) Modus NICHT zurücksetzen – bleibt erhalte
+                    // 2) Modus NICHT zurücksetzen – bleibt erhalten
                     // 3) Counter zurücksetzen
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                     $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
@@ -1869,6 +1869,7 @@ class PVWallboxManager extends IPSModule
             'roh_ueber'   => $rohUeberschuss,
             'anteil_watt' => $anteilWatt,
         ];
+        }
     }
 
     /**
