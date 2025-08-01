@@ -37,7 +37,8 @@ Hier werden geplante Features gesammelt, Community-Wünsche, Ideen und größere
 - [ ] Strompreis Tibber erweitern
 - [x] Strompreis: Grundpreis, Aufschlag, Steuersatz -> **Umgesetzt in: v1.4b**
 - [x] Ladezeit Berechnen anhand Auto Batteriekapazität, IST SOC, Ziel SOC und aktueller Ladeleistung -> **Umgesetzt in: v1.4b**
-- [ ] Uhrzeit Ladeende errechnen und in WF ausgeben
+- [x] Uhrzeit Ladeende errechnen und in WF ausgeben -> **Umgesetzt in: v1.4b**
+- [ ] Überlegung Modul für mehrere Fahrzeug erweitern
 
 ---
 ## 🛠️ Technische Verbesserungen
