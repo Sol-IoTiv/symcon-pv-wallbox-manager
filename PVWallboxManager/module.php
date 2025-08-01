@@ -934,11 +934,8 @@ class PVWallboxManager extends IPSModule
 
         // Nur Ladestrom setzen, wenn Freigabe aktiv und Ampere gültig
         if ($sollFRC === 2 && $ampere > 0) {
-            $currentAmp = $this->GetValue('Ampere');
-            if ($currentAmp != $ampere) {
-                $this->LogTemplate('debug', "SetChargingCurrent: sende {$ampere}A");
-                $this->SetChargingCurrent($ampere);
-            }
+            $this->LogTemplate('debug', "SetChargingCurrent: sende {$ampere}A");
+            $this->SetChargingCurrent($ampere);
         }
     }
 
@@ -1871,31 +1868,32 @@ class PVWallboxManager extends IPSModule
         ];
         }
     }
+
     /**
      * 3) Überschuss und Ampere berechnen (inkl. Threshold und Hysterese-Logging)
      */
     private function calculateSurplus(array $data, int $anzPhasen, bool $log = true): array
     {
-        // Nur Batterie­ladung (positiv) berücksichtigen
+        // 0) Batterie-Last
         $batLoad = max(0, $data['batt']);
 
-        // Gesamtverbrauch (gefilterter Hausverbrauch + Batterie)
+        // 1) Gesamtverbrauch (gefilterter HV + Batterie)
         $cons = $data['hausFiltered'] + $batLoad;
 
-        // Roh-Überschuss
+        // 2) Roh-Überschuss
         $rawSurplus = max(0, $data['pv'] - $cons);
         if (abs($rawSurplus) < 1) {
             $rawSurplus = 0;
         }
 
-        // 1) Exponentielle Glättung
-        $alpha        = $this->ReadPropertyFloat('SmoothingAlpha');
-        $lastSmooth   = $this->ReadAttributeFloat('SmoothedSurplus');
-        $smoothed     = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        // 3) Exponentielle Glättung
+        $alpha      = $this->ReadPropertyFloat('SmoothingAlpha');
+        $lastSmooth = $this->ReadAttributeFloat('SmoothedSurplus');
+        $smoothed   = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
         $this->WriteAttributeFloat('SmoothedSurplus', $smoothed);
-        $useSurplus   = $smoothed;
+        $useSurplus = $smoothed;
 
-        // 2) Cutoff-Threshold
+        // 4) Cutoff-Threshold → gewünschten Ampere-Wert berechnen
         $cutoff     = 250;
         $desiredAmp = 0;
         if ($useSurplus >= $cutoff) {
@@ -1906,20 +1904,21 @@ class PVWallboxManager extends IPSModule
             );
         } else {
             if ($log) {
-                $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → nicht angezeigt (auf 0 gesetzt)");
+                $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → auf 0 gesetzt)");
             }
         }
 
-        // 3) Ramp-Rate-Limiting
-        $lastAmp    = $this->ReadAttributeInteger('LastChargingCurrent');
-        $maxDelta   = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-        $delta      = $desiredAmp - $lastAmp;
-        // Limitiere die Änderung pro Zyklus
-        $delta      = max(-$maxDelta, min($maxDelta, $delta));
-        $amp        = $lastAmp + $delta;
+        // 5) Ramp-Rate-Limiting
+        $lastAmp  = $this->ReadAttributeInteger('LastChargingCurrent');
+        $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
+        $delta    = $desiredAmp - $lastAmp;
+        // Δ auf ±MaxDelta clampen
+        $delta = max(-$maxDelta, min($maxDelta, $delta));
+        $amp   = $lastAmp + $delta;
+        // neuen Wert direkt als Attribut speichern
         $this->WriteAttributeInteger('LastChargingCurrent', $amp);
 
-        // 4) Logging & Visualisierung
+        // 6) Logging & UI-Updates
         if ($log) {
             $this->LogTemplate(
                 'debug',
