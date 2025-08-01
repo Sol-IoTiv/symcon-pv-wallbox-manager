@@ -9,6 +9,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Börsenpreis-Vorscha (HTML) angepasst
 - Ladezeit berechnen und im WF in der Variable "⏳ Ladezeit" anzeigen
 - Ladeende Uhrzeit wird errechnet und als Info im Log angezeigt
+- Exponentialle Glättung: Der berechnete PV-Überschuss wird nun mit einem einstellbaren α-Wert (SmoothingAlpha) geglättet, um plötzliche Schwankungen zu dämpfen und eine stabilere Lade­strom­steuerung zu ermöglichen.
+- Ramp-Rate-Limiting: Die Änderung des Lade­stroms pro Zyklus wird auf einen konfigurierbaren Maximalwert (MaxRampDeltaAmp derzeit 2A fix) begrenzt, sodass der Strom sanft von Minimum bis Maximum ansteigt und abrupte Sprünge vermieden werden.
 
 ## [1.3b] - 2025-07-29
 ### Hinzugefügt
