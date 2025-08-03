@@ -2250,8 +2250,8 @@ class PVWallboxManager extends IPSModule
 
         // Loop nur über $slice
         foreach ($slice as $dat) {
-            // Stunde korrigiert (eine Stunde abziehen)
-            $time    = date('H', $dat['timestamp'] - 3600);
+            // Stunde direkt aus Timestamp
+            $time    = date('H', $dat['timestamp']);
             $price   = number_format($dat['price'], 3, ',', '.');
             $percent = ($dat['price'] - $min) / max(0.001, ($maxPrice - $min));
 
@@ -2286,4 +2286,5 @@ class PVWallboxManager extends IPSModule
 
         return $html;
     }
+
 }
