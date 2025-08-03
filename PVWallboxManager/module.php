@@ -2208,35 +2208,36 @@ class PVWallboxManager extends IPSModule
             return '<span style="color:#888;">Keine Preisdaten verfügbar.</span>';
         }
 
-        // Aktuellen Netto-Spotpreis zurückrechnen
-        $netto       = $this->GetValue('CurrentSpotPrice') 
-                    / (1 + $this->ReadPropertyFloat('MarketPriceTaxRate')/100);
-        $grundpreis  = $this->ReadPropertyFloat('MarketPriceBasePrice');
-        $aufschlagPct= $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
-        $steuersatz  = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
-        $provider    = $this->ReadPropertyString('MarketPriceProvider');
+        // Aktuellen Netto-Spotpreis rückrechnen
+        $netto        = $this->GetValue('CurrentSpotPrice') / (1 + $this->ReadPropertyFloat('MarketPriceTaxRate')/100);
+        $grundpreis   = $this->ReadPropertyFloat('MarketPriceBasePrice');
+        $aufschlagPct = $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
+        $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
+        $provider     = $this->ReadPropertyString('MarketPriceProvider');
 
         // "Aktuell" brutto neu berechnen
-        $preisVorAufschlag  = $netto + $grundpreis;
-        $preisNachAufschlag = $preisVorAufschlag * (1 + $aufschlagPct);
-        $bruttoAktuell      = round($preisNachAufschlag * (1 + $steuersatz), 3);
+        $preisVor      = $netto + $grundpreis;
+        $preisNach     = $preisVor * (1 + $aufschlagPct);
+        $bruttoAktuell = round($preisNach * (1 + $steuersatz), 3);
 
-        // Schön formatieren
-        $fmt = function(float $v) { return number_format($v, 3, ',', '.'); };
+        // Schön formatieren (3 Nachkommastellen, Komma als Dezimalpunkt)
+        $fmt = function(float $v) {
+            return number_format($v, 3, ',', '.');
+        };
 
-        // nur zukünftige oder aktuelle Zeitpunkte
+        // nur zukünftige oder aktuelle Zeitpunkte behalten
         $now    = time();
         $future = array_filter($preise, function($p) use ($now) {
             return $p['timestamp'] >= $now;
         });
         $slice  = array_slice(array_values($future), 0, $max);
 
-        // === NEU: für jede Stunde Brutto-Preis berechnen und daraus Min/Max nehmen ===
+        // brutto-Preise für Min/Max sammeln
         $bruttoPreise = [];
         foreach ($slice as $dat) {
-            // Roh-Preis + Grundpreis + Aufschlag + Steuer
-            $g = ($dat['price'] + $grundpreis) * (1 + $aufschlagPct);
-            $g = round($g * (1 + $steuersatz), 3);
+            $pv = $dat['price']; // kann negativ sein
+            $g  = ($pv + $grundpreis) * (1 + $aufschlagPct);
+            $g  = round($g * (1 + $steuersatz), 3);
             $bruttoPreise[] = $g;
         }
         $minPrice = min($bruttoPreise);
@@ -2258,7 +2259,7 @@ class PVWallboxManager extends IPSModule
     </div>
     EOT;
 
-        // Schleife **nur** über $slice, aber mit den neuen Brutto-Werten
+        // Schleife nur über $slice, mit den neuen Brutto-Werten
         foreach ($slice as $i => $dat) {
             $time    = date('H', $dat['timestamp']);
             $gross   = $bruttoPreise[$i];
@@ -2284,9 +2285,7 @@ class PVWallboxManager extends IPSModule
     <div class='pvwm-row'>
         <span class='pvwm-hour'>{$time}</span>
         <span class='pvwm-bar-wrap'>
-        <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>
-            {$price} ct
-        </span>
+        <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>{$price} ct</span>
         </span>
     </div>";
         }
@@ -2295,4 +2294,5 @@ class PVWallboxManager extends IPSModule
         $html .= '</div>';
         return $html;
     }
+
 }
