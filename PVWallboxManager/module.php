@@ -2200,7 +2200,7 @@ class PVWallboxManager extends IPSModule
         );
     }
 
-    private function FormatMarketPricesPreviewHTML($max = 24)
+    private function FormatMarketPricesPreviewHTML(int $max = 24)
     {
         $preiseRaw = @$this->GetValue('MarketPrices');
         $preise    = json_decode($preiseRaw, true);
@@ -2208,74 +2208,78 @@ class PVWallboxManager extends IPSModule
             return '<span style="color:#888;">Keine Preisdaten verfügbar.</span>';
         }
 
-        // ------------------------------------------------------------------------
-        // 1) "Aktuell" berechnen (Spot-Brutto aus CurrentSpotPrice)
-        // ------------------------------------------------------------------------
-        $taxRate     = $this->ReadPropertyFloat('MarketPriceTaxRate')    / 100; // z.B. 0.19
-        $basePrice   = $this->ReadPropertyFloat('MarketPriceBasePrice');      // ct/kWh
-        $surcharge   = $this->ReadPropertyFloat('MarketPriceSurcharge')  / 100; // z.B. 0.05
-        $provider    = $this->ReadPropertyString('MarketPriceProvider');
-        // Netto-Spotpreis zurückrechnen
-        $nettoSpot   = $this->GetValue('CurrentSpotPrice') / (1 + $taxRate);
-        // Brutto-Aktuell neu: (nettoSpot + basePrice) * (1+surcharge) * (1+taxRate)
-        $bruttoAkt   = round((($nettoSpot + $basePrice) * (1 + $surcharge)) * (1 + $taxRate), 3);
+        // Steuersatz (z.B. 20% → 0.20)
+        $taxRate = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
 
-        $fmt = function(float $v) {
-            return number_format($v, 3, ',', '.');
-        };
+        // Provider-Text
+        $provider = $this->ReadPropertyString('MarketPriceProvider');
 
         // ------------------------------------------------------------------------
-        // 2) Slice der Stunden-Daten ab Beginn der aktuellen Stunde
+        // 1) Aus den schon brutto gespeicherten Preisen
+        //    (MarketPrices['price']) nehmen wir direkt die Balken-Werte,
+        //    und addieren **nur bei negativen** noch einmal den Steuersatz oben drauf.
         // ------------------------------------------------------------------------
-        // Start der aktuellen Stunde (z.B. heute 12:00:00)
+        // Aktueller Wert: nehmen wir aus der ersten Stunde nach Beginn der aktuellen Stunde
         $startOfHour = strtotime(date('Y-m-d H:00:00'));
-        // nur Einträge ab dieser Stunde
-        $future = array_filter($preise, function($p) use ($startOfHour) {
-            return $p['timestamp'] >= $startOfHour;
-        });
-        $slice = array_slice(array_values($future), 0, $max);
-
-        // ------------------------------------------------------------------------
-        // 3) Für jede Stunde Brutto-Wert berechnen und Min/Max ermitteln
-        // ------------------------------------------------------------------------
-        $bruttoPreise = [];
-        foreach ($slice as $dat) {
-            $pv = $dat['price']; // Roh-Spotpreis (kann negativ sein)
-            // brutto = (pv + basePrice) * (1+surcharge) * (1+taxRate)
-            $g = round((($pv + $basePrice) * (1 + $surcharge)) * (1 + $taxRate), 3);
-            $bruttoPreise[] = $g;
+        // Filter für Stunden ab jetzt
+        $future = array_filter($preise, fn($p) => $p['timestamp'] >= $startOfHour);
+        // Slice der nächsten $max Stunden
+        $slice  = array_slice(array_values($future), 0, $max);
+        if (count($slice) === 0) {
+            return '<span style="color:#888;">Keine zukünftigen Preisdaten.</span>';
         }
-        $minPrice = min($bruttoPreise);
-        $maxPrice = max($bruttoPreise);
+
+        // Werte für Balken und aktuellen Preis vorbereiten
+        $displayValues = [];
+        foreach ($slice as $dat) {
+            $raw = $dat['price'];          // schon brutto gespeichert
+            if ($raw < 0) {
+                // im Minusbereich Steuersatz dazurechnen
+                $gross = round($raw * (1 + $taxRate), 3);
+            } else {
+                // Positiv belassen
+                $gross = round($raw, 3);
+            }
+            $displayValues[] = $gross;
+        }
+
+        // Min/Max für Farbskalierung aus den finalen Display-Werten
+        $minVal = min($displayValues);
+        $maxVal = max($displayValues);
+
+        // Formatierer
+        $fmt = fn(float $v) => number_format($v, 3, ',', '.');
 
         // ------------------------------------------------------------------------
-        // 4) Ausgabe: CSS + Header
+        // 2) Header mit aktuellem Preis
         // ------------------------------------------------------------------------
+        $aktuell = $displayValues[0];
         $html = <<<EOT
     <style>
-    .pvwm-row { display:flex; align-items:center; margin:7px 0 0 0; }
-    .pvwm-hour { width:28px; min-width:28px; font-weight:600; font-size:1.07em; text-align:right; padding-right:8px; }
-    .pvwm-bar-wrap { flex:1; display:flex; align-items:center; }
-    .pvwm-bar { display:flex; align-items:center; justify-content:left; height:22px; border-radius:7px;
-        font-weight:700; font-size:1.10em; box-shadow:0 1px 2.5px #0002; padding-left:18px;
-        letter-spacing:0.02em; min-width:62px; background:#eee; transition:width 0.35s; }
+    .pvwm-row     { display:flex; align-items:center; margin:7px 0 0 0; }
+    .pvwm-hour    { width:28px; min-width:28px; font-weight:600; font-size:1.07em; text-align:right; padding-right:8px; }
+    .pvwm-bar-wrap{ flex:1; display:flex; align-items:center; }
+    .pvwm-bar     { display:flex; align-items:center; justify-content:left; height:22px; border-radius:7px;
+                    font-weight:700; font-size:1.10em; box-shadow:0 1px 2.5px #0002; padding-left:18px;
+                    letter-spacing:0.02em; min-width:62px; background:#eee; transition:width 0.35s; }
     </style>
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
     <div style="font-size:1.07em;font-weight:bold;text-align:center;">
-        Aktuell: {$fmt($bruttoAkt)} ct/kWh – {$provider}
+        Aktuell: {$fmt($aktuell)} ct/kWh – {$provider}
     </div>
     EOT;
 
         // ------------------------------------------------------------------------
-        // 5) Bars zeichnen, in originaler Reihenfolge
+        // 3) Balken in Originalreihenfolge zeichnen
         // ------------------------------------------------------------------------
         foreach ($slice as $i => $dat) {
-            $hour    = date('H', $dat['timestamp']);       // Stunde 00–23
-            $gross   = $bruttoPreise[$i];
-            $price   = $fmt($gross);
-            $pct     = ($gross - $minPrice) / max(0.001, $maxPrice - $minPrice);
+            $hour  = date('H', $dat['timestamp']);
+            $val   = $displayValues[$i];
+            $price = $fmt($val);
+            // Prozentualer Anteil für Farbverlauf
+            $pct   = ($val - $minVal) / max(0.001, $maxVal - $minVal);
 
-            // Farbverlauf: Grün→Gelb→Orange
+            // Farbverlauf Grün→Gelb→Orange
             if ($pct <= 0.5) {
                 $t = $pct / 0.5;
                 $r = intval(56  + (255 - 56)  * $t);
@@ -2298,8 +2302,9 @@ class PVWallboxManager extends IPSModule
     </div>";
         }
 
-        // schließen
+        // schließe Container und zurückgeben
         $html .= '</div>';
         return $html;
     }
+
 }
