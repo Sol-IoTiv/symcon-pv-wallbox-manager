@@ -2208,42 +2208,49 @@ class PVWallboxManager extends IPSModule
             return '<span style="color:#888;">Keine Preisdaten verfügbar.</span>';
         }
 
-        // Aktuellen Netto-Spotpreis rückrechnen
-        $netto        = $this->GetValue('CurrentSpotPrice') / (1 + $this->ReadPropertyFloat('MarketPriceTaxRate')/100);
-        $grundpreis   = $this->ReadPropertyFloat('MarketPriceBasePrice');
-        $aufschlagPct = $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
-        $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
-        $provider     = $this->ReadPropertyString('MarketPriceProvider');
+        // ------------------------------------------------------------------------
+        // 1) "Aktuell" berechnen (Spot-Brutto aus CurrentSpotPrice)
+        // ------------------------------------------------------------------------
+        $taxRate     = $this->ReadPropertyFloat('MarketPriceTaxRate')    / 100; // z.B. 0.19
+        $basePrice   = $this->ReadPropertyFloat('MarketPriceBasePrice');      // ct/kWh
+        $surcharge   = $this->ReadPropertyFloat('MarketPriceSurcharge')  / 100; // z.B. 0.05
+        $provider    = $this->ReadPropertyString('MarketPriceProvider');
+        // Netto-Spotpreis zurückrechnen
+        $nettoSpot   = $this->GetValue('CurrentSpotPrice') / (1 + $taxRate);
+        // Brutto-Aktuell neu: (nettoSpot + basePrice) * (1+surcharge) * (1+taxRate)
+        $bruttoAkt   = round((($nettoSpot + $basePrice) * (1 + $surcharge)) * (1 + $taxRate), 3);
 
-        // "Aktuell" brutto neu berechnen
-        $preisVor      = $netto + $grundpreis;
-        $preisNach     = $preisVor * (1 + $aufschlagPct);
-        $bruttoAktuell = round($preisNach * (1 + $steuersatz), 3);
-
-        // Schön formatieren (3 Nachkommastellen, Komma als Dezimalpunkt)
         $fmt = function(float $v) {
             return number_format($v, 3, ',', '.');
         };
 
-        // nur zukünftige oder aktuelle Zeitpunkte behalten
-        $now    = time();
-        $future = array_filter($preise, function($p) use ($now) {
-            return $p['timestamp'] >= $now;
+        // ------------------------------------------------------------------------
+        // 2) Slice der Stunden-Daten ab Beginn der aktuellen Stunde
+        // ------------------------------------------------------------------------
+        // Start der aktuellen Stunde (z.B. heute 12:00:00)
+        $startOfHour = strtotime(date('Y-m-d H:00:00'));
+        // nur Einträge ab dieser Stunde
+        $future = array_filter($preise, function($p) use ($startOfHour) {
+            return $p['timestamp'] >= $startOfHour;
         });
-        $slice  = array_slice(array_values($future), 0, $max);
+        $slice = array_slice(array_values($future), 0, $max);
 
-        // brutto-Preise für Min/Max sammeln
+        // ------------------------------------------------------------------------
+        // 3) Für jede Stunde Brutto-Wert berechnen und Min/Max ermitteln
+        // ------------------------------------------------------------------------
         $bruttoPreise = [];
         foreach ($slice as $dat) {
-            $pv = $dat['price']; // kann negativ sein
-            $g  = ($pv + $grundpreis) * (1 + $aufschlagPct);
-            $g  = round($g * (1 + $steuersatz), 3);
+            $pv = $dat['price']; // Roh-Spotpreis (kann negativ sein)
+            // brutto = (pv + basePrice) * (1+surcharge) * (1+taxRate)
+            $g = round((($pv + $basePrice) * (1 + $surcharge)) * (1 + $taxRate), 3);
             $bruttoPreise[] = $g;
         }
         $minPrice = min($bruttoPreise);
         $maxPrice = max($bruttoPreise);
 
-        // CSS + Header
+        // ------------------------------------------------------------------------
+        // 4) Ausgabe: CSS + Header
+        // ------------------------------------------------------------------------
         $html = <<<EOT
     <style>
     .pvwm-row { display:flex; align-items:center; margin:7px 0 0 0; }
@@ -2255,44 +2262,44 @@ class PVWallboxManager extends IPSModule
     </style>
     <div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;max-width:540px;">
     <div style="font-size:1.07em;font-weight:bold;text-align:center;">
-        Aktuell: {$fmt($bruttoAktuell)} ct/kWh – {$provider}
+        Aktuell: {$fmt($bruttoAkt)} ct/kWh – {$provider}
     </div>
     EOT;
 
-        // Schleife nur über $slice, mit den neuen Brutto-Werten
+        // ------------------------------------------------------------------------
+        // 5) Bars zeichnen, in originaler Reihenfolge
+        // ------------------------------------------------------------------------
         foreach ($slice as $i => $dat) {
-            $time    = date('H', $dat['timestamp']);
+            $hour    = date('H', $dat['timestamp']);       // Stunde 00–23
             $gross   = $bruttoPreise[$i];
             $price   = $fmt($gross);
-            $percent = ($gross - $minPrice) / max(0.001, ($maxPrice - $minPrice));
+            $pct     = ($gross - $minPrice) / max(0.001, $maxPrice - $minPrice);
 
-            // Farbverlauf Grün→Gelb→Orange
-            if ($percent <= 0.5) {
-                $t = $percent / 0.5;
+            // Farbverlauf: Grün→Gelb→Orange
+            if ($pct <= 0.5) {
+                $t = $pct / 0.5;
                 $r = intval(56  + (255 - 56)  * $t);
                 $g = intval(176 + (204 - 176) * $t);
-                $b = 0;
             } else {
-                $t = ($percent - 0.5) / 0.5;
+                $t = ($pct - 0.5) / 0.5;
                 $r = 255;
                 $g = intval(204 - (204 - 106) * $t);
-                $b = 0;
             }
-            $color    = sprintf("#%02x%02x%02x", $r, $g, $b);
-            $barWidth = 38 + intval($percent * 62);
+            $b        = 0;
+            $color    = sprintf('#%02x%02x%02x', $r, $g, $b);
+            $barWidth = 38 + intval($pct * 62);
 
             $html .= "
     <div class='pvwm-row'>
-        <span class='pvwm-hour'>{$time}</span>
+        <span class='pvwm-hour'>{$hour}</span>
         <span class='pvwm-bar-wrap'>
         <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>{$price} ct</span>
         </span>
     </div>";
         }
 
-        // Container schließen
+        // schließen
         $html .= '</div>';
         return $html;
     }
-
 }
