@@ -2289,45 +2289,39 @@ class PVWallboxManager extends IPSModule
     EOT;
 
         // Zeilen erzeugen
-        foreach ($slice as $dat) {
-            // Stunde
-            $time = date('H', $dat['timestamp']);
-            // Netto-Preis
-            $netto = $dat['price'];
-            // Brutto neu berechnen
-            $brutto = round(
-                ($netto + $grundpreis)
-                * (1 + $aufschlagPct)
-                * (1 + $steuersatz),
-                3
-            );
-            $priceText = $fmt($brutto);
+        foreach ($slice as $i => $dat) {
+        // Stunde aus Timestamp
+        $h = intval(date('H', $dat['timestamp']));
+        // Label nur als Stunde (z.B. "12")
+        $time = sprintf('%02d', $h);
 
-            // Position in Farbskala
-            $percent = ($brutto - $min) / max(0.001, ($maxPrice - $min));
-            if ($percent <= 0.5) {
-                $t = $percent / 0.5;
-                $r = intval(56  + (255-56)  * $t);
-                $g = intval(176 + (204-176) * $t);
-                $b = 0;
-            } else {
-                $t = ($percent - 0.5) / 0.5;
-                $r = 255;
-                $g = intval(204 - (204-106) * $t);
-                $b = 0;
-            }
-            $color = sprintf("#%02x%02x%02x", $r, $g, $b);
-            $barWidth = 38 + intval($percent * 62);
+        // Preis (brutto) direkt aus $dat['price']
+        $priceText = number_format($dat['price'], 3, ',', '.');
 
-            $html .= "<div class='pvwm-row'>
-                <span class='pvwm-hour'>{$time}</span>
-                <span class='pvwm-bar-wrap'>
-                    <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>{$priceText} ct</span>
-                </span>
-            </div>";
+        // Prozent für Farbskala
+        $percent = ($dat['price'] - $min) / max(0.001, ($maxPrice - $min));
+
+        // Farbverlauf (wie vorher)
+        if ($percent <= 0.5) {
+            $t = $percent / 0.5;
+            $r = intval(56  + (255-56)  * $t);
+            $g = intval(176 + (204-176) * $t);
+            $b = 0;
+        } else {
+            $t = ($percent - 0.5) / 0.5;
+            $r = 255;
+            $g = intval(204 - (204-106) * $t);
+            $b = 0;
         }
+        $color    = sprintf("#%02x%02x%02x", $r, $g, $b);
+        $barWidth = 38 + intval($percent * 62);
 
-        $html .= '</div>';
-        return $html;
+        // HTML-Zeile bauen
+        $html .= "<div class='pvwm-row'>
+            <span class='pvwm-hour'>{$time}</span>
+            <span class='pvwm-bar-wrap'>
+                <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>{$priceText} ct</span>
+            </span>
+        </div>";
     }
 }
