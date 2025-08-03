@@ -2323,5 +2323,6 @@ class PVWallboxManager extends IPSModule
                 <span class='pvwm-bar' style='background:{$color}; width:{$barWidth}%;'>{$priceText} ct</span>
             </span>
         </div>";
+        }
     }
 }
