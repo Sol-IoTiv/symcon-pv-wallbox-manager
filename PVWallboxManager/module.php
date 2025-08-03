@@ -2250,7 +2250,7 @@ class PVWallboxManager extends IPSModule
 
         // Loop **nur** über $slice
         foreach ($slice as $dat) {
-            $time    = date('H', $dat['timestamp']);
+            $time    = date('H', $dat['timestamp'] - 3600);
             $price   = number_format($dat['price'], 3, ',', '.');
             $percent = ($dat['price'] - $min) / max(0.001, ($maxPrice - $min));
 
