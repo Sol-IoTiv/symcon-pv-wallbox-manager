@@ -1334,7 +1334,7 @@ class PVWallboxManager extends IPSModule
 
         // 4) Fallback: No-Power-Counter
         if ($loadActive && $currentFRC === 2) {
-            $leistung  = $this->GetValue('Leistung');
+            $leistung  = intval(round($this->GetValue('Leistung')));
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
             $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
 
