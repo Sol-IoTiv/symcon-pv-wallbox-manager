@@ -1083,6 +1083,9 @@ class PVWallboxManager extends IPSModule
 
     private function ResetWallboxVisualisierungKeinFahrzeug()
     {
+        // SmoothedSurplus zurücksetzen
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
+
         $this->SetValue('Leistung', 0);                  // Ladeleistung zum Fahrzeug
         $this->SetValue('PV_Ueberschuss', 0);            // PV-Überschuss (W)
         $this->SetValue('PV_Ueberschuss_A', 0);          // PV-Überschuss (A) – Jetzt 0A!
@@ -1328,13 +1331,10 @@ class PVWallboxManager extends IPSModule
         }
 
         // 4) Fallback: No-Power-Counter
-        if ($loadActive) {
+        if ($loadActive && $currentFRC === 2) {
             $leistung  = $this->GetValue('Leistung');
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
-            $this->LogTemplate(
-                'debug',
-                "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}"
-            );
+            $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
 
             if ($leistung < 100) {
                 $cnt = $cntVorher + 1;
@@ -1342,12 +1342,8 @@ class PVWallboxManager extends IPSModule
                 $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
 
                 if ($cnt >= 3) {
-                    $this->LogTemplate(
-                        'ok',
-                        "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung."
-                    );
+                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung.");
                     $this->SetForceState(1);
-                    // Modus bleibt erhalten
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                     $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
@@ -1359,15 +1355,15 @@ class PVWallboxManager extends IPSModule
                 }
             }
         } else {
-            $this->LogTemplate(
-                'debug',
-                'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.'
-            );
+            $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
         }
     }
 
     private function ResetModiNachLadeende()
     {
+        // SmoothedSurplus zurücksetzen
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
+
         // Hier kannst du nach Ladeende die Lademodi zurücksetzen (optional)
         $modi = ['ManuellLaden', 'PV2CarModus', 'ZielzeitLaden'];
         $manualDeactivated = false;
