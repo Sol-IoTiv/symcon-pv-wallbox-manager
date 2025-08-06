@@ -1313,17 +1313,15 @@ class PVWallboxManager extends IPSModule
         );
 
         // 3) Primäre Erkennung per SOC
-        if ($loadActive && $socAktuell !== null && $socZiel !== null) {
-            if ($socAktuell >= $socZiel) {
-                $this->LogTemplate(
-                    'ok',
-                    "🔌 Ziel-SOC erreicht ({$socAktuell}% ≥ {$socZiel}%) – beende Ladung."
-                );
-                $this->SetForceState(1);
-                $this->ResetModiNachLadeende();
-                $this->WriteAttributeInteger('NoPowerCounter', 0);
-                return;
-            }
+        if ($socAktuell >= $socZiel) {
+            $this->LogTemplate('ok', "🔌 Ziel-SOC erreicht… – beende Ladung.");
+            $this->SetForceState(1);
+            $this->SetPhaseMode(1);
+            $this->SetChargingCurrent(6);
+            $this->ResetModiNachLadeende();
+            $this->WriteAttributeInteger('NoPowerCounter', 0);
+            return;
+        }
             $this->LogTemplate(
                 'debug',
                 "SOC ({$socAktuell}%) < Ziel ({$socZiel}%) – Fallback wird geprüft."
@@ -1342,8 +1340,10 @@ class PVWallboxManager extends IPSModule
                 $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
 
                 if ($cnt >= 3) {
-                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung.");
+                    $this->LogTemplate('ok', "🔌 Ladeende erkannt… – beende Ladung.");
                     $this->SetForceState(1);
+                    $this->SetPhaseMode(1);
+                    $this->SetChargingCurrent(6);
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                     $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
