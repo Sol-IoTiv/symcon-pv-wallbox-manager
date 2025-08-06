@@ -2001,42 +2001,47 @@ class PVWallboxManager extends IPSModule
         $startZ       = $this->ReadAttributeInteger('LadeStartZaehler');
         $stopZ        = $this->ReadAttributeInteger('LadeStopZaehler');
 
-        $aktFRC       = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-        $desiredFRC   = $aktFRC;
+        $aktFRC     = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $desiredFRC = $aktFRC;
 
         // 🛑 Sperre nach Moduswechsel – kein Start erlaubt
         if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(15)) {
             return $aktFRC;
         }
 
-        // 🟢 Start-Hysterese
-        if ($pvUeberschuss >= $minLadeWatt) {
-            $startZ++;
-            $this->WriteAttributeInteger('LadeStartZaehler', $startZ);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-            $this->LogTemplate('info', "Start-Hysterese: {$startZ}/{$startHys} Zyklen ≥ {$minLadeWatt} W");
-            if ($startZ >= $startHys) {
-                $this->LogTemplate('ok', "Start-Hysterese erreicht → Freigabe an.");
-                $desiredFRC = 2;
+        // 🟢 Start-Hysterese NUR wenn aktuell noch NICHT lädt (FRC=1)
+        if ($aktFRC === 1) {
+            if ($pvUeberschuss >= $minLadeWatt) {
+                $startZ++;
+                $this->WriteAttributeInteger('LadeStartZaehler', $startZ);
+                $this->WriteAttributeInteger('LadeStopZaehler', 0);
+                $this->LogTemplate('info', "Start-Hysterese: {$startZ}/{$startHys} Zyklen ≥ {$minLadeWatt} W");
+                if ($startZ >= $startHys) {
+                    $this->LogTemplate('ok', "Start-Hysterese erreicht → Freigabe an.");
+                    $desiredFRC = 2;
+                    $this->WriteAttributeInteger('LadeStartZaehler', 0);
+                }
+            } else {
+                // Nur zurücksetzen, wenn wir noch nicht laden
                 $this->WriteAttributeInteger('LadeStartZaehler', 0);
             }
-        } else {
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
         }
 
-        // 🔴 Stop-Hysterese (nur wenn aktuell FRC=2)
-        if ($aktFRC === 2 && $pvUeberschuss <= $minStopWatt) {
-            $stopZ++;
-            $this->WriteAttributeInteger('LadeStopZaehler', $stopZ);
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->LogTemplate('info', "Stop-Hysterese: {$stopZ}/{$stopHys} Zyklen ≤ {$minStopWatt} W");
-            if ($stopZ >= $stopHys) {
-                $this->LogTemplate('warn', "Stop-Hysterese erreicht → Freigabe aus.");
-                $desiredFRC = 1;
+        // 🔴 Stop-Hysterese nur wenn bereits geladen wird (FRC=2)
+        if ($aktFRC === 2) {
+            if ($pvUeberschuss <= $minStopWatt) {
+                $stopZ++;
+                $this->WriteAttributeInteger('LadeStopZaehler', $stopZ);
+                $this->WriteAttributeInteger('LadeStartZaehler', 0);
+                $this->LogTemplate('info', "Stop-Hysterese: {$stopZ}/{$stopHys} Zyklen ≤ {$minStopWatt} W");
+                if ($stopZ >= $stopHys) {
+                    $this->LogTemplate('warn', "Stop-Hysterese erreicht → Freigabe aus.");
+                    $desiredFRC = 1;
+                    $this->WriteAttributeInteger('LadeStopZaehler', 0);
+                }
+            } else {
                 $this->WriteAttributeInteger('LadeStopZaehler', 0);
             }
-        } elseif ($aktFRC === 2) {
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
         }
 
         return $desiredFRC;
