@@ -2291,5 +2291,4 @@ class PVWallboxManager extends IPSModule
         $html .= '</div>';
         return $html;
     }
-
 }

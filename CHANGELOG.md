@@ -3,12 +3,13 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
-## [1.4b] - 🚧 in Vorbereitung 🚧
+## [1.5b] - 🚧 in Vorbereitung 🚧
+
+## [1.4b] - 2025-08-06
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
 - Börsenpreis wird anhand der Werte berechnet
 - Börsenpreis-Vorscha (HTML) angepasst
-- Ladezeit berechnen und im WF in der Variable "⏳ Ladezeit" anzeigen
-- Ladeende Uhrzeit wird errechnet und als Info im Log angezeigt
+- Ladezeit und Uhrzeit Ladeende wird berechnen und im WF in der Variable "⏳ Ladezeit" angezeigen (z.b.: 04h 22min -> 16:24 Uhr)
 - Exponentialle Glättung: Der berechnete PV-Überschuss wird nun mit einem einstellbaren α-Wert (SmoothingAlpha) geglättet, um plötzliche Schwankungen zu dämpfen und eine stabilere Lade­strom­steuerung zu ermöglichen.
 - Ramp-Rate-Limiting: Die Änderung des Lade­stroms pro Zyklus wird auf einen konfigurierbaren Maximalwert (MaxRampDeltaAmp derzeit 2A fix) begrenzt, sodass der Strom sanft von Minimum bis Maximum ansteigt und abrupte Sprünge vermieden werden.
 
