@@ -1083,6 +1083,9 @@ class PVWallboxManager extends IPSModule
 
     private function ResetWallboxVisualisierungKeinFahrzeug()
     {
+        // SmoothedSurplus zurücksetzen
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
+
         $this->SetValue('Leistung', 0);                  // Ladeleistung zum Fahrzeug
         $this->SetValue('PV_Ueberschuss', 0);            // PV-Überschuss (W)
         $this->SetValue('PV_Ueberschuss_A', 0);          // PV-Überschuss (A) – Jetzt 0A!
@@ -1317,6 +1320,8 @@ class PVWallboxManager extends IPSModule
                     "🔌 Ziel-SOC erreicht ({$socAktuell}% ≥ {$socZiel}%) – beende Ladung."
                 );
                 $this->SetForceState(1);
+                $this->SetPhaseMode(1);
+                $this->SetChargingCurrent(6);
                 $this->ResetModiNachLadeende();
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
                 return;
@@ -1328,13 +1333,10 @@ class PVWallboxManager extends IPSModule
         }
 
         // 4) Fallback: No-Power-Counter
-        if ($loadActive) {
-            $leistung  = $this->GetValue('Leistung');
+        if ($loadActive && $currentFRC === 2) {
+            $leistung  = intval(round($this->GetValue('Leistung')));
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
-            $this->LogTemplate(
-                'debug',
-                "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}"
-            );
+            $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
 
             if ($leistung < 100) {
                 $cnt = $cntVorher + 1;
@@ -1342,12 +1344,10 @@ class PVWallboxManager extends IPSModule
                 $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
 
                 if ($cnt >= 3) {
-                    $this->LogTemplate(
-                        'ok',
-                        "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung."
-                    );
+                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung.");
                     $this->SetForceState(1);
-                    // Modus bleibt erhalten
+                    $this->SetPhaseMode(1);
+                    $this->SetChargingCurrent(6);
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
                     $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
@@ -1359,15 +1359,15 @@ class PVWallboxManager extends IPSModule
                 }
             }
         } else {
-            $this->LogTemplate(
-                'debug',
-                'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.'
-            );
+            $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
         }
     }
 
     private function ResetModiNachLadeende()
     {
+        // SmoothedSurplus zurücksetzen
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
+
         // Hier kannst du nach Ladeende die Lademodi zurücksetzen (optional)
         $modi = ['ManuellLaden', 'PV2CarModus', 'ZielzeitLaden'];
         $manualDeactivated = false;
@@ -2001,42 +2001,47 @@ class PVWallboxManager extends IPSModule
         $startZ       = $this->ReadAttributeInteger('LadeStartZaehler');
         $stopZ        = $this->ReadAttributeInteger('LadeStopZaehler');
 
-        $aktFRC       = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-        $desiredFRC   = $aktFRC;
+        $aktFRC     = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $desiredFRC = $aktFRC;
 
         // 🛑 Sperre nach Moduswechsel – kein Start erlaubt
         if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(15)) {
             return $aktFRC;
         }
 
-        // 🟢 Start-Hysterese
-        if ($pvUeberschuss >= $minLadeWatt) {
-            $startZ++;
-            $this->WriteAttributeInteger('LadeStartZaehler', $startZ);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-            $this->LogTemplate('info', "Start-Hysterese: {$startZ}/{$startHys} Zyklen ≥ {$minLadeWatt} W");
-            if ($startZ >= $startHys) {
-                $this->LogTemplate('ok', "Start-Hysterese erreicht → Freigabe an.");
-                $desiredFRC = 2;
+        // 🟢 Start-Hysterese NUR wenn aktuell noch NICHT lädt (FRC=1)
+        if ($aktFRC === 1) {
+            if ($pvUeberschuss >= $minLadeWatt) {
+                $startZ++;
+                $this->WriteAttributeInteger('LadeStartZaehler', $startZ);
+                $this->WriteAttributeInteger('LadeStopZaehler', 0);
+                $this->LogTemplate('info', "Start-Hysterese: {$startZ}/{$startHys} Zyklen ≥ {$minLadeWatt} W");
+                if ($startZ >= $startHys) {
+                    $this->LogTemplate('ok', "Start-Hysterese erreicht → Freigabe an.");
+                    $desiredFRC = 2;
+                    $this->WriteAttributeInteger('LadeStartZaehler', 0);
+                }
+            } else {
+                // Nur zurücksetzen, wenn wir noch nicht laden
                 $this->WriteAttributeInteger('LadeStartZaehler', 0);
             }
-        } else {
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
         }
 
-        // 🔴 Stop-Hysterese (nur wenn aktuell FRC=2)
-        if ($aktFRC === 2 && $pvUeberschuss <= $minStopWatt) {
-            $stopZ++;
-            $this->WriteAttributeInteger('LadeStopZaehler', $stopZ);
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->LogTemplate('info', "Stop-Hysterese: {$stopZ}/{$stopHys} Zyklen ≤ {$minStopWatt} W");
-            if ($stopZ >= $stopHys) {
-                $this->LogTemplate('warn', "Stop-Hysterese erreicht → Freigabe aus.");
-                $desiredFRC = 1;
+        // 🔴 Stop-Hysterese nur wenn bereits geladen wird (FRC=2)
+        if ($aktFRC === 2) {
+            if ($pvUeberschuss <= $minStopWatt) {
+                $stopZ++;
+                $this->WriteAttributeInteger('LadeStopZaehler', $stopZ);
+                $this->WriteAttributeInteger('LadeStartZaehler', 0);
+                $this->LogTemplate('info', "Stop-Hysterese: {$stopZ}/{$stopHys} Zyklen ≤ {$minStopWatt} W");
+                if ($stopZ >= $stopHys) {
+                    $this->LogTemplate('warn', "Stop-Hysterese erreicht → Freigabe aus.");
+                    $desiredFRC = 1;
+                    $this->WriteAttributeInteger('LadeStopZaehler', 0);
+                }
+            } else {
                 $this->WriteAttributeInteger('LadeStopZaehler', 0);
             }
-        } elseif ($aktFRC === 2) {
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
         }
 
         return $desiredFRC;
