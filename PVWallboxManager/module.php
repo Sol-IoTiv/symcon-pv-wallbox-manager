@@ -121,6 +121,9 @@ class PVWallboxManager extends IPSModule
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+        // → SmoothedSurplus beim (Re-)Start zurücksetzen
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
+
         // Synchronisiere WebFront-Variable mit Property
         $aktiv = $this->ReadPropertyBoolean('ModulAktiv');
         $this->SetValue('ModulAktiv_Switch', $aktiv);
@@ -613,24 +616,29 @@ class PVWallboxManager extends IPSModule
         $oldPhasen = max(1, $this->GetValue('Phasenmodus'));
 
         // 3) Energie-Daten holen und filtern
-        $energy       = $this->gatherEnergyData();
-        $filtered     = $this->applyFilters($energy);
-        $rawSurplus   = max(0, $energy['pv'] - $filtered['hausFiltered']);
+        $energy     = $this->gatherEnergyData();
+        $filtered   = $this->applyFilters($energy);
+        $rawSurplus = max(0, $energy['pv'] - $filtered['hausFiltered']);
 
-        // 4) Exponentielle Glättung
-        $alpha        = $this->ReadPropertyFloat('SmoothingAlpha');
-        $lastSmooth   = $this->ReadAttributeFloat('SmoothedSurplus');
-        $smooth       = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        // 4) Exponentielle Glättung mit Erst-Durchlauf = Raw
+        $alpha      = $this->ReadPropertyFloat('SmoothingAlpha');
+        $lastSmooth = $this->ReadAttributeFloat('SmoothedSurplus');
+        if ($lastSmooth <= 0) {
+            // erster Durchlauf: nimm den echten Überschuss
+            $smooth = $rawSurplus;
+        } else {
+            $smooth = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        }
         $this->WriteAttributeFloat('SmoothedSurplus', $smooth);
 
         // 5) PV-Anteil in Watt umrechnen
         $anteilWatt = intval(round($smooth * $anteil / 100));
 
-        // 6) Phasen-Hysterese wie gewohnt
+        // 6) Phasen-Hysterese wie gehabt
         $this->PruefeUndSetzePhasenmodus($smooth);
         $newPhasen = max(1, $this->GetValue('Phasenmodus'));
         if ($newPhasen !== $oldPhasen) {
-            // bei Phasenwechsel neu berechnen
+            // bei Phasenwechsel einmal neu berechnen
             $energy     = $this->gatherEnergyData();
             $filtered   = $this->applyFilters($energy);
             $rawSurplus = max(0, $energy['pv'] - $filtered['hausFiltered']);
@@ -639,29 +647,28 @@ class PVWallboxManager extends IPSModule
         }
 
         // 7) Ziel-Ampere berechnen
-        $minAmp    = $this->ReadPropertyInteger('MinAmpere');
-        $maxAmp    = $this->ReadPropertyInteger('MaxAmpere');
-        $desiredA  = $newPhasen
+        $minAmp   = $this->ReadPropertyInteger('MinAmpere');
+        $maxAmp   = $this->ReadPropertyInteger('MaxAmpere');
+        $desiredA = $newPhasen
             ? (int)ceil($anteilWatt / (230 * $newPhasen))
             : 0;
-        $desiredA  = max($minAmp, min($maxAmp, $desiredA));
+        $desiredA = max($minAmp, min($maxAmp, $desiredA));
 
         // 8) Ramp-Rate begrenzen
-        $lastA     = $this->ReadAttributeInteger('LastChargingCurrent');
-        $maxDelta  = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-        $diff      = $desiredA - $lastA;
-        $diff      = max(-$maxDelta, min($maxDelta, $diff));
-        $ampere    = $lastA + $diff;
+        $lastA    = $this->ReadAttributeInteger('LastChargingCurrent');
+        $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
+        $diff     = max(-$maxDelta, min($maxDelta, $desiredA - $lastA));
+        $ampere   = $lastA + $diff;
         $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
 
-        // 9) Visualisierung aktualisieren
+        // 9) Visualisierung
         $this->SetValueAndLogChange('PV_Ueberschuss',   round($smooth), 'PV-Überschuss',     'W', 'debug');
         $this->SetValueAndLogChange('PV_Ueberschuss_A', $ampere,         'PV-Überschuss (A)', 'A', 'debug');
 
-        // 10) Hysterese-Freigabe prüfen
+        // 10) Hysterese-Freigabe
         $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
 
-        // 11) Wallbox steuern
+        // 11) Wallbox ansteuern
         $this->SteuerungLadefreigabe(
             $smooth,
             'pv2car',
@@ -1899,7 +1906,7 @@ class PVWallboxManager extends IPSModule
         // 0) Batterie-Last
         $batLoad = max(0, $data['batt']);
 
-        // 1) Gesamtverbrauch (gefilterter HV + Batterie)
+        // 1) Gesamtverbrauch
         $cons = $data['hausFiltered'] + $batLoad;
 
         // 2) Roh-Überschuss
@@ -1908,14 +1915,18 @@ class PVWallboxManager extends IPSModule
             $rawSurplus = 0;
         }
 
-        // 3) Exponentielle Glättung
+        // 3) Exponentielle Glättung mit Erst-Durchlauf = Raw
         $alpha      = $this->ReadPropertyFloat('SmoothingAlpha');
         $lastSmooth = $this->ReadAttributeFloat('SmoothedSurplus');
-        $smoothed   = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        if ($lastSmooth <= 0) {
+            $smoothed = $rawSurplus;
+        } else {
+            $smoothed = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
+        }
         $this->WriteAttributeFloat('SmoothedSurplus', $smoothed);
         $useSurplus = $smoothed;
 
-        // 4) Cutoff-Threshold → gewünschten Ampere-Wert berechnen
+        // 4) Cutoff-Threshold → Ampere berechnen
         $cutoff     = 250;
         $desiredAmp = 0;
         if ($useSurplus >= $cutoff) {
@@ -1924,23 +1935,18 @@ class PVWallboxManager extends IPSModule
                 $this->ReadPropertyInteger('MinAmpere'),
                 min($this->ReadPropertyInteger('MaxAmpere'), $desiredAmp)
             );
-        } else {
-            if ($log) {
-                $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → auf 0 gesetzt)");
-            }
+        } elseif ($log) {
+            $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → auf 0 gesetzt)");
         }
 
         // 5) Ramp-Rate-Limiting
         $lastAmp  = $this->ReadAttributeInteger('LastChargingCurrent');
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-        $delta    = $desiredAmp - $lastAmp;
-        // Δ auf ±MaxDelta clampen
-        $delta = max(-$maxDelta, min($maxDelta, $delta));
-        $amp   = $lastAmp + $delta;
-        // neuen Wert direkt als Attribut speichern
+        $delta    = max(-$maxDelta, min($maxDelta, $desiredAmp - $lastAmp));
+        $amp      = $lastAmp + $delta;
         $this->WriteAttributeInteger('LastChargingCurrent', $amp);
 
-        // 6) Logging & UI-Updates
+        // 6) Logging & UI
         if ($log) {
             $this->LogTemplate(
                 'debug',
