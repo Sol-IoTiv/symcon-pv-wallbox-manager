@@ -3,7 +3,7 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
-## [1.5b] - 🚧 in Vorbereitung 🚧
+## [1.4.1b] - 🚧 in Vorbereitung 🚧
 
 ## [1.4b] - 2025-08-06
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt

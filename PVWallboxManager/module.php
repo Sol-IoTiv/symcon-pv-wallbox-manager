@@ -77,7 +77,6 @@ class PVWallboxManager extends IPSModule
 
         // 3) Modul-Aktiv Switch
         $this->RegisterVariableBoolean('ModulAktiv_Switch', '✅ Modul aktiv', '~Switch', 900);
-        $this->EnableAction('ModulAktiv_Switch');
 
         // 4) API- & Status-Variablen
         $this->registerVariables([
@@ -108,6 +107,13 @@ class PVWallboxManager extends IPSModule
             ['string',  'StatusInfo',                   'ℹ️ Status-Info',                            '~HTMLBox',                70,  null],
             ['string',  'ChargeTime',                   '⏳ Ladezeit',                              '',                         80 , null],
         ]);
+
+        $this->EnableAction('ModulAktiv_Switch');
+        $this->EnableAction('ManuellAmpere');
+        $this->EnableAction('ManuellPhasen');
+        $this->EnableAction('ManuellLaden');
+        $this->EnableAction('PV2CarModus');
+        $this->EnableAction('PVAnteil');
 
         // 5) Timer für Updates
         $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
@@ -264,8 +270,8 @@ class PVWallboxManager extends IPSModule
                 $this->SetValue('ModulAktiv_Switch', $Value);
                 IPS_SetProperty($this->InstanceID, 'ModulAktiv', $Value);
                 IPS_ApplyChanges($this->InstanceID);
-            if (!$Value) {
-                // 1) Wallbox sperren
+                if (!$Value) {
+                    // 1) Wallbox sperren
                     $this->SetForceState(1);
 
                     // 2) Lademodi zurücksetzen (wiederverwendbar)
@@ -898,7 +904,7 @@ class PVWallboxManager extends IPSModule
         }
 
         // === Auf 1-phasig umschalten ===
-        if ($aktModus == 2 && $pvUeberschuss <= $schwelle1) {
+        if ($aktModus > 1 && $pvUeberschuss <= $schwelle1) {
             $zaehler = $this->ReadAttributeInteger('Phasen1Zaehler') + 1;
             $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
             $this->WriteAttributeInteger('Phasen3Zaehler', 0);
@@ -1867,37 +1873,6 @@ class PVWallboxManager extends IPSModule
         return $data;
     }
 
-        /**
-     * 2.5) Anteilsberechnung für PV2Car-Modus
-     *
-     * @param array $data         Ergebnis von applyFilters(): ['pv','wallbox','hausFiltered','batt']
-     * @param int   $anteilProzent Prozentwert 0–100
-     * @return array              ['roh_ueber','anteil_watt']
-     */
-    private function calculatePV2Car(array $data, int $anteilProzent): array
-    {
-        
-        // wenn Hausakku voll ist, dann 100 % PV2Car ***
-        $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
-        $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
-        $soc    = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
-        if ($soc !== null && $soc >= $voll) {
-            $this->LogTemplate('info', "Hausakku voll ({$soc} % ≥ {$voll} %) → PV-Anteil override auf 100 %");
-            $anteilProzent = 100;
-
-        // Roh-Überschuss = PV minus gefiltertem Hausverbrauch
-        $rohUeberschuss = max(0, $data['pv'] - $data['hausFiltered']);
-
-        // Watt-Anteil für’s Auto
-        $anteilWatt = intval(round($rohUeberschuss * $anteilProzent / 100));
-
-        return [
-            'roh_ueber'   => $rohUeberschuss,
-            'anteil_watt' => $anteilWatt,
-        ];
-        }
-    }
-
     /**
      * 3) Überschuss und Ampere berechnen (inkl. Threshold und Hysterese-Logging)
      */
@@ -1908,6 +1883,16 @@ class PVWallboxManager extends IPSModule
 
         // 1) Gesamtverbrauch
         $cons = $data['hausFiltered'] + $batLoad;
+
+        // Wenn Batterie "nahe" voll, alles in Auto um Batterie Buffer für 
+        //    a.) PV liefert nicht mehr genung für Auto 
+        //    b.) Nur mehr 1 phasiges Laden möglich, Rest in Batterie
+        $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
+        $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
+        $soc    = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
+        if ($soc !== null && $soc >= $voll) {
+            $cons = $data['hausFiltered'];
+        }
 
         // 2) Roh-Überschuss
         $rawSurplus = max(0, $data['pv'] - $cons);
