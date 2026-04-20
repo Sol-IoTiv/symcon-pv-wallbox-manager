@@ -1493,9 +1493,7 @@ class PVWallboxManager extends IPSModule
             $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
             $this->LogTemplate('ok', "Nach Ladeende: Zurück auf 1-phasig/6A/0A für PVonly.");
         }
-
         $this->SyncLademodusAuswahl();
-        
     }
 
     /**
