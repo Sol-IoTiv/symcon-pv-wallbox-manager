@@ -352,14 +352,15 @@ class PVWallboxManager extends IPSModule
                         $this->SetValue('ManuellLaden', false);
                         $this->SetValue('PV2CarModus', true);
                         $this->LogTemplate('info', "🔁 Lademodus: PV-Anteil");
-                        $this->UpdateStatus($Value ? 'pv2car' : 'pvonly');
+                        
+                        $this->UpdateStatus('pv2car');
                         break;
 
                     case 2: // Manuell
                         $this->SetValue('ManuellLaden', true);
                         $this->SetValue('PV2CarModus', false);
                         $this->LogTemplate('info', "🔁 Lademodus: Manuell");
-                        $this->UpdateStatus($Value ? 'manuell' : 'pvonly');
+                        $this->UpdateStatus('manuell');
                         break;
 
                     default:
