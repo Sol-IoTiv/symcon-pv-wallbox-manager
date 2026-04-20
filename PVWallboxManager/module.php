@@ -114,6 +114,7 @@ class PVWallboxManager extends IPSModule
         $this->EnableAction('ManuellLaden');
         $this->EnableAction('PV2CarModus');
         $this->EnableAction('PVAnteil');
+        $this->EnableAction('ZielzeitLaden');
 
         // 5) Timer für Updates
         $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
@@ -2308,5 +2309,38 @@ class PVWallboxManager extends IPSModule
         }
         $html .= '</div>';
         return $html;
+    }
+public function GetConfigurationForm()
+    {
+        $form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
+
+        $version = 'unbekannt';
+        $name = 'PVWallboxManager';
+
+        $moduleFile = __DIR__ . '/module.json';
+        if (file_exists($moduleFile)) {
+            $moduleJson = json_decode(file_get_contents($moduleFile), true);
+            if (is_array($moduleJson)) {
+                if (isset($moduleJson['version'])) {
+                    $version = (string) $moduleJson['version'];
+                }
+                if (isset($moduleJson['name'])) {
+                    $name = (string) $moduleJson['name'];
+                }
+            }
+        }
+
+        array_unshift($form['elements'], [
+            'type'    => 'ExpansionPanel',
+            'caption' => 'ℹ️ Modulinfo',
+            'items'   => [
+                [
+                    'type'    => 'Label',
+                    'caption' => $name . ' – Version ' . $version
+                ]
+            ]
+        ]);
+
+        return json_encode($form);
     }
 }
