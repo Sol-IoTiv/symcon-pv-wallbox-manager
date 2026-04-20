@@ -13,7 +13,7 @@ class PVWallboxManager extends IPSModule
         // 1) Custom Profiles & Attribute defaults
         $this->RegisterCustomProfiles();
         $this->registerAttributes([
-//            'MarketPricesTimerInterval'      => 0,
+            'MarketPricesTimerInterval'      => 0,
             'MarketPricesActive'             => false,
 //            'PV2CarStartZaehler'             => 0,
 //            'PV2CarStopZaehler'              => 0,
