@@ -3,7 +3,9 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
-## [1.4.1b] - 🚧 in Vorbereitung 🚧
+## [1.4.1b] - 2026-04-20
+- Fixed Phasenmodus (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/b4c744119a09afd9a6d508878c35d885efda791c#diff-30c80afda9db4a50bf1f908b20eca6a8c7242c6db1b302cd1fcb9b8839035ca4L76
+- Usage of HausakkuSOCID (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/602f479dc5597e4eef5def64677816b5ce254c29
 
 ## [1.4b] - 2025-08-06
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
