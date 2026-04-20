@@ -13,10 +13,10 @@ class PVWallboxManager extends IPSModule
         // 1) Custom Profiles & Attribute defaults
         $this->RegisterCustomProfiles();
         $this->registerAttributes([
-            'MarketPricesTimerInterval'      => 0,
+//            'MarketPricesTimerInterval'      => 0,
             'MarketPricesActive'             => false,
-            'PV2CarStartZaehler'             => 0,
-            'PV2CarStopZaehler'              => 0,
+//            'PV2CarStartZaehler'             => 0,
+//            'PV2CarStopZaehler'              => 0,
             'Phasen1Zaehler'                 => 0,
             'Phasen3Zaehler'                 => 0,
             'LadeStartZaehler'               => 0,
@@ -24,7 +24,7 @@ class PVWallboxManager extends IPSModule
             'HausverbrauchAbzWallboxBuffer'  => '[]',
             'HausverbrauchAbzWallboxLast'    => 0.0,
             'NoPowerCounter'                 => 0,
-            'LastFRCState'                   => 0,
+//            'LastFRCState'                   => 0,
             'LastTimerStatus'                => -1,
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
@@ -98,12 +98,12 @@ class PVWallboxManager extends IPSModule
             ['integer', 'LademodusAuswahl',             '🔁 Lademodus',                             'PVWM.Lademodus',           39, 'Shuffle'],
             ['boolean', 'ManuellLaden',                 '🔌 Manuell: Vollladen aktiv',              '~Switch',                  40, null],
             ['boolean', 'PV2CarModus',                  '🌞 PV-Anteil laden',                       '~Switch',                  41, 'SolarPanel'],
-            ['boolean', 'ZielzeitLaden',                '⏰ Zielzeit-Ladung',                       '~Switch',                  42, null],
+//            ['boolean', 'ZielzeitLaden',                '⏰ Zielzeit-Ladung',                       '~Switch',                  42, null],
             ['integer', 'PVAnteil',                     'PV-Anteil (%)',                            'PVWM.Percent',             43, 'Percent'],
             ['integer', 'ManuellAmpere',                '🔌 Ampere (manuell)',                      'PVWM.Ampere',              44, null],
             ['integer', 'ManuellPhasen',                '🔀 Phasen (manuell)',                      'PVWM.PSM',                 45, null],
-            ['integer', 'PhasenmodusEinstellung',       '🟢 Wallbox-Phasen Soll (Einstellung)',     'PVWM.PSM',                 50, 'Lightning'],
-            ['integer', 'Phasenmodus',                  '🔵 Genutzte Phasen (Fahrzeug)',            'PVWM.PhasenText',          51, 'Lightning'],
+            ['integer', 'PhasenmodusEinstellung',       '🟢 Wallbox Phasen (Soll)',                 'PVWM.PSM',                 50, 'Lightning'],
+            ['integer', 'Phasenmodus',                  '🔵 Fahrzeug nutzt Phasen (Ist)',           'PVWM.PhasenText',          51, 'Lightning'],
             ['string',  'StatusInfo',                   'ℹ️ Status-Info',                            '~HTMLBox',                70,  null],
             ['string',  'ChargeTime',                   '⏳ Ladezeit',                              '',                         80 , null],
         ]);
@@ -115,7 +115,7 @@ class PVWallboxManager extends IPSModule
         $this->EnableAction('ManuellLaden');
         $this->EnableAction('PV2CarModus');
         $this->EnableAction('PVAnteil');
-        $this->EnableAction('ZielzeitLaden');
+//        $this->EnableAction('ZielzeitLaden');
 
         // 5) Timer für Updates
         $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
@@ -224,7 +224,7 @@ class PVWallboxManager extends IPSModule
             [0, 'Nur PV',     'SolarPanel', 0x44AA44],
             [1, 'PV-Anteil',  'Sun',        0xFFCC00],
             [2, 'Manuell',    'Power',      0xFF8800],
-            [3, 'Zielzeit',   'Clock',      0x0088FF]
+//            [3, 'Zielzeit',   'Clock',      0x0088FF]
         ]);
 
         $create('PVWM.PhasenText', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
@@ -260,7 +260,7 @@ class PVWallboxManager extends IPSModule
         $val = GetValue($vid);
         $v = IPS_GetVariable($vid);
         $profile = $v['VariableCustomProfile'] ?: $v['VariableProfile'];
-        if (!$profile) return (string)$val;
+        if (!$profile || !IPS_VariableProfileExists($profile)) return (string)$val;
 
         $assos = IPS_GetVariableProfile($profile)['Associations'];
         foreach ($assos as $a) {
@@ -273,12 +273,13 @@ class PVWallboxManager extends IPSModule
     {
         $mode = 0; // Nur PV
 
-        if ($this->GetValue('ZielzeitLaden')) {
-            $mode = 3;
-        } elseif ($this->GetValue('ManuellLaden')) {
+        // Zielzeit aktuell deaktiviert
+        if ($this->GetValue('ManuellLaden')) {
             $mode = 2;
         } elseif ($this->GetValue('PV2CarModus')) {
             $mode = 1;
+        } else {
+            $mode = 0;
         }
 
         if (@$this->GetIDForIdent('LademodusAuswahl')) {
@@ -340,7 +341,6 @@ class PVWallboxManager extends IPSModule
                     case 0: // Nur PV
                         $this->SetValue('ManuellLaden', false);
                         $this->SetValue('PV2CarModus', false);
-                        $this->SetValue('ZielzeitLaden', false);
                         $this->LogTemplate('info', "🔁 Lademodus: Nur PV");
                         $this->SetPhaseMode(1);
                         $this->SetChargingCurrent(6);
@@ -351,25 +351,15 @@ class PVWallboxManager extends IPSModule
                     case 1: // PV-Anteil
                         $this->SetValue('ManuellLaden', false);
                         $this->SetValue('PV2CarModus', true);
-                        $this->SetValue('ZielzeitLaden', false);
                         $this->LogTemplate('info', "🔁 Lademodus: PV-Anteil");
-                        $this->UpdateStatus('pv2car');
+                        $this->UpdateStatus($Value ? 'pv2car' : 'pvonly');
                         break;
 
                     case 2: // Manuell
                         $this->SetValue('ManuellLaden', true);
                         $this->SetValue('PV2CarModus', false);
-                        $this->SetValue('ZielzeitLaden', false);
                         $this->LogTemplate('info', "🔁 Lademodus: Manuell");
-                        $this->UpdateStatus('manuell');
-                        break;
-
-                    case 3: // Zielzeit
-                        $this->SetValue('ManuellLaden', false);
-                        $this->SetValue('PV2CarModus', false);
-                        $this->SetValue('ZielzeitLaden', true);
-                        $this->LogTemplate('info', "🔁 Lademodus: Zielzeit");
-                        $this->UpdateStatus('zielzeit');
+                        $this->UpdateStatus($Value ? 'manuell' : 'pvonly');
                         break;
 
                     default:
@@ -436,7 +426,7 @@ class PVWallboxManager extends IPSModule
                 $this->SyncLademodusAuswahl();
                 break;
 
-            case "ZielzeitLaden":
+/*            case "ZielzeitLaden":
                 if ($Value) {
                     $this->SetValue('ZielzeitLaden', true);
                     $this->SetValue('ManuellLaden', false);
@@ -455,7 +445,7 @@ class PVWallboxManager extends IPSModule
                 $this->UpdateStatus('zielzeit');
                 $this->SyncLademodusAuswahl();
                 break;
-
+*/
             case "PVAnteil":
                 // Wertebereich checken (0-100%)
                 $value = max(0, min(100, intval($Value)));
@@ -1214,17 +1204,24 @@ class PVWallboxManager extends IPSModule
 
     private function FahrzeugVerbunden($data)
     {
-        // Robust, egal ob false oder Array kommt
+        // 1) Status sauber bestimmen
         $car = (is_array($data) && isset($data['car'])) ? intval($data['car']) : 0;
-        if ($car > 1) return true;
 
-        // --- NUR EINMAL zentral alles erledigen ---
+        // 2) Fahrzeug verbunden → fertig
+        if ($car > 1) {
+            return true;
+        }
+
+        // 3) Kein Fahrzeug → nur reagieren, wenn nötig
         if ($this->GetValue('AccessStateV2') != 1) {
             $this->SetForceState(1);
-            $this->LogTemplate('info', "Kein Fahrzeug verbunden – Wallbox bleibt gesperrt.");
+            $this->LogTemplate('info', "Kein Fahrzeug verbunden – Wallbox gesperrt.");
         }
-        $this->SetTimerNachModusUndAuto($car);
+
+        // 4) Visualisierung & Timer
         $this->ResetWallboxVisualisierungKeinFahrzeug();
+//        $this->SetTimerNachModusUndAuto();
+
         return false;
     }
 
@@ -1275,7 +1272,7 @@ class PVWallboxManager extends IPSModule
     private function ResetLademodiWennKeinFahrzeug()
     {
         if ($this->GetValue('Status') <= 1) {
-            $modi = ['ManuellLaden', 'PV2CarModus', 'ZielzeitLaden'];
+            $modi = ['ManuellLaden', 'PV2CarModus'];
             foreach ($modi as $modus) {
                 if ($this->GetValue($modus)) {
                     $this->SetValue($modus, false);
@@ -1384,10 +1381,9 @@ class PVWallboxManager extends IPSModule
         $currentFRC = $this->GetValue('AccessStateV2'); // 2 = laden erzwungen
         $manuell    = $this->GetValue('ManuellLaden')   ? 'ja' : 'nein';
         $pv2car     = $this->GetValue('PV2CarModus')    ? 'ja' : 'nein';
-        $zielzeit   = $this->GetValue('ZielzeitLaden')  ? 'ja' : 'nein';
         $this->LogTemplate(
             'debug',
-            "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Manuell={$manuell}, PV2Car={$pv2car}, Zielzeit={$zielzeit}"
+            "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Manuell={$manuell}, PV2Car={$pv2car}"
         );
 
         // 1) SOC-Werte einlesen
@@ -1402,14 +1398,12 @@ class PVWallboxManager extends IPSModule
         $pvOnlyActive = (
             !$this->GetValue('ManuellLaden')
             && !$this->GetValue('PV2CarModus')
-            && !$this->GetValue('ZielzeitLaden')
         );
 
         $loadActive = (
             $currentFRC === 2
             || $this->GetValue('ManuellLaden')
             || $this->GetValue('PV2CarModus')
-            || $this->GetValue('ZielzeitLaden')
             || $pvOnlyActive
         );
         $this->LogTemplate(
@@ -1475,7 +1469,7 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
         // Hier kannst du nach Ladeende die Lademodi zurücksetzen (optional)
-        $modi = ['ManuellLaden', 'PV2CarModus', 'ZielzeitLaden'];
+        $modi = ['ManuellLaden', 'PV2CarModus'];
         $manualDeactivated = false;
         foreach ($modi as $modus) {
             if ($this->GetValue($modus)) {
@@ -1533,9 +1527,10 @@ class PVWallboxManager extends IPSModule
         elseif ($this->GetValue('PV2CarModus')) {
             $modusText = '🌞 PV-Anteil laden (' . $this->GetValue('PVAnteil') . '%)';
         }
-        elseif ($this->GetValue('ZielzeitLaden')) {
+/*        elseif ($this->GetValue('ZielzeitLaden')) {
             $modusText = '⏰ Zielzeitladung';
         }
+*/        
         else {
             $modusText = '☀️ PVonly (nur PV-Überschuss)';
         }
@@ -1752,8 +1747,6 @@ class PVWallboxManager extends IPSModule
         );
 
         $accessStateV2 = ($vars['frcRaw'] === 2 || $vars['stateRaw'] === 2) ? 2 : 1;
-        $this->SetValueAndLogChange('PhasenmodusEinstellung', $vars['psm'] ?? 0, 'Phasenmodus (Einstellung)', '', 'debug');
-        $this->SetValueAndLogChange('Phasenmodus',           $phasen,                    'Genutzte Phasen',            '', 'debug');
         $this->SetValueAndLogChange('Status',                $vars['car'],               'Status');
         $this->SetValueAndLogChange('AccessStateV2',         $accessStateV2,             'Wallbox Modus');
         $this->SetValueAndLogChange('Leistung',              $vars['leistung'],          'Aktuelle Ladeleistung (W)',  'W');
@@ -2335,6 +2328,10 @@ class PVWallboxManager extends IPSModule
         // 2) auf die ersten $max Einträge kürzen
         $slice = array_slice(array_values($future), 0, $max);
 
+        if (count($slice) === 0) {
+            return '<span style="color:#888;">Keine zukünftigen Preisdaten verfügbar.</span>';
+        }
+
         // === ab hier unverändert weiterverarbeiten $slice statt $preise ===
         $allePreise = array_column($slice, 'price');
         $min        = min($allePreise);
@@ -2376,7 +2373,7 @@ class PVWallboxManager extends IPSModule
     <b style="font-size:1.07em;">Börsenpreis-Vorschau:</b>
     EOT;
 
-        foreach ($preise as $i => $dat) {
+        foreach ($slice as $i => $dat) {
             $time = date('H', $dat['timestamp']);
             $price = number_format($dat['price'], 3, ',', '.');
             $percent = ($dat['price'] - $min) / max(0.001, ($maxPrice - $min));
@@ -2410,6 +2407,7 @@ class PVWallboxManager extends IPSModule
         $html .= '</div>';
         return $html;
     }
+
 public function GetConfigurationForm()
     {
         $form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
