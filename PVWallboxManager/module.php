@@ -223,7 +223,7 @@ class PVWallboxManager extends IPSModule
         $create('PVWM.Lademodus', VARIABLETYPE_INTEGER, 0, '', 'Shuffle', [
             [0, 'Nur PV',     'SolarPanel', 0x44AA44],
             [1, 'PV-Anteil',  'Sun',        0xFFCC00],
-            [2, 'Manuell',    'Power',      0xFF8800],
+            [2, 'Manuell',    'Power',      0xFF8800]
 //            [3, 'Zielzeit',   'Clock',      0x0088FF]
         ]);
 
