@@ -10,13 +10,6 @@ Die Kommunikation erfolgt nun direkt und nativ mit der lokalen GO-eCharger API (
 
 ---
 
-## 🆕 Wichtigste Neuerung in v1.0b
-
-👉 **Die Kommunikation erfolgt jetzt direkt mit der lokalen API deines GO-eChargers (V3 & V4)**  
-Das ist ein großer Meilenstein – alle bisherigen und zukünftigen Funktionen laufen ab jetzt unabhängig, ohne Drittmodul oder externe Zwischenschicht.
-
----
-
 ## 🔧 Unterstützte Wallboxen
 
 Aktuell unterstützt dieses Modul **ausschließlich den GO-eCharger (V3 und V4)** in Kombination mit dem offiziellen IP-Symcon-Modul [`IPSCoyote/GO-eCharger`](https://github.com/IPSCoyote/GO-eCharger).
@@ -24,6 +17,61 @@ Aktuell unterstützt dieses Modul **ausschließlich den GO-eCharger (V3 und V4)*
 > 🎯 Ziel: 100 % Feature-Unterstützung für GO-eCharger – dynamische Ladeleistung, Phasenumschaltung, PV-Optimierung, Strompreis-Optimierung.
 >
 > 🔄 Weitere Wallboxen (openWB, easee, …) sind denkbar – abhängig von Community-Feedback.
+
+---
+
+### Hinweis zur Hausverbrauchs-Variable
+
+> **In den Modul-Einstellungen bitte immer die Variable für den gesamten Hausverbrauch (inkl. Wallbox) eintragen.**
+> Das Modul zieht die Wallbox-Leistung automatisch ab und berechnet den echten Überschuss intern.
+>  
+> **Nicht einen bereits „bereinigten“ Wert eintragen!**
+
+---
+
+## Funktionsweise und Lademodi
+
+**Standard-Modus „PV-Überschuss laden“ (`PVonly`):**
+- Der PV-Überschuss wird zuerst zur Ladung des Hausspeichers genutzt, bis dieser voll ist.
+- Erst danach wird der verbleibende PV-Überschuss automatisch zum Laden des Autos verwendet.
+
+**Manueller Modus „🔌 Vollladen aktiv“:**
+- Das Auto lädt sofort mit maximal möglicher Leistung – unabhängig von PV-Überschuss, Speicherstand oder Uhrzeit.
+- Es wird alles verwendet, was verfügbar ist: PV-Überschuss, Hausspeicher und (falls nötig) Strom aus dem Netz.
+
+**Modus „🌞 PV-Anteil laden“:**
+- Mit dem Schieberegler kann eingestellt werden, wie viel Prozent des aktuellen PV-Überschusses ins Auto fließen (z. B. 50 %).
+- Beispiel: Bei 5.000 W Überschuss gehen 2.500 W ins Auto, der Rest steht Haus und Hausspeicher zur Verfügung.
+- Der Hausspeicher wird in diesem Modus bevorzugt geladen, bis die eingestellte „Voll-Schwelle“ erreicht ist.
+
+---
+
+### Aktualisierungsintervalle im PVWallboxManager
+
+- **Initial-Check-Intervall:**  
+  Das Modul prüft in kurzen Abständen (standardmäßig alle 10 Sekunden), ob ein Fahrzeug an der Wallbox erkannt wird.
+  Hier passieren keine Berechnugen vom PV-Überschuss usw...
+  Erst wenn ein Fahrzeug angeschlossen ist, schaltet das Modul automatisch auf den normalen Aktualisierungsintervall um.
+
+- **Normaler Aktualisierungsintervall:**  
+  Während des laufenden Betriebs werden alle Werte (PV-Leistung, Hausverbrauch, Wallbox-Status, etc.) standardmäßig alle **30 Sekunden** aktualisiert.  
+  Das Intervall kannst du in den Moduleinstellungen (Eigenschaften der Instanz) an deine Bedürfnisse anpassen.
+
+> **Tipp:**  
+> Ein kürzeres Intervall sorgt für schnellere Reaktion bei Wetterwechseln, erzeugt aber auch mehr Systemlast.  
+> 30 - 60 Sekunden ist ein guter Mittelwert für die meisten Anwendungsfälle.
+
+---
+
+## Was ist neu in Version v1.1b?
+
+- Eigene Icons für „PV-Überschuss (W)“ (☀️) und „PV-Überschuss (A)“ (⚡️) im WebFront.
+- Die Ladestrom-Anzeige (A) zeigt jetzt **0 A**, solange kein Überschuss vorhanden ist, und springt bei PV-Überschuss direkt auf den minimalen Ladestrom.
+- Hausverbrauch abzüglich Wallbox-Leistung kann nicht mehr negativ werden – Fehlerquellen ausgeräumt.
+- Alle Visualisierungswerte werden ab sofort konsequent gerundet angezeigt (keine unschönen Nachkommastellen mehr).
+- Viele weitere Verbesserungen bei Stabilität, Anzeige und Status-Info.
+
+→ **Alle Änderungen und technischen Details findest du im [CHANGELOG.md](./CHANGELOG.md).**
 
 ---
 

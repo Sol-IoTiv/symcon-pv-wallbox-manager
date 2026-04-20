@@ -116,12 +116,33 @@
     },
     {
       "type": "ExpansionPanel",
+      "caption": "🚗 Fahrzeugdaten & Ziel-SOC",
+      "items": [
+        { "type": "Label", "label": "🔋 Aktueller SoC des Fahrzeugs & 🎯 Ziel-SoC für das Fahrzeug" },
+        { "type": "RowLayout", "items": [
+          { "type": "SelectVariable", "name": "CarSOCID", "caption": "Aktueller SoC des Fahrzeugs", "suffix": "%", "minimum": 0, "maximum": 100 },
+          { "type": "Label", "caption": "    " },
+          { "type": "SelectVariable", "name": "CarTargetSOCID", "caption": "Ziel-SoC für das Fahrzeug" }
+        ]},
+        { "type": "Label", "caption": "    " },
+        { "type": "Label", "label": "🔋 Batteriekapazität des Fahrzeugs in kWh (z. B. 52 für ID.3 Pure):" },
+        { "type": "RowLayout", "items": [
+          { "type": "NumberSpinner", "name": "CarBatteryCapacity", "caption": "Batteriekapazität (kWh)", "suffix": "kWh" }
+        ]}
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
       "caption": "📉 Strompreis-Börse / Forecast",
       "items": [
         {
           "type": "CheckBox",
           "name": "UseMarketPrices",
-          "caption": "Strompreisbörsenpreise aktivieren (Awattar, Tibber ...)"
+          "caption": "Strompreisbörsenpreise aktivieren (Awattar, ...)"
+        },
+        {
+          "type": "Label",
+          "label": "Die Preise werden automatisch zu jeder vollen Stunde und beim Aktivieren aktualisiert."
         },
         {
           "type": "Select",
@@ -135,7 +156,7 @@
           "default": "awattar_at"
         },
         { "type": "Label", "caption": "    " },
-        { "type": "Label", "label": "🔗 Die API-URL muss **nur** bei Auswahl von 'Custom API' ausgefüllt werden. Bei Awattar wird die URL automatisch gesetzt!"},
+        { "type": "Label", "label": "🔗 Die API-URL muss **nur** bei Auswahl von 'Custom API' ausgefüllt werden. Bei Awattar wird die URL automatisch gesetzt!" },
         {
           "type": "ValidationTextBox",
           "name": "MarketPriceAPI",
@@ -143,21 +164,16 @@
           "default": ""
         },
         { "type": "Label", "caption": "    " },
+        { "type": "Label", "caption": "Grundpreis für Netzentgelte, Umlagen, Abgaben, Steuern"  },
+        { "type": "NumberSpinner", "name": "MarketPriceBasePrice", "caption": "Grundpreis", "default": 0.00, "suffix": " cent/kWh", "minimum": 0, "maximum": 100 },
+        { "type": "Label", "caption": "Aufschlag zum Marktpreis für Versorger-Marge, Bilanzierungs- und Beschaffungskosten" },
+        { "type": "NumberSpinner", "name": "MarketPriceSurcharge", "caption": "Aufschlag", "default": 0.00, "suffix": " %", "minimum": 0, "maximum": 100 },
+        { "type": "Label", "caption": "Steuersatz" },
+        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 20, "suffix": " %", "minimum": 0, "maximum": 100 },
         {
-          "type": "NumberSpinner",
-          "name": "MarketPriceInterval",
-          "caption": "Abrufintervall in Minuten",
-          "suffix": "min",
-          "minimum": 1,
-          "maximum": 120,
-          "default": 30
-        },
-        {"type": "Label", "label": "Der aktuelle Börsenpreis-Forecast wird automatisch in die Variable 'Marktueller-Börsenpreis' geschrieben."},
-        {"type": "Label", "label": "Die Preise werden alle X Minuten aktualisiert und können in der Lade-Logik verwendet werden."},
-        {
-        "type": "Label",
-        "label": "Den aktuellen Börsenpreis-Forecast findest du im WebFront unter 'Börsenpreis-Vorschau'."
-      }
+          "type": "Label",
+          "label": "Börsenpreise und Vorschau erscheinen im WebFront und werden in die Variable 'CurrentSpotPrice' geschrieben."
+        }
       ]
     }
   ]

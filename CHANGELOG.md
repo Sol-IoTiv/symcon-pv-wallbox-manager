@@ -3,6 +3,61 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.1b] - 2026-04-20
+- Fixed Phasenmodus (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/b4c744119a09afd9a6d508878c35d885efda791c#diff-30c80afda9db4a50bf1f908b20eca6a8c7242c6db1b302cd1fcb9b8839035ca4L76
+- Usage of HausakkuSOCID (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/602f479dc5597e4eef5def64677816b5ce254c29
+
+## [1.4b] - 2025-08-06
+- Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
+- Börsenpreis wird anhand der Werte berechnet
+- Börsenpreis-Vorscha (HTML) angepasst
+- Ladezeit und Uhrzeit Ladeende wird berechnen und im WF in der Variable "⏳ Ladezeit" angezeigen (z.b.: 04h 22min -> 16:24 Uhr)
+- Exponentialle Glättung: Der berechnete PV-Überschuss wird nun mit einem einstellbaren α-Wert (SmoothingAlpha) geglättet, um plötzliche Schwankungen zu dämpfen und eine stabilere Lade­strom­steuerung zu ermöglichen.
+- Ramp-Rate-Limiting: Die Änderung des Lade­stroms pro Zyklus wird auf einen konfigurierbaren Maximalwert (MaxRampDeltaAmp derzeit 2A fix) begrenzt, sodass der Strom sanft von Minimum bis Maximum ansteigt und abrupte Sprünge vermieden werden.
+
+## [1.3b] - 2025-07-29
+### Hinzugefügt
+- SOC-Werte (IST/ZIEL) werden jetzt in allen Lademodi berücksichtigt  
+- Manuelles Vollladen startet sofort mit konfigurierter Stromstärke und Phasen (Hysterese nicht angewendet)
+
+### Geändert
+- Status-Anzeige komplett neu gestaltet  
+- „Warte auf Fahrzeug“ umbenannt in „Fahrzeug verbunden / Bereit zum Laden“  
+- Modul-deaktiviert-Zustand wird jetzt angezeigt  
+- SOC IST/ZIEL vom Fahrzeug in der Status-Info angezeigt
+
+### Behoben
+- Anzeige- und Berechnungsfehler in der Status-Info korrigiert  
+- Doppelte Berechnungen und redundante Logs entfernt  
+- API-Befehle werden nur gesendet, wenn sich ein Wert tatsächlich ändert  
+- Hysterese für Phasenumschaltung und Start/Stop vollständig implementiert
+- PV-Überschuss < 250 W wird als 0 W angezeigt
+- NoPowerCounter nach 3 aufeinanderfolgenden fehlenden Leistungswerten (unter 100 W) wir Ladeende angenommen
+
+### Bereinigt
+- Modulstruktur bereinigt und neu organisiert
+
+## [1.2b] - 2025-07-28
+- Bugfix "🏠 Hausverbrauch abzügl. Wallbox (W)" 0 Werte
+- Modul über Visiu aktivieren / deaktivieren neuer Boolean Variable
+- PV-Überschuss (W) und (A) wird jetzt immer berechnen
+- Lademodi "Manuell Vollladen": Die Ladeleistung richtet sich nun nach den manuell eingestellten Phasen- und Ampere-Werten. 🔀 Phasen (manuell) & 🔌 Ampere (manuell)
+
+## [1.1b] - 2025-07-25
+- Börsenpreise wird zur vollen Stunde aktualisiert
+- Börsenpreis-Vorschau +24h erweitert
+- Hausansschluss (W) aktueller Wert wird im WF immer aktualisert angezeigt
+- Wenn Auto SOC erreicht hat wird nach 6 Intervallen der Ladenodus auch beendet. Ist in der Instanzkonfig das Property Aktueller SOC und Ziel SOC gesetzt wird der Lademodus anhand der Werte beendet.
+- Phasenmodus wird immer aktualisiert
+- Stauts-Info Anzeige ~HTML Box für Webfront hinzugefügt (Lademodi, Phasensstatus, Status, Modus, PV2Car (%) werden angezeigt)
+- 🏠 Hausverbrauch (W) und 🏠 Hausverbrauch abzügl. Wallbox (W) werden per Ereignis immer aktualisiert
+- NEU: ☀️ und ⚡️ Icons für „PV-Überschuss (W/A)“ im WebFront
+- NEU: 0A-Logik für Ladestrom (zeigt 0A, solange kein Überschuss)
+- FIX: Hausverbrauch abzüglich Wallbox kann nicht mehr negativ werden
+- OPTIMIERUNG: Glättung & Buffer für Hausverbrauch abzüglich Wallbox verbessert
+- OPTIMIERUNG: Alle Werte im WebFront jetzt gerundet (keine Nachkommastellen-Flut)
+- Diverse Berechnungen überarbeitet und WebFront-Anzeige bereinigt
+
 ## [1.0b] – 2025-07-13
 
 ### 🚀 Wichtige Neuerungen
