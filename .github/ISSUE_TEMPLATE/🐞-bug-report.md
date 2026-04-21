@@ -1,8 +1,8 @@
 ---
-name: Bug report
+name: "\U0001F41E Bug report"
 about: Melde einen Fehler im PVWallboxManager
 title: "[BUG]"
-labels: bug
+labels: bug, enhancement
 assignees: ''
 
 ---
