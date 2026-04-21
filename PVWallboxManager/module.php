@@ -96,8 +96,8 @@ class PVWallboxManager extends IPSModule
             ['string',  'MarketPricesPreview',          '📊 Börsenpreis-Vorschau (HTML)',           '~HTMLBox',                 32, null],
             ['integer', 'TargetTime',                   'Zielzeit',                                 '~UnixTimestampTime',       20, 'clock'],
             ['integer', 'LademodusAuswahl',             '🔁 Lademodus',                             'PVWM.Lademodus',           39, 'Shuffle'],
-            ['boolean', 'ManuellLaden',                 '🔌 Manuell: Vollladen aktiv',              '~Switch',                  40, null],
-            ['boolean', 'PV2CarModus',                  '🌞 PV-Anteil laden',                       '~Switch',                  41, 'SolarPanel'],
+//            ['boolean', 'ManuellLaden',                 '🔌 Manuell: Vollladen aktiv',              '~Switch',                  40, null],
+//            ['boolean', 'PV2CarModus',                  '🌞 PV-Anteil laden',                       '~Switch',                  41, 'SolarPanel'],
 //            ['boolean', 'ZielzeitLaden',                '⏰ Zielzeit-Ladung',                       '~Switch',                  42, null],
             ['integer', 'PVAnteil',                     'PV-Anteil (%)',                            'PVWM.Percent',             43, 'Percent'],
             ['integer', 'ManuellAmpere',                '🔌 Ampere (manuell)',                      'PVWM.Ampere',              44, null],
@@ -112,8 +112,8 @@ class PVWallboxManager extends IPSModule
         $this->EnableAction('LademodusAuswahl');
         $this->EnableAction('ManuellAmpere');
         $this->EnableAction('ManuellPhasen');
-        $this->EnableAction('ManuellLaden');
-        $this->EnableAction('PV2CarModus');
+//        $this->EnableAction('ManuellLaden');
+//        $this->EnableAction('PV2CarModus');
         $this->EnableAction('PVAnteil');
 //        $this->EnableAction('ZielzeitLaden');
 
@@ -145,7 +145,7 @@ class PVWallboxManager extends IPSModule
         $this->SetTimerNachModusUndAuto();
         $this->SetMarketPriceTimerZurVollenStunde();
         $this->UpdateHausverbrauchEvent();
-        $this->SyncLegacyModeBooleans();
+//        $this->SyncLegacyModeBooleans();
     }
 
     // =========================================================================
@@ -269,7 +269,7 @@ class PVWallboxManager extends IPSModule
         return (string)$val;
     }
 
-    private function SyncLegacyModeBooleans(): void
+/*    private function SyncLegacyModeBooleans(): void
     {
         $selection = $this->getCurrentModeSelection();
 
@@ -284,6 +284,7 @@ class PVWallboxManager extends IPSModule
             $this->SetValue('PV2CarModus', $isPv2Car);
         }
     }
+*/
 
     // =========================================================================
     // 3. EVENTS & REQUESTACTION
@@ -309,6 +310,7 @@ class PVWallboxManager extends IPSModule
                 $this->handleLademodusAuswahl((int) $Value);
                 return;
 
+/*                
             case 'ManuellLaden':
                 $this->handleLegacyModeToggle('manuell', (bool) $Value);
                 return;
@@ -317,11 +319,10 @@ class PVWallboxManager extends IPSModule
                 $this->handleLegacyModeToggle('pv2car', (bool) $Value);
                 return;
 
-    /*
             case 'ZielzeitLaden':
                 $this->handleLegacyModeToggle('zielzeit', (bool) $Value);
                 return;
-    */
+*/
 
             case 'PVAnteil':
                 $this->handlePVAnteilChange((int) $Value);
@@ -1142,8 +1143,6 @@ class PVWallboxManager extends IPSModule
                 $this->SetValue('LademodusAuswahl', 0);
                 $this->LogTemplate('debug', "Lademodus wurde auf PVonly zurückgesetzt, weil kein Fahrzeug verbunden ist.");
             }
-
-            $this->SyncLegacyModeBooleans();
         }
     }
 
@@ -1315,9 +1314,7 @@ class PVWallboxManager extends IPSModule
         $oldMode = $this->getCurrentModeKey();
 
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
-
         $this->SetValue('LademodusAuswahl', 0);
-        $this->SyncLegacyModeBooleans();
 
         if ($oldMode === 'manuell') {
             $this->SetPhaseMode(1);
@@ -1721,7 +1718,7 @@ class PVWallboxManager extends IPSModule
         $this->applyChargingMode($this->mapSelectionToMode($mode));
     }
 
-    private function handleLegacyModeToggle(string $mode, bool $enabled): void
+/*    private function handleLegacyModeToggle(string $mode, bool $enabled): void
     {
         if ($enabled) {
             $this->applyChargingMode($mode);
@@ -1735,7 +1732,7 @@ class PVWallboxManager extends IPSModule
 
         $this->SyncLegacyModeBooleans();
     }
-
+*/
     private function handlePVAnteilChange(int $value): void
     {
         $value = max(0, min(100, $value));
@@ -1791,14 +1788,12 @@ class PVWallboxManager extends IPSModule
         $newSelection = $this->mapModeToSelection($mode);
 
         if ($oldSelection === $newSelection) {
-            $this->SyncLegacyModeBooleans();
             $this->SetTimerNachModusUndAuto();
             $this->UpdateStatus($mode);
             return;
         }
 
         $this->SetValue('LademodusAuswahl', $newSelection);
-        $this->SyncLegacyModeBooleans();
 
         switch ($mode) {
             case 'pvonly':
