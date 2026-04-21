@@ -310,7 +310,6 @@ class PVWallboxManager extends IPSModule
         // 1. Check: IP konfiguriert?
         if ($ip == "" || $ip == "0.0.0.0") {
             $this->LogTemplate('error', "Keine IP-Adresse für Wallbox konfiguriert.");
-            //$this->SetStatus(200); // Symcon-Status: Konfiguration fehlt
             return false;
         }
         // 2. Check: IP gültig?
@@ -322,7 +321,6 @@ class PVWallboxManager extends IPSModule
         // 3. Check: Erreichbar (Ping Port 80)?
         if (!$this->ping($ip, 80, 1)) {
             $this->LogTemplate('error', "Wallbox unter $ip:80 nicht erreichbar.");
-            //$this->SetStatus(202); // Symcon-Status: Keine HTTP-Antwort
             return false;
         }
 
@@ -338,24 +336,20 @@ class PVWallboxManager extends IPSModule
             curl_close($ch);
         } catch (Exception $e) {
             $this->LogTemplate('error', "HTTP Fehler: " . $e->getMessage());
-            //$this->SetStatus(203);
             return false;
         }
 
         if ($json === false || strlen($json) < 2) {
             $this->LogTemplate('error', "Fehler: Keine Antwort von Wallbox ($url)");
-            //$this->SetStatus(203);
             return false;
         }
 
         $data = json_decode($json, true);
         if (!is_array($data)) {
             $this->LogTemplate('error', "Fehler: Ungültiges JSON von Wallbox ($url)");
-            //$this->SetStatus(204);
             return false;
         }
 
-        //$this->SetStatus(102); // Alles OK (optional)
         return $data;
     }
 
@@ -386,7 +380,7 @@ class PVWallboxManager extends IPSModule
         $this->handleInitialCheck();
 
         // 2) Status von der Wallbox holen
-        $data = $this->fetchChargerStatus();
+        $data = $this->getStatusFromCharger();
         if ($data === false) {
             $this->handleChargerUnavailable();
             return;
@@ -647,7 +641,6 @@ class PVWallboxManager extends IPSModule
             return false;
         } else {
             $this->LogTemplate('ok', "SetChargingCurrent: Ladestrom auf $ampere A gesetzt. (HTTP {$response['httpcode']})");
-            //$this->UpdateStatus();
             return true;
         }
     }
@@ -679,7 +672,6 @@ class PVWallboxManager extends IPSModule
         } else {
             $this->LogTemplate('ok', "SetPhaseMode: Phasenmodus auf '$modeText' ($mode) gesetzt. (HTTP {$response['httpcode']})");
             // Direkt Status aktualisieren
-            //$this->UpdateStatus();
             return true;
         }
     }
@@ -753,7 +745,6 @@ class PVWallboxManager extends IPSModule
             return false;
         } else {
             $this->LogTemplate('ok', "SetChargingEnabled: Ladefreigabe wurde auf '$statusText' ($alwValue) gesetzt. (HTTP {$response['httpcode']})");
-            //$this->UpdateStatus();
             return true;
         }
     }
@@ -970,16 +961,6 @@ class PVWallboxManager extends IPSModule
 
         $this->LogTemplate($level, $msg);
         SetValue($varID, $newValue);
-    }
-
-    private function GetFrcText($frc)
-    {
-        switch (intval($frc)) {
-            case 0: return 'Neutral (Wallbox entscheidet)';
-            case 1: return 'Nicht Laden (gesperrt)';
-            case 2: return 'Laden (erzwungen)';
-            default: return 'Unbekannt (' . $frc . ')';
-        }
     }
 
     private function GetInitialCheckInterval() {
@@ -1426,18 +1407,6 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    // 1) Neutral-Modus prüfen
-    private function isNeutralModeActive(): bool
-    {
-        return intval($this->ReadAttributeInteger('NeutralModeUntil')) > time();
-    }
-
-    // 2) Wallbox-Status holen & auf Fehler prüfen
-    private function fetchChargerStatus()
-    {
-        $data = $this->getStatusFromCharger();
-        return $data === false ? false : $data;
-    }
     private function handleChargerUnavailable(): void
     {
         $this->ResetWallboxVisualisierungKeinFahrzeug();
@@ -1586,38 +1555,6 @@ class PVWallboxManager extends IPSModule
         return $inInitial;
     }
 
-    /**
-     * Holt direkt die aktuellen Wallbox-Daten, synchronisiert alle Werte und updatet die Anzeige.
-     */
-    private function refreshChargerData(): void
-    {
-        // 1) Daten holen
-        $data = $this->getStatusFromCharger();
-        if ($data === false) {
-            // Wallbox nicht erreichbar – wir könnten hier noch Reset einbauen
-            return;
-        }
-
-        // 2) Phasen ermitteln
-        $phasen = $this->determinePhases($data);
-
-        // 3) Charger-Variablen synchronisieren
-        $vars = $this->extractChargerVariables($data);
-        $this->syncChargerVariables($vars, $phasen);
-
-        // 4) Hausverbrauch aktualisieren
-        $energyRaw = $this->gatherEnergyData();
-        $this->updateHousePower($energyRaw);
-
-        // 5) PV-Überschuss anzeigen, wenn kein Fahrzeug da
-        if (!$this->isCarConnected($data)) {
-            $this->updateSurplusDisplayWithoutCar($energyRaw);
-        }
-
-        // 6) UI aktualisieren
-        $this->UpdateStatusAnzeige();
-    }
-
     private function handleModulAktivSwitch(bool $active): void
     {
         $this->SetValue('ModulAktiv_Switch', $active);
@@ -1757,7 +1694,7 @@ class PVWallboxManager extends IPSModule
             $this->LogTemplate('debug', 'Neutralmodus nach Moduswechsel aktiv bis ' . date('H:i:s', $neutralUntil));
 
             IPS_Sleep(1000);
-            $this->refreshChargerData();
+            $this->UpdateStatus();
         }
     }
 
