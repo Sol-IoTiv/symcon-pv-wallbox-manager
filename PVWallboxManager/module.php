@@ -212,7 +212,7 @@ class PVWallboxManager extends IPSModule
         $create('PVWM.AmpereCable', VARIABLETYPE_INTEGER, 0, ' A', 'Energy');
         
         $create('PVWM.Ampere',      VARIABLETYPE_INTEGER, 0, ' A',      'Energy');
-        IPS_SetVariableProfileValues('PVWM.Ampere', 6, 16, 1);
+        IPS_SetVariableProfileValues("PVWM.Ampere", 6, 32, 1);
         $create('PVWM.Percent',     VARIABLETYPE_INTEGER, 0, ' %',      'Percent');
         IPS_SetVariableProfileValues('PVWM.Percent', 0, 100, 1);
         $create('PVWM.Watt',        VARIABLETYPE_FLOAT,   0, ' W',      'Flash');
@@ -376,6 +376,19 @@ class PVWallboxManager extends IPSModule
         $minAmpere = max(6, (int) $this->ReadPropertyInteger('MinAmpere'));
         $maxAmpere = max($minAmpere, (int) $this->ReadPropertyInteger('MaxAmpere'));
         $effectiveMaxAmpere = min($maxAmpere, $this->getEffectiveWallboxMaxAmpere());
+
+        if ($minAmpere > $effectiveMaxAmpere) {
+            $this->LogDebug(
+                'clampAmpere',
+                sprintf(
+                    'MinAmpere (%dA) liegt über effectiveMaxAmpere (%dA) und wird begrenzt.',
+                    $minAmpere,
+                    $effectiveMaxAmpere
+                )
+            );
+        }
+        
+        $minAmpere = min($minAmpere, $effectiveMaxAmpere);
 
         return max($minAmpere, min($ampere, $effectiveMaxAmpere));
     }
