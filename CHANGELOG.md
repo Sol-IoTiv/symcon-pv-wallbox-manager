@@ -3,6 +3,10 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.2b] - 2026-04-21
+### Update
+- Clamp charging current to wallbox limits (16/32A)
+
 ## [1.4.1b] - 2026-04-20
 ### Refactor
 - Legacy-Code und veraltete Hilfsfunktionen entfernt (`FahrzeugVerbunden`, `GetFrcText`, ungenutzte Methoden)
