@@ -4,8 +4,21 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
 ## [1.4.1b] - 2026-04-20
-- Fixed Phasenmodus (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/b4c744119a09afd9a6d508878c35d885efda791c#diff-30c80afda9db4a50bf1f908b20eca6a8c7242c6db1b302cd1fcb9b8839035ca4L76
-- Usage of HausakkuSOCID (thx brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/602f479dc5597e4eef5def64677816b5ce254c29
+### Refactor
+- Legacy-Code und veraltete Hilfsfunktionen entfernt (`FahrzeugVerbunden`, `GetFrcText`, ungenutzte Methoden)
+- Ladelogik überarbeitet und Lademodi vereinheitlicht (`pvonly`, `pv2car`, `manuell`)
+- Saubere Trennung von Zustandsprüfung und Aktionen:
+  - `isCarConnected()` → Statusprüfung
+  - `handleNoCarConnected()` → Handling / Fallback
+- `routeChargingMode()` neu aufgebaut → keine doppelte Logik mehr, klarer Ablauf
+- Timer-Handling und Statusfluss vereinfacht und konsolidiert
+- Kommentare bereinigt und Code insgesamt lesbarer gemacht
+
+### Fixes
+- Börsenpreis-Vorschau korrigiert → aktuelle Stunde wird jetzt korrekt angezeigt
+- Fixed Phasenumschaltung (`Phasenmodus`) korrigiert (thx @brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/b4c744119a09afd9a6d508878c35d885efda791c#diff-30c80afda9db4a50bf1f908b20eca6a8c7242c6db1b302cd1fcb9b8839035ca4L76
+- Verwendung von `HausakkuSOCID` in der Überschussberechnung korrigiert (thx @brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/602f479dc5597e4eef5def64677816b5ce254c29
+
 
 ## [1.4b] - 2025-08-06
 - Börsenpreis: Grundpreis, Aufschlag und Steuersatz in den Properties hinzugefügt
