@@ -452,7 +452,7 @@ class PVWallboxManager extends IPSModule
         $this->PruefeLadeendeAutomatisch();
 
         // 8) Lademodus steuern
-        $this->routeChargingMode($data, $mode, $phasen);
+        $this->routeChargingMode($data, $phasen);
 
         // 9) Anzeige aktualisieren
         $this->UpdateStatusAnzeige();
@@ -461,7 +461,7 @@ class PVWallboxManager extends IPSModule
         $this->HandleLadezeitLogging();
     }
 
-    private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, string $mode = 'pvonly')
+    private function ModusPVonlyLaden(array $data, int $anzPhasenAlt)
     {
         if (!$this->FahrzeugVerbunden($data)) {
             $this->ResetLademodiWennKeinFahrzeug();
@@ -489,7 +489,7 @@ class PVWallboxManager extends IPSModule
         $anzPhasenNeu = max(1, $this->GetValue('Phasenmodus'));
         $this->SteuerungLadefreigabe(
             $pvUeberschuss,
-            $mode,
+            'pvonly',
             $ampere,
             $anzPhasenNeu,
             $desiredFRC
@@ -1598,7 +1598,7 @@ class PVWallboxManager extends IPSModule
     }
 
     // 8) Modus-Routing
-    private function routeChargingMode(array $data, string $mode, int $phasen): void
+    private function routeChargingMode(array $data, int $phasen): void
     {
         $handlers = [
             'manuell' => 'ModusManuellVollladen',
@@ -1742,7 +1742,7 @@ class PVWallboxManager extends IPSModule
         $this->SetValue('PVAnteil', $value);
         $this->LogTemplate('info', "🌞 PV-Anteil geändert: {$value}%");
 
-        if ($this->GetValue('PV2CarModus')) {
+        if ($this->getCurrentModeKey() === 'pv2car') {
             $this->UpdateStatus('pv2car');
         }
     }
@@ -1756,7 +1756,7 @@ class PVWallboxManager extends IPSModule
 
         $this->SetValue('ManuellAmpere', $amp);
 
-        if ($this->GetValue('ManuellLaden')) {
+        if ($this->getCurrentModeKey() === 'manuell') {
             $this->UpdateStatus('manuell');
         }
     }
@@ -1766,7 +1766,7 @@ class PVWallboxManager extends IPSModule
         $phases = ($phases == 2) ? 2 : 1;
         $this->SetValue('ManuellPhasen', $phases);
 
-        if ($this->GetValue('ManuellLaden')) {
+        if ($this->getCurrentModeKey() === 'manuell') {
             $this->UpdateStatus('manuell');
         }
     }
