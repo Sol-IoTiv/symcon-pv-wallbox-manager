@@ -1820,20 +1820,6 @@ class PVWallboxManager extends IPSModule
         $this->UpdateStatus($mode);
     }
 
-    private function mapModeToSelection(string $mode): int
-    {
-        switch ($mode) {
-            case 'pvonly':
-                return 0;
-            case 'pv2car':
-                return 1;
-            case 'manuell':
-                return 2;
-            default:
-                return 0;
-        }
-    }
-
     /**
      * Gemeinsame Rücksetzung für "zurück zu PVonly".
      * $fromManual: nur wenn wirklich aus manuell kommend, dann Neutralmodus + Hysterese reset.
