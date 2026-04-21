@@ -122,7 +122,7 @@ class PVWallboxManager extends IPSModule
         $this->SetTimerNachModusUndAuto();
         $this->SetMarketPriceTimerZurVollenStunde();
         $this->UpdateHausverbrauchEvent();
-        $this->ValidateAmpereConfiguration();
+        $this->validateAmpereConfiguration();
     }
 
     private function RegisterCustomProfiles()
@@ -320,10 +320,10 @@ class PVWallboxManager extends IPSModule
         return $data;
     }
 
-    private function ValidateAmpereConfiguration(): void
+    private function validateAmpereConfiguration(): void
     {
         $configuredMaxAmpere = (int) $this->ReadPropertyInteger('MaxAmpere');
-        $wallboxMaxAmpere = $this->GetEffectiveWallboxMaxAmpere();
+        $wallboxMaxAmpere = $this->getEffectiveWallboxMaxAmpere();
 
         if ($configuredMaxAmpere > $wallboxMaxAmpere) {
             $this->LogTemplate(
@@ -338,27 +338,27 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    private function GetEffectiveWallboxMaxAmpere(): int
+    private function getEffectiveWallboxMaxAmpere(): int
     {
         $status = $this->getStatusFromCharger();
         if (!is_array($status)) {
             return 16;
         }
 
-        $hardwareMaxAmpere = $this->GetHardwareMaxAmpereFromStatus($status);
-        $configuredWallboxMaxAmpere = $this->GetConfiguredWallboxMaxAmpereFromStatus($status);
+        $hardwareMaxAmpere = $this->getHardwareMaxAmpereFromStatus($status);
+        $configuredWallboxMaxAmpere = $this->getConfiguredWallboxMaxAmpereFromStatus($status);
 
         return min($hardwareMaxAmpere, $configuredWallboxMaxAmpere);
     }
 
-    private function GetHardwareMaxAmpereFromStatus(array $status): int
+    private function getHardwareMaxAmpereFromStatus(array $status): int
     {
         $variant = isset($status['var']) ? (int) $status['var'] : 0;
 
         return ($variant === 22) ? 32 : 16;
     }
 
-    private function GetConfiguredWallboxMaxAmpereFromStatus(array $status): int
+    private function getConfiguredWallboxMaxAmpereFromStatus(array $status): int
     {
         if (isset($status['ama'])) {
             $ama = (int) $status['ama'];
@@ -370,11 +370,11 @@ class PVWallboxManager extends IPSModule
         return 32;
     }
 
-    private function ClampAmpere(int $ampere): int
+    private function clampAmpere(int $ampere): int
     {
         $minAmpere = max(6, (int) $this->ReadPropertyInteger('MinAmpere'));
         $maxAmpere = max($minAmpere, (int) $this->ReadPropertyInteger('MaxAmpere'));
-        $effectiveMaxAmpere = min($maxAmpere, $this->GetEffectiveWallboxMaxAmpere());
+        $effectiveMaxAmpere = min($maxAmpere, $this->getEffectiveWallboxMaxAmpere());
 
         return max($minAmpere, min($ampere, $effectiveMaxAmpere));
     }
@@ -597,7 +597,7 @@ class PVWallboxManager extends IPSModule
     public function SetChargingCurrent(int $ampere)
     {
         $requestedAmpere = $ampere;
-        $ampere = $this->ClampAmpere($ampere);
+        $ampere = $this->clampAmpere($ampere);
 
         if ($requestedAmpere !== $ampere) {
             $this->LogTemplate(
