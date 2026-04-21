@@ -414,8 +414,8 @@ class PVWallboxManager extends IPSModule
     // =========================================================================
     public function UpdateStatus(string $mode = 'pvonly')
     {
-        // Start-Log
-        $this->LogTemplate('debug', "UpdateStatus getriggert (Modus: $mode, Zeit: " . date("H:i:s") . ")");
+        $activeMode = $this->getCurrentModeKey();
+        $this->LogTemplate('debug', "UpdateStatus getriggert (Modus: {$activeMode}, Zeit: " . date("H:i:s") . ")");
 
         // 0) Neutralmodus?
         if ($this->handleNeutralMode()) {
@@ -475,7 +475,7 @@ class PVWallboxManager extends IPSModule
         $energy = $this->applyFilters($energy);
 
         // 3) Überschuss & Ampere berechnen
-        $surplus = $this->calculateSurplus($energy, $anzPhasenAlt, true);
+        $surplus       = $this->calculateSurplus($energy, $anzPhasenAlt, true);
         $pvUeberschuss = $surplus['ueberschuss_w'];
         $ampere        = $surplus['ueberschuss_a'];
 
@@ -1622,7 +1622,7 @@ class PVWallboxManager extends IPSModule
         $method = $handlers[$key];
 
         if ($key === 'pvonly') {
-            $this->$method($data, $phasen, $key);
+            $this->$method($data, $phasen);
             return;
         }
 
