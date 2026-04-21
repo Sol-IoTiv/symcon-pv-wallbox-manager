@@ -145,7 +145,7 @@ class PVWallboxManager extends IPSModule
         $this->SetTimerNachModusUndAuto();
         $this->SetMarketPriceTimerZurVollenStunde();
         $this->UpdateHausverbrauchEvent();
-        $this->SyncLademodusAuswahl();
+        $this->SyncLegacyModeBooleans();
     }
 
     // =========================================================================
@@ -269,23 +269,19 @@ class PVWallboxManager extends IPSModule
         return (string)$val;
     }
 
-    private function SyncLademodusAuswahl(): void
+    private function SyncLegacyModeBooleans(): void
     {
-        $mode = 0; // Nur PV
+        $selection = $this->getCurrentModeSelection();
 
-        // Zielzeit aktuell deaktiviert
-        if ($this->GetValue('ManuellLaden')) {
-            $mode = 2;
-        } elseif ($this->GetValue('PV2CarModus')) {
-            $mode = 1;
-        } else {
-            $mode = 0;
+        $isManuell = ($selection === 2);
+        $isPv2Car  = ($selection === 1);
+
+        if ($this->GetValue('ManuellLaden') !== $isManuell) {
+            $this->SetValue('ManuellLaden', $isManuell);
         }
 
-        if (@$this->GetIDForIdent('LademodusAuswahl')) {
-            if ($this->GetValue('LademodusAuswahl') !== $mode) {
-                $this->SetValue('LademodusAuswahl', $mode);
-            }
+        if ($this->GetValue('PV2CarModus') !== $isPv2Car) {
+            $this->SetValue('PV2CarModus', $isPv2Car);
         }
     }
 
@@ -1142,18 +1138,13 @@ class PVWallboxManager extends IPSModule
     private function ResetLademodiWennKeinFahrzeug()
     {
         if ($this->GetValue('Status') <= 1) {
-            $modi = ['ManuellLaden', 'PV2CarModus'];
-            foreach ($modi as $modus) {
-                if ($this->GetValue($modus)) {
-                    $this->SetValue($modus, false);
-                    $this->LogTemplate(
-                        'debug',
-                        "Modus '$modus' wurde deaktiviert, weil kein Fahrzeug verbunden ist."
-                    );
-                }
+            if ($this->GetValue('LademodusAuswahl') !== 0) {
+                $this->SetValue('LademodusAuswahl', 0);
+                $this->LogTemplate('debug', "Lademodus wurde auf PVonly zurückgesetzt, weil kein Fahrzeug verbunden ist.");
             }
+
+            $this->SyncLegacyModeBooleans();
         }
-        $this->SyncLademodusAuswahl();
     }
 
     private function SetMarketPriceTimerZurVollenStunde()
@@ -1247,42 +1238,26 @@ class PVWallboxManager extends IPSModule
 
     private function PruefeLadeendeAutomatisch()
     {
-        // 0) Status aller Modi und Force-State loggen
-        $currentFRC = $this->GetValue('AccessStateV2'); // 2 = laden erzwungen
-        $manuell    = $this->GetValue('ManuellLaden')   ? 'ja' : 'nein';
-        $pv2car     = $this->GetValue('PV2CarModus')    ? 'ja' : 'nein';
+        $currentFRC = $this->GetValue('AccessStateV2');
+        $modeKey    = $this->getCurrentModeKey();
+
         $this->LogTemplate(
             'debug',
-            "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Manuell={$manuell}, PV2Car={$pv2car}"
+            "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Modus={$modeKey}"
         );
 
-        // 1) SOC-Werte einlesen
         $socID       = $this->ReadPropertyInteger('CarSOCID');
         $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
-        $socAktuell  = ($socID > 0 && IPS_VariableExists($socID))             ? GetValue($socID)        : null;
+        $socAktuell  = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
         $socZiel     = ($socTargetID > 0 && IPS_VariableExists($socTargetID)) ? GetValue($socTargetID) : null;
-        $this->LogTemplate('debug', "SOC-Aktuell={$socAktuell}, SOC-Ziel={$socZiel}");
 
-        // 2) Prüfen, ob gerade geladen wird (erzwungen ODER einer der Modi aktiv)
-        //    pvonly ist aktiv, wenn keiner der anderen Modi gesetzt ist
-        $pvOnlyActive = (
-            !$this->GetValue('ManuellLaden')
-            && !$this->GetValue('PV2CarModus')
-        );
+        $loadActive = ($currentFRC === 2) || in_array($modeKey, ['pvonly', 'pv2car', 'manuell'], true);
 
-        $loadActive = (
-            $currentFRC === 2
-            || $this->GetValue('ManuellLaden')
-            || $this->GetValue('PV2CarModus')
-            || $pvOnlyActive
-        );
         $this->LogTemplate(
             'debug',
             'Ladefreigabe/Modus aktiv: ' . ($loadActive ? 'ja' : 'nein')
-            . ($pvOnlyActive ? ' (pvonly)' : '')
         );
 
-        // 3) Primäre Erkennung per SOC
         if ($loadActive && $socAktuell !== null && $socZiel !== null) {
             if ($socAktuell >= $socZiel) {
                 $this->LogTemplate(
@@ -1296,13 +1271,13 @@ class PVWallboxManager extends IPSModule
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
                 return;
             }
+
             $this->LogTemplate(
                 'debug',
                 "SOC ({$socAktuell}%) < Ziel ({$socZiel}%) – Fallback wird geprüft."
             );
         }
 
-        // 4) Fallback: No-Power-Counter
         if ($loadActive && $currentFRC === 2) {
             $leistung  = intval(round($this->GetValue('Leistung')));
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
@@ -1318,46 +1293,38 @@ class PVWallboxManager extends IPSModule
                     $this->SetForceState(1);
                     $this->SetPhaseMode(1);
                     $this->SetChargingCurrent(6);
+                    $this->ResetModiNachLadeende();
                     $this->WriteAttributeInteger('NoPowerCounter', 0);
-                    $this->LogTemplate('debug', "NoPowerCounter zurückgesetzt");
                 }
             } else {
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
                 $this->LogTemplate('debug', 'Leistung ≥100 W → NoPowerCounter zurückgesetzt');
+
                 if ($this->GetValue('AccessStateV2') !== 2) {
                     $this->SetForceState(2);
                 }
             }
         } else {
+            $this->WriteAttributeInteger('NoPowerCounter', 0);
             $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
         }
     }
 
     private function ResetModiNachLadeende()
     {
-        // SmoothedSurplus zurücksetzen
+        $oldMode = $this->getCurrentModeKey();
+
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
-        // Hier kannst du nach Ladeende die Lademodi zurücksetzen (optional)
-        $modi = ['ManuellLaden', 'PV2CarModus'];
-        $manualDeactivated = false;
-        foreach ($modi as $modus) {
-            if ($this->GetValue($modus)) {
-                $this->SetValue($modus, false);
-                $this->LogTemplate('debug', "Modus '$modus' wurde deaktiviert, da Ladeende erreicht.");
-                if ($modus === 'ManuellLaden') {
-                    $manualDeactivated = true;
-                }
-            }
-        }
-        // Nach Deaktivierung von ManuellLaden → auf 1-phasig, 6A, 0A (nur einmalig!)
-        if ($manualDeactivated) {
-            $this->SetPhaseMode(1); // 1-phasig
-            $this->SetChargingCurrent(6); // 6A
+        $this->SetValue('LademodusAuswahl', 0);
+        $this->SyncLegacyModeBooleans();
+
+        if ($oldMode === 'manuell') {
+            $this->SetPhaseMode(1);
+            $this->SetChargingCurrent(6);
             $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
             $this->LogTemplate('ok', "Nach Ladeende: Zurück auf 1-phasig/6A/0A für PVonly.");
         }
-        $this->SyncLademodusAuswahl();
     }
 
     /**
@@ -1387,22 +1354,25 @@ class PVWallboxManager extends IPSModule
         $neutralActive = ($until > time());
 
         // --- Lademodus-Text ---
-        if ($this->GetValue('ManuellLaden')) {
-            $modusText = sprintf(
-                '🔌 Manuell: Vollladen (%d-phasig, %d A)',
-                $this->GetValue('Phasenmodus'),
-                $this->GetValue('ManuellAmpere')
-            );
-        }
-        elseif ($this->GetValue('PV2CarModus')) {
-            $modusText = '🌞 PV-Anteil laden (' . $this->GetValue('PVAnteil') . '%)';
-        }
-/*        elseif ($this->GetValue('ZielzeitLaden')) {
-            $modusText = '⏰ Zielzeitladung';
-        }
-*/        
-        else {
-            $modusText = '☀️ PVonly (nur PV-Überschuss)';
+        $modeKey = $this->getCurrentModeKey();
+
+        switch ($modeKey) {
+            case 'manuell':
+                $modusText = sprintf(
+                    '🔌 Manuell: Vollladen (%d-phasig, %d A)',
+                    $this->GetValue('ManuellPhasen'),
+                    $this->GetValue('ManuellAmpere')
+                );
+                break;
+
+            case 'pv2car':
+                $modusText = '🌞 PV-Anteil laden (' . $this->GetValue('PVAnteil') . '%)';
+                break;
+
+            case 'pvonly':
+            default:
+                $modusText = '☀️ PVonly (nur PV-Überschuss)';
+                break;
         }
 
         // --- Modul aktiv/inaktiv ---
@@ -1630,51 +1600,33 @@ class PVWallboxManager extends IPSModule
     // 8) Modus-Routing
     private function routeChargingMode(array $data, string $mode, int $phasen): void
     {
-        // Map Modus-Schlüssel auf Handler-Methoden
         $handlers = [
             'manuell' => 'ModusManuellVollladen',
             'pv2car'  => 'ModusPV2CarLaden',
             'pvonly'  => 'ModusPVonlyLaden',
-            // später z.B. 'zielzeit' => 'ModusZielzeitLaden',
         ];
 
-        // 1) Prüfe: Fahrzeug verbunden?
         if (!$this->isCarConnected($data) || !$this->FahrzeugVerbunden($data)) {
             $this->ResetLademodiWennKeinFahrzeug();
             $this->SetTimerNachModusUndAuto();
             return;
         }
 
-        // 2) Bestimme aktuellen Modus-Key
-        if ($this->GetValue('ManuellLaden')) {
-            $key = 'manuell';
-        }
-        elseif ($this->GetValue('PV2CarModus')) {
-            $key = 'pv2car';
-        }
-        else {
-            // Default: PVonly (egal ob $mode übergeben wird)
-            $key = 'pvonly';
-        }
+        $key = $this->getCurrentModeKey();
 
-        // 3) Handler-Methode aus Map holen
         if (!isset($handlers[$key])) {
             $this->LogTemplate('warn', "Unbekannter Lademodus: {$key}");
             return;
         }
+
         $method = $handlers[$key];
 
-        // 4) Modus-Methode aufrufen
-        switch ($key) {
-            case 'pvonly':
-                // braucht noch Phasen und $mode
-                $this->$method($data, $phasen, $mode);
-                break;
-            default:
-                // manuell und pv2car nur mit $data
-                $this->$method($data);
-                break;
+        if ($key === 'pvonly') {
+            $this->$method($data, $phasen, $key);
+            return;
         }
+
+        $this->$method($data);
     }
 
     private function handleNeutralMode(): bool
@@ -1735,50 +1687,39 @@ class PVWallboxManager extends IPSModule
     }
 
     private function handleModulAktivSwitch(bool $active): void
-{
-    $this->SetValue('ModulAktiv_Switch', $active);
+    {
+        $this->SetValue('ModulAktiv_Switch', $active);
 
-    IPS_SetProperty($this->InstanceID, 'ModulAktiv', $active);
-    IPS_ApplyChanges($this->InstanceID);
+        IPS_SetProperty($this->InstanceID, 'ModulAktiv', $active);
+        IPS_ApplyChanges($this->InstanceID);
 
-    if (!$active) {
-        $this->SetForceState(1);
-        $this->ResetModiNachLadeende();
+        if (!$active) {
+            $this->SetForceState(1);
+            $this->ResetModiNachLadeende();
 
-        $this->SetValue('PV_Ueberschuss', 0);
-        $this->SetValue('PV_Ueberschuss_A', 0);
-        $this->SetValue('Hausverbrauch_W', 0);
-        $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
+            $this->SetValue('PV_Ueberschuss', 0);
+            $this->SetValue('PV_Ueberschuss_A', 0);
+            $this->SetValue('Hausverbrauch_W', 0);
+            $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
 
-        $this->SetTimerInterval('PVWM_UpdateStatus', 0);
-        $this->SetTimerInterval('PVWM_InitialCheck', 0);
-        $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
+            $this->SetTimerInterval('PVWM_UpdateStatus', 0);
+            $this->SetTimerInterval('PVWM_InitialCheck', 0);
+            $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
 
-        $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
+            $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
+        }
+
+        $this->UpdateStatusAnzeige();
     }
 
-    $this->UpdateStatusAnzeige();
-}
-
-private function handleLademodusAuswahl(int $mode): void
-{
-    switch ($mode) {
-        case 0:
-            $this->applyChargingMode('pvonly');
-            return;
-
-        case 1:
-            $this->applyChargingMode('pv2car');
-            return;
-
-        case 2:
-            $this->applyChargingMode('manuell');
-            return;
-
-        default:
+    private function handleLademodusAuswahl(int $mode): void
+    {
+        if (!in_array($mode, [0, 1, 2], true)) {
             throw new Exception("Ungültiger Wert für LademodusAuswahl: $mode");
+        }
+
+        $this->applyChargingMode($this->mapSelectionToMode($mode));
     }
-}
 
     private function handleLegacyModeToggle(string $mode, bool $enabled): void
     {
@@ -1787,7 +1728,12 @@ private function handleLademodusAuswahl(int $mode): void
             return;
         }
 
-        $this->applyChargingMode('pvonly', true);
+        if ($this->getCurrentModeKey() === $mode) {
+            $this->applyChargingMode('pvonly');
+            return;
+        }
+
+        $this->SyncLegacyModeBooleans();
     }
 
     private function handlePVAnteilChange(int $value): void
@@ -1833,23 +1779,27 @@ private function handleLademodusAuswahl(int $mode): void
      * - Timer / Auswahl synchronisieren
      * - genau ein UpdateStatus()
      */
-    private function applyChargingMode(string $mode, bool $resetToPvOnlyBase = false): void
+    private function applyChargingMode(string $mode): void
     {
         $allowedModes = ['pvonly', 'pv2car', 'manuell'];
         if (!in_array($mode, $allowedModes, true)) {
             throw new Exception("Ungültiger Modus: $mode");
         }
 
-        $isPvOnly  = ($mode === 'pvonly');
-        $isPv2Car  = ($mode === 'pv2car');
-        $isManuell = ($mode === 'manuell');
+        $oldMode      = $this->getCurrentModeKey();
+        $oldSelection = $this->getCurrentModeSelection();
+        $newSelection = $this->mapModeToSelection($mode);
 
-        // Boolean-Modi zentral setzen
-        $this->SetValue('ManuellLaden', $isManuell);
-        $this->SetValue('PV2CarModus', $isPv2Car);
-        $this->SetValue('LademodusAuswahl', $this->mapModeToSelection($mode));
+        if ($oldSelection === $newSelection) {
+            $this->SyncLegacyModeBooleans();
+            $this->SetTimerNachModusUndAuto();
+            $this->UpdateStatus($mode);
+            return;
+        }
 
-        // Logging
+        $this->SetValue('LademodusAuswahl', $newSelection);
+        $this->SyncLegacyModeBooleans();
+
         switch ($mode) {
             case 'pvonly':
                 $this->LogTemplate('info', '🔁 Lademodus: Nur PV');
@@ -1862,13 +1812,11 @@ private function handleLademodusAuswahl(int $mode): void
                 break;
         }
 
-        // Beim Rückwechsel auf PVonly saubere Basis herstellen
-        if ($resetToPvOnlyBase || $isPvOnly) {
-            $this->resetToPvOnlyBaseState($mode === 'manuell');
+        if ($mode === 'pvonly') {
+            $this->resetToPvOnlyBaseState($oldMode === 'manuell');
         }
 
         $this->SetTimerNachModusUndAuto();
-        $this->SyncLademodusAuswahl();
         $this->UpdateStatus($mode);
     }
 
@@ -1910,6 +1858,42 @@ private function handleLademodusAuswahl(int $mode): void
             IPS_Sleep(1000);
             $this->refreshChargerData();
         }
+    }
+
+    private function getCurrentModeSelection(): int
+    {
+        return intval($this->GetValue('LademodusAuswahl'));
+    }
+
+    private function mapSelectionToMode(int $selection): string
+    {
+        switch ($selection) {
+            case 1:
+                return 'pv2car';
+            case 2:
+                return 'manuell';
+            case 0:
+            default:
+                return 'pvonly';
+        }
+    }
+
+    private function mapModeToSelection(string $mode): int
+    {
+        switch ($mode) {
+            case 'pv2car':
+                return 1;
+            case 'manuell':
+                return 2;
+            case 'pvonly':
+            default:
+                return 0;
+        }
+    }
+
+    private function getCurrentModeKey(): string
+    {
+        return $this->mapSelectionToMode($this->getCurrentModeSelection());
     }
 
     // =========================================================================
