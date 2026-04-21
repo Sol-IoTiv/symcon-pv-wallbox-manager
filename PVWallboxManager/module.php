@@ -1943,9 +1943,9 @@ class PVWallboxManager extends IPSModule
             return '<span style="color:#888;">Keine Preisdaten verfügbar.</span>';
         }
 
-        $now = time();
-        $future = array_filter($preise, function($p) use ($now) {
-            return $p['timestamp'] >= $now;
+        $hourStart = strtotime(date('Y-m-d H:00:00'));
+        $future = array_filter($preise, static function($p) use ($hourStart) {
+            return ($p['timestamp'] ?? 0) >= $hourStart;
         });
         $slice = array_slice(array_values($future), 0, $max);
 
