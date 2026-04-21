@@ -7,6 +7,9 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 ### Update
 - Clamp charging current to wallbox limits (16/32A)
 
+### 🛠️ Fixes
+- clampAmpere(): verhindert, dass MinAmpere über dem effektiven Wallbox-Maximalstrom liegt
+
 ## [1.4.1b] - 2026-04-20
 ### Refactor
 - Legacy-Code und veraltete Hilfsfunktionen entfernt (`FahrzeugVerbunden`, `GetFrcText`, ungenutzte Methoden)
