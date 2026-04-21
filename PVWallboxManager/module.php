@@ -297,181 +297,50 @@ class PVWallboxManager extends IPSModule
     {
         switch ($Ident) {
             case 'ModulAktiv_Switch':
-                $this->SetValue('ModulAktiv_Switch', $Value);
-                IPS_SetProperty($this->InstanceID, 'ModulAktiv', $Value);
-                IPS_ApplyChanges($this->InstanceID);
-                if (!$Value) {
-                    // 1) Wallbox sperren
-                    $this->SetForceState(1);
+                $this->handleModulAktivSwitch((bool) $Value);
+                return;
 
-                    // 2) Lademodi zurücksetzen (wiederverwendbar)
-                    $this->ResetModiNachLadeende();
+            case 'UpdateStatus':
+                $this->UpdateStatus((string) $Value);
+                return;
 
-                    // 3) Daten-Anzeige zurücksetzen
-                    $this->SetValue('PV_Ueberschuss',   0);
-                    $this->SetValue('PV_Ueberschuss_A', 0);
-                    $this->SetValue('Hausverbrauch_W',  0);
-                    $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
-
-                    // 4) Timer abschalten
-                    $this->SetTimerInterval('PVWM_UpdateStatus',     0);
-                    $this->SetTimerInterval('PVWM_InitialCheck',     0);
-                    $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
-
-                    $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
-                }
-                // Anzeige immer aktualisieren
-                $this->UpdateStatusAnzeige();
-                break;
-
-            case "UpdateStatus":
-                $this->UpdateStatus($Value);
-                break;
-
-            case "UpdateMarketPrices":
+            case 'UpdateMarketPrices':
                 $this->AktualisiereMarktpreise();
                 $this->SetTimerInterval('PVWM_UpdateMarketPrices', 3600000);
-                break;
+                return;
 
-            case "LademodusAuswahl":
-                $mode = (int)$Value;
-                $this->SetValue('LademodusAuswahl', $mode);
+            case 'LademodusAuswahl':
+                $this->handleLademodusAuswahl((int) $Value);
+                return;
 
-                switch ($mode) {
-                    case 0: // Nur PV
-                        $this->SetValue('ManuellLaden', false);
-                        $this->SetValue('PV2CarModus', false);
-                        $this->LogTemplate('info', "🔁 Lademodus: Nur PV");
-                        $this->SetPhaseMode(1);
-                        $this->SetChargingCurrent(6);
-                        $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-                        $this->UpdateStatus('pvonly');
-                        break;
+            case 'ManuellLaden':
+                $this->handleLegacyModeToggle('manuell', (bool) $Value);
+                return;
 
-                    case 1: // PV-Anteil
-                        $this->SetValue('ManuellLaden', false);
-                        $this->SetValue('PV2CarModus', true);
-                        $this->LogTemplate('info', "🔁 Lademodus: PV-Anteil");
-                        
-                        $this->UpdateStatus('pv2car');
-                        break;
+            case 'PV2CarModus':
+                $this->handleLegacyModeToggle('pv2car', (bool) $Value);
+                return;
 
-                    case 2: // Manuell
-                        $this->SetValue('ManuellLaden', true);
-                        $this->SetValue('PV2CarModus', false);
-                        $this->LogTemplate('info', "🔁 Lademodus: Manuell");
-                        $this->UpdateStatus('manuell');
-                        break;
+    /*
+            case 'ZielzeitLaden':
+                $this->handleLegacyModeToggle('zielzeit', (bool) $Value);
+                return;
+    */
 
-                    default:
-                        throw new Exception("Ungültiger Wert für LademodusAuswahl: $mode");
-                }
+            case 'PVAnteil':
+                $this->handlePVAnteilChange((int) $Value);
+                return;
 
-                $this->SetTimerNachModusUndAuto();
-                $this->SyncLademodusAuswahl();
-                break;
+            case 'ManuellAmpere':
+                $this->handleManuellAmpereChange((int) $Value);
+                return;
 
-            case "ManuellLaden":
-                // Nur EIN Modus darf aktiv sein!
-                if ($Value) {
-                    $this->SetValue('ManuellLaden', true);
-                    $this->SetValue('PV2CarModus', false);
-                    // (später: weitere Modi hier deaktivieren)
-                    $this->LogTemplate('info', "🔌 Manuelles Vollladen aktiviert.");
-                } else {
-                    $this->SetValue('ManuellLaden', false);
-                    $this->LogTemplate('info', "🔌 Manuelles Vollladen deaktiviert – zurück in PVonly-Modus.");
+            case 'ManuellPhasen':
+                $this->handleManuellPhasenChange((int) $Value);
+                return;
 
-                    // Zurücksetzen auf 1-phasig / 6A / 0A
-                    $this->SetPhaseMode(1);
-                    $this->SetChargingCurrent(6);
-                    $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-                    $this->LogTemplate('ok', "Nach Deaktivierung Manuell: Wallbox auf 1-phasig/6A/0A zurückgesetzt.");
-
-                    // Hysterese-Zähler zurücksetzen
-                    $this->WriteAttributeInteger('LadeStartZaehler', 0);
-                    $this->WriteAttributeInteger('LadeStopZaehler', 0);
-                    $this->LogTemplate('debug', "Hysterese-Zähler nach Deaktivierung ManuellLaden zurückgesetzt.");
-
-                    // Neutralmodus aktivieren (z.B. 30 Sek)
-                    $this->WriteAttributeInteger('NeutralModeUntil', time() + 30);
-                    $this->LogTemplate('debug', 'Neutralmodus nach Moduswechsel: Ladefreigabe gesperrt bis ' . date("H:i:s", time() + 30));
-
-                    // sofortige Aktualisierung der Wallbox-Werte
-                    IPS_Sleep(1000);
-                    $this->refreshChargerData();
-
-                }
-                $this->SetTimerNachModusUndAuto();
-                $this->UpdateStatus('manuell');
-                $this->SyncLademodusAuswahl();
-                break;
-
-            case "PV2CarModus":
-                // Nur EIN Modus darf aktiv sein!
-                if ($Value) {
-                    $this->SetValue('PV2CarModus', true);
-                    $this->SetValue('ManuellLaden', false);
-                    $this->LogTemplate('info', "🌞 PV-Anteil laden aktiviert.");
-                } else {
-                    $this->SetValue('PV2CarModus', false);
-                    $this->LogTemplate('info', "🌞 PV-Anteil laden deaktiviert – zurück in PVonly-Modus.");
-                    // Nach Beenden: zurück auf 1-phasig, 6A, 0A
-                    $this->SetPhaseMode(1);
-                    $this->SetChargingCurrent(6);
-                    $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-                    $this->LogTemplate('ok', "Nach Deaktivierung PV2Car: Wallbox auf 1-phasig/6A/0A zurückgesetzt.");
-                }
-                $this->SetTimerNachModusUndAuto();
-                $this->UpdateStatus('pv2car');
-                $this->SyncLademodusAuswahl();
-                break;
-
-/*            case "ZielzeitLaden":
-                if ($Value) {
-                    $this->SetValue('ZielzeitLaden', true);
-                    $this->SetValue('ManuellLaden', false);
-                    $this->SetValue('PV2CarModus', false);
-                    $this->LogTemplate('info', "⏰ Zielzeit-Ladung aktiviert.");
-                } else {
-                    $this->SetValue('ZielzeitLaden', false);
-                    $this->LogTemplate('info', "⏰ Zielzeit-Ladung deaktiviert – zurück in PVonly-Modus.");
-
-                    $this->SetPhaseMode(1);
-                    $this->SetChargingCurrent(6);
-                    $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-                }
-
-                $this->SetTimerNachModusUndAuto();
-                $this->UpdateStatus('zielzeit');
-                $this->SyncLademodusAuswahl();
-                break;
-*/
-            case "PVAnteil":
-                // Wertebereich checken (0-100%)
-                $value = max(0, min(100, intval($Value)));
-                $this->SetValue('PVAnteil', $value);
-                $this->LogTemplate('info', "🌞 PV-Anteil geändert: {$value}%");
-                // Sofortige Wirkung, wenn PV2Car aktiv ist
-                if ($this->GetValue('PV2CarModus')) {
-                    $this->UpdateStatus('pv2car');
-                }
-                break;
-            
-            case "ManuellAmpere":
-                $amp = max($this->ReadPropertyInteger('MinAmpere'), min($this->ReadPropertyInteger('MaxAmpere'), intval($Value)));
-                $this->SetValue('ManuellAmpere', $amp);
-                if ($this->GetValue('ManuellLaden')) $this->UpdateStatus('manuell');
-                break;
-
-            case "ManuellPhasen":
-                $ph = ($Value == 2) ? 2 : 1; // Nur 1 oder 2 zulassen
-                $this->SetValue('ManuellPhasen', $ph);
-                if ($this->GetValue('ManuellLaden')) $this->UpdateStatus('manuell');
-                break;
-
-        default:
-            throw new Exception("Invalid Ident: $Ident");
+            default:
+                throw new Exception("Invalid Ident: $Ident");
         }
     }
 
@@ -1863,6 +1732,184 @@ class PVWallboxManager extends IPSModule
 
         // 6) UI aktualisieren
         $this->UpdateStatusAnzeige();
+    }
+
+    private function handleModulAktivSwitch(bool $active): void
+{
+    $this->SetValue('ModulAktiv_Switch', $active);
+
+    IPS_SetProperty($this->InstanceID, 'ModulAktiv', $active);
+    IPS_ApplyChanges($this->InstanceID);
+
+    if (!$active) {
+        $this->SetForceState(1);
+        $this->ResetModiNachLadeende();
+
+        $this->SetValue('PV_Ueberschuss', 0);
+        $this->SetValue('PV_Ueberschuss_A', 0);
+        $this->SetValue('Hausverbrauch_W', 0);
+        $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
+
+        $this->SetTimerInterval('PVWM_UpdateStatus', 0);
+        $this->SetTimerInterval('PVWM_InitialCheck', 0);
+        $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
+
+        $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
+    }
+
+    $this->UpdateStatusAnzeige();
+}
+
+private function handleLademodusAuswahl(int $mode): void
+{
+    switch ($mode) {
+        case 0:
+            $this->applyChargingMode('pvonly');
+            return;
+
+        case 1:
+            $this->applyChargingMode('pv2car');
+            return;
+
+        case 2:
+            $this->applyChargingMode('manuell');
+            return;
+
+        default:
+            throw new Exception("Ungültiger Wert für LademodusAuswahl: $mode");
+    }
+}
+
+    private function handleLegacyModeToggle(string $mode, bool $enabled): void
+    {
+        if ($enabled) {
+            $this->applyChargingMode($mode);
+            return;
+        }
+
+        $this->applyChargingMode('pvonly', true);
+    }
+
+    private function handlePVAnteilChange(int $value): void
+    {
+        $value = max(0, min(100, $value));
+        $this->SetValue('PVAnteil', $value);
+        $this->LogTemplate('info', "🌞 PV-Anteil geändert: {$value}%");
+
+        if ($this->GetValue('PV2CarModus')) {
+            $this->UpdateStatus('pv2car');
+        }
+    }
+
+    private function handleManuellAmpereChange(int $amp): void
+    {
+        $amp = max(
+            $this->ReadPropertyInteger('MinAmpere'),
+            min($this->ReadPropertyInteger('MaxAmpere'), $amp)
+        );
+
+        $this->SetValue('ManuellAmpere', $amp);
+
+        if ($this->GetValue('ManuellLaden')) {
+            $this->UpdateStatus('manuell');
+        }
+    }
+
+    private function handleManuellPhasenChange(int $phases): void
+    {
+        $phases = ($phases == 2) ? 2 : 1;
+        $this->SetValue('ManuellPhasen', $phases);
+
+        if ($this->GetValue('ManuellLaden')) {
+            $this->UpdateStatus('manuell');
+        }
+    }
+
+    /**
+     * Zentraler Moduswechsel:
+     * - setzt Boolean-Flags konsistent
+     * - optional Rücksetzung auf PVonly-Basis
+     * - Logging
+     * - Timer / Auswahl synchronisieren
+     * - genau ein UpdateStatus()
+     */
+    private function applyChargingMode(string $mode, bool $resetToPvOnlyBase = false): void
+    {
+        $allowedModes = ['pvonly', 'pv2car', 'manuell'];
+        if (!in_array($mode, $allowedModes, true)) {
+            throw new Exception("Ungültiger Modus: $mode");
+        }
+
+        $isPvOnly  = ($mode === 'pvonly');
+        $isPv2Car  = ($mode === 'pv2car');
+        $isManuell = ($mode === 'manuell');
+
+        // Boolean-Modi zentral setzen
+        $this->SetValue('ManuellLaden', $isManuell);
+        $this->SetValue('PV2CarModus', $isPv2Car);
+        $this->SetValue('LademodusAuswahl', $this->mapModeToSelection($mode));
+
+        // Logging
+        switch ($mode) {
+            case 'pvonly':
+                $this->LogTemplate('info', '🔁 Lademodus: Nur PV');
+                break;
+            case 'pv2car':
+                $this->LogTemplate('info', '🔁 Lademodus: PV-Anteil');
+                break;
+            case 'manuell':
+                $this->LogTemplate('info', '🔁 Lademodus: Manuell');
+                break;
+        }
+
+        // Beim Rückwechsel auf PVonly saubere Basis herstellen
+        if ($resetToPvOnlyBase || $isPvOnly) {
+            $this->resetToPvOnlyBaseState($mode === 'manuell');
+        }
+
+        $this->SetTimerNachModusUndAuto();
+        $this->SyncLademodusAuswahl();
+        $this->UpdateStatus($mode);
+    }
+
+    private function mapModeToSelection(string $mode): int
+    {
+        switch ($mode) {
+            case 'pvonly':
+                return 0;
+            case 'pv2car':
+                return 1;
+            case 'manuell':
+                return 2;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Gemeinsame Rücksetzung für "zurück zu PVonly".
+     * $fromManual: nur wenn wirklich aus manuell kommend, dann Neutralmodus + Hysterese reset.
+     */
+    private function resetToPvOnlyBaseState(bool $fromManual = false): void
+    {
+        $this->SetPhaseMode(1);
+        $this->SetChargingCurrent(6);
+        $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
+
+        $this->LogTemplate('ok', 'Wallbox auf 1-phasig/6A als PVonly-Basis zurückgesetzt.');
+
+        if ($fromManual) {
+            $this->WriteAttributeInteger('LadeStartZaehler', 0);
+            $this->WriteAttributeInteger('LadeStopZaehler', 0);
+            $this->LogTemplate('debug', 'Hysterese-Zähler nach Verlassen von Manuell zurückgesetzt.');
+
+            $neutralUntil = time() + 30;
+            $this->WriteAttributeInteger('NeutralModeUntil', $neutralUntil);
+            $this->LogTemplate('debug', 'Neutralmodus nach Moduswechsel aktiv bis ' . date('H:i:s', $neutralUntil));
+
+            IPS_Sleep(1000);
+            $this->refreshChargerData();
+        }
     }
 
     // =========================================================================
