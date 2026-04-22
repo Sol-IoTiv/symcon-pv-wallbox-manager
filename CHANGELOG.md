@@ -3,6 +3,17 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.3b] - 2026-04-22
+### ✨ Neu
+- Konfigurierbarer Lademodus nach Fahrzeug-Abstecken (`ModeAfterUnplug`)
+
+### 🔧 Verbesserung
+- Lademodus wird nur noch beim tatsächlichen Abstecken des Fahrzeugs geändert (Statuswechsel erkannt)
+
+### 🧹 Refactoring
+- Entferntes hartes Zurücksetzen auf „Nur PV“
+- Zentrale Logik für Fahrzeug-Verbindungsstatus eingeführt
+
 ## [1.4.2b] - 2026-04-21
 ### Update
 - Clamp charging current to wallbox limits (16/32A)
