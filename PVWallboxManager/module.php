@@ -1198,13 +1198,13 @@ class PVWallboxManager extends IPSModule
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
             $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
 
-            if ($leistung < 100) {
+            if ($leistung < 300) {
                 $cnt = $cntVorher + 1;
                 $this->WriteAttributeInteger('NoPowerCounter', $cnt);
                 $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
 
                 if ($cnt >= 3) {
-                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: keine Leistung nach {$cnt} Updates – beende Ladung.");
+                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: Ladeleistung < 300 W nach {$cnt} Updates – beende Ladung.");
                     $this->SetForceState(1);
                     $this->SetPhaseMode(1);
                     $this->SetChargingCurrent(6);
@@ -1213,11 +1213,7 @@ class PVWallboxManager extends IPSModule
                 }
             } else {
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
-                $this->LogTemplate('debug', 'Leistung ≥100 W → NoPowerCounter zurückgesetzt');
-
-                if ($this->GetValue('AccessStateV2') !== 2) {
-                    $this->SetForceState(2);
-                }
+                $this->LogTemplate('debug', 'Ladeleistung ≥ 300 W → NoPowerCounter zurückgesetzt');
             }
         } else {
             $this->WriteAttributeInteger('NoPowerCounter', 0);
