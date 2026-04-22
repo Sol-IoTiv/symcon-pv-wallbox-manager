@@ -31,6 +31,7 @@ class PVWallboxManager extends IPSModule
             'WallboxAPIKey'         => ['type'=>'string',  'default'=>''],
             'RefreshInterval'       => ['type'=>'integer', 'default'=>30],
             'ModulAktiv'            => ['type'=>'boolean', 'default'=>true],
+            'ModeAfterUnplug'       => ['type'=>'integer', 'default'=>0],
             'DebugLogging'          => ['type'=>'boolean', 'default'=>false],
             'MinAmpere'             => ['type'=>'integer', 'default'=>6],
             'MaxAmpere'             => ['type'=>'integer', 'default'=>16],
