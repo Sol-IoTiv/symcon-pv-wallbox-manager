@@ -1188,7 +1188,7 @@ class PVWallboxManager extends IPSModule
 
         if ($loadActive && $currentFRC === 2) {
             $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
-            if ($cooldownSeconds < 15) {
+            if ($cooldownSeconds < 30) {
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
                 $this->LogTemplate('debug', "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < 15s");
                 return;
