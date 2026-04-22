@@ -1004,6 +1004,7 @@ class PVWallboxManager extends IPSModule
         }
     }
 
+    private function handleCarConnectionState(array $data): bool
     {
         $carConnected = $this->isCarConnected($data);
         $wasConnected = (bool) $this->ReadAttributeBoolean('LastCarConnected');
