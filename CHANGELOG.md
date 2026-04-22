@@ -8,11 +8,16 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Konfigurierbarer Lademodus nach Fahrzeug-Abstecken (`ModeAfterUnplug`)
 
 ### 🔧 Verbesserung
-- Lademodus wird nur noch beim tatsächlichen Abstecken des Fahrzeugs geändert (Statuswechsel erkannt)
+- Einheitliches Verhalten bei Fahrzeug-Abstecken und Ladeende
+- Lademodus wird nur noch bei tatsächlichem Statuswechsel geändert (kein zyklisches Zurücksetzen mehr)
+
+### 🧠 Logik
+- Zentrale Fallback-Logik für Lademodus eingeführt (`ApplyModeAfterDisconnectOrChargeEnd`)
+- Ladeende verwendet nun die gleiche Logik wie Fahrzeug-Abstecken
 
 ### 🧹 Refactoring
 - Entferntes hartes Zurücksetzen auf „Nur PV“
-- Zentrale Logik für Fahrzeug-Verbindungsstatus eingeführt
+- Bereinigung der Lademodus-Logik in den Modus-Funktionen
 
 ## [1.4.2b] - 2026-04-21
 ### Update
