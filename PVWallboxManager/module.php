@@ -24,6 +24,7 @@ class PVWallboxManager extends IPSModule
             'LastStatusInfoHTML'             => '',
             'LastChargingCurrent'            => 0,
             'SmoothedSurplus'                => 0.0,
+            'LastCarConnected'               => false,
         ]);
 
         $this->registerProperties([
@@ -442,7 +443,6 @@ class PVWallboxManager extends IPSModule
     {
         if (!$this->isCarConnected($data)) {
             $this->handleNoCarConnected();
-            $this->ResetLademodiWennKeinFahrzeug();
             return;
         }
 
@@ -472,7 +472,6 @@ class PVWallboxManager extends IPSModule
     {
         if (!$this->isCarConnected($data)) {
             $this->handleNoCarConnected();
-            $this->ResetLademodiWennKeinFahrzeug();
             return;
         }
 
@@ -530,7 +529,6 @@ class PVWallboxManager extends IPSModule
     {
         if (!$this->isCarConnected($data)) {
             $this->handleNoCarConnected();
-            $this->ResetLademodiWennKeinFahrzeug();
             return;
         }
 
@@ -1006,13 +1004,63 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    private function ResetLademodiWennKeinFahrzeug()
     {
-        if ($this->GetValue('Status') <= 1) {
-            if ($this->GetValue('LademodusAuswahl') !== 0) {
-                $this->SetValue('LademodusAuswahl', 0);
-                $this->LogTemplate('debug', "Lademodus wurde auf PVonly zurückgesetzt, weil kein Fahrzeug verbunden ist.");
-            }
+        $carConnected = $this->isCarConnected($data);
+        $wasConnected = (bool) $this->ReadAttributeBoolean('LastCarConnected');
+
+        if ($wasConnected && !$carConnected) {
+            $this->ResetLademodusBeimAbstecken();
+        }
+
+        $this->WriteAttributeBoolean('LastCarConnected', $carConnected);
+
+        return $carConnected;
+    }
+
+    private function ResetLademodusBeimAbstecken(): void
+    {
+        $modeAfterUnplug = (int) $this->ReadPropertyInteger('ModeAfterUnplug');
+        $aktuellerModus  = (int) $this->GetValue('LademodusAuswahl');
+
+        if ($modeAfterUnplug === -1) {
+            $this->LogTemplate('info', '🚗 Fahrzeug abgesteckt → aktueller Lademodus bleibt erhalten.');
+            return;
+        }
+
+        if (!in_array($modeAfterUnplug, [0, 1, 2], true)) {
+            $this->LogTemplate('warn', "Ungültiger ModeAfterUnplug-Wert: {$modeAfterUnplug} – fallback auf Nur PV.");
+            $modeAfterUnplug = 0;
+        }
+
+        if ($aktuellerModus === $modeAfterUnplug) {
+            $this->LogTemplate('debug', '🚗 Fahrzeug abgesteckt → Lademodus bleibt unverändert.');
+            return;
+        }
+
+        $this->SetValue('LademodusAuswahl', $modeAfterUnplug);
+        $this->LogTemplate(
+            'info',
+            sprintf(
+                '🚗 Fahrzeug abgesteckt → Lademodus gewechselt: %s → %s',
+                $this->getModeSelectionLabel($aktuellerModus),
+                $this->getModeSelectionLabel($modeAfterUnplug)
+            )
+        );
+    }
+
+    private function getModeSelectionLabel(int $mode): string
+    {
+        switch ($mode) {
+            case -1:
+                return 'Beibehalten';
+            case 0:
+                return 'Nur PV';
+            case 1:
+                return 'PV-Anteil';
+            case 2:
+                return 'Manuell';
+            default:
+                return 'Unbekannt';
         }
     }
 
@@ -1424,9 +1472,8 @@ class PVWallboxManager extends IPSModule
             'pvonly'  => 'ModusPVonlyLaden',
         ];
 
-        if (!$this->isCarConnected($data)) {
+        if (!$this->handleCarConnectionState($data)) {
             $this->handleNoCarConnected();
-            $this->ResetLademodiWennKeinFahrzeug();
             $this->SetTimerNachModusUndAuto();
             return;
         }
