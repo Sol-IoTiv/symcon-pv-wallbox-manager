@@ -1159,7 +1159,7 @@ class PVWallboxManager extends IPSModule
         $socAktuell  = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
         $socZiel     = ($socTargetID > 0 && IPS_VariableExists($socTargetID)) ? GetValue($socTargetID) : null;
 
-        $loadActive = ($currentFRC === 2) || in_array($modeKey, ['pvonly', 'pv2car', 'manuell'], true);
+        $loadActive = in_array($modeKey, ['pvonly', 'pv2car', 'manuell'], true);
 
         $this->LogTemplate(
             'debug',
@@ -1187,6 +1187,13 @@ class PVWallboxManager extends IPSModule
         }
 
         if ($loadActive && $currentFRC === 2) {
+            $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+            if ($cooldownSeconds < 15) {
+                $this->WriteAttributeInteger('NoPowerCounter', 0);
+                $this->LogTemplate('debug', "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < 15s");
+                return;
+            }
+
             $leistung  = intval(round($this->GetValue('Leistung')));
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
             $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
