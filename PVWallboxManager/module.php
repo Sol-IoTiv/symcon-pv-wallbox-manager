@@ -1010,7 +1010,7 @@ class PVWallboxManager extends IPSModule
         $wasConnected = (bool) $this->ReadAttributeBoolean('LastCarConnected');
 
         if ($wasConnected && !$carConnected) {
-            $this->ResetLademodusBeimAbstecken();
+            $this->ApplyModeAfterDisconnectOrChargeEnd('🚗 Fahrzeug abgesteckt');
         }
 
         $this->WriteAttributeBoolean('LastCarConnected', $carConnected);
@@ -1018,13 +1018,13 @@ class PVWallboxManager extends IPSModule
         return $carConnected;
     }
 
-    private function ResetLademodusBeimAbstecken(): void
+    private function ApplyModeAfterDisconnectOrChargeEnd(string $reason): void
     {
         $modeAfterUnplug = (int) $this->ReadPropertyInteger('ModeAfterUnplug');
         $aktuellerModus  = (int) $this->GetValue('LademodusAuswahl');
 
         if ($modeAfterUnplug === -1) {
-            $this->LogTemplate('info', '🚗 Fahrzeug abgesteckt → aktueller Lademodus bleibt erhalten.');
+            $this->LogTemplate('info', $reason . ' → aktueller Lademodus bleibt erhalten.');
             return;
         }
 
@@ -1034,7 +1034,7 @@ class PVWallboxManager extends IPSModule
         }
 
         if ($aktuellerModus === $modeAfterUnplug) {
-            $this->LogTemplate('debug', '🚗 Fahrzeug abgesteckt → Lademodus bleibt unverändert.');
+            $this->LogTemplate('debug', $reason . ' → Lademodus bleibt unverändert.');
             return;
         }
 
@@ -1042,7 +1042,8 @@ class PVWallboxManager extends IPSModule
         $this->LogTemplate(
             'info',
             sprintf(
-                '🚗 Fahrzeug abgesteckt → Lademodus gewechselt: %s → %s',
+                '%s → Lademodus gewechselt: %s → %s',
+                $reason,
                 $this->getModeSelectionLabel($aktuellerModus),
                 $this->getModeSelectionLabel($modeAfterUnplug)
             )
@@ -1222,13 +1223,13 @@ class PVWallboxManager extends IPSModule
         $oldMode = $this->getCurrentModeKey();
 
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
-        $this->SetValue('LademodusAuswahl', 0);
+        $this->ApplyModeAfterDisconnectOrChargeEnd('🏁 Ladeende');
 
         if ($oldMode === 'manuell') {
             $this->SetPhaseMode(1);
             $this->SetChargingCurrent(6);
             $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-            $this->LogTemplate('ok', "Nach Ladeende: Zurück auf 1-phasig/6A/0A für PVonly.");
+            $this->LogTemplate('ok', "Nach Ladeende: Zurück auf 1-phasig/6A/0A.");
         }
     }
 
