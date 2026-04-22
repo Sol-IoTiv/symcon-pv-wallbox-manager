@@ -23,6 +23,7 @@ class PVWallboxManager extends IPSModule
             'LetztePhasenUmschaltung'        => 0,
             'LastStatusInfoHTML'             => '',
             'LastChargingCurrent'            => 0,
+            'LastChargingCurrentChange'      => 0,
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
         ]);
@@ -618,6 +619,7 @@ class PVWallboxManager extends IPSModule
                 "SetChargingCurrent: Angefordert {$requestedAmpere} A, begrenzt auf {$ampere} A."
             );
         }
+
         $ip = $this->ReadPropertyString('WallboxIP');
         $url = "http://$ip/api/set?amp=" . intval($ampere);
 
@@ -632,10 +634,13 @@ class PVWallboxManager extends IPSModule
                 "HTTP-Code: {$response['httpcode']}, cURL-Fehler: {$response['error']}"
             );
             return false;
-        } else {
-            $this->LogTemplate('ok', "SetChargingCurrent: Ladestrom auf $ampere A gesetzt. (HTTP {$response['httpcode']})");
-            return true;
         }
+
+        $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
+        $this->WriteAttributeInteger('LastChargingCurrentChange', time());
+
+        $this->LogTemplate('ok', "SetChargingCurrent: Ladestrom auf $ampere A gesetzt. (HTTP {$response['httpcode']})");
+        return true;
     }
 
     public function SetPhaseMode(int $mode)
@@ -1190,7 +1195,15 @@ class PVWallboxManager extends IPSModule
             $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
             if ($cooldownSeconds < 30) {
                 $this->WriteAttributeInteger('NoPowerCounter', 0);
-                $this->LogTemplate('debug', "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < 15s");
+                $this->LogTemplate('debug', "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < 30s");
+                return;
+            }
+
+            $lastCurrentChange  = $this->ReadAttributeInteger('LastChargingCurrentChange');
+            $sinceCurrentChange = time() - $lastCurrentChange;
+            if ($sinceCurrentChange < 20) {
+                $this->WriteAttributeInteger('NoPowerCounter', 0);
+                $this->LogTemplate('debug', "Fallback gesperrt: {$sinceCurrentChange}s seit Stromänderung < 20s");
                 return;
             }
 
