@@ -3,6 +3,19 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.4b] - 2026-04-24
+### 🧹 Refactoring
+- Methodenstruktur in `module.php` neu sortiert und thematisch gruppiert
+- Bereichs-Kommentare zur besseren Übersicht eingeführt
+- Zentralen Konstantenblock für Lademodi, Phasenmodi, Cooldowns und Ladeende-Schwellwerte ergänzt
+- Magic Numbers in zentralen Logikbereichen durch Konstanten ersetzt
+- Mapping-Funktionen für Lademodi auf Konstanten umgestellt
+
+### 🔧 Wartbarkeit
+- Lesbarkeit und Orientierung im Code verbessert
+- Grundlage für weitere Code-Verschlankung geschaffen
+- Keine funktionalen Änderungen an der Lade- oder Phasenlogik
+
 ## [1.4.3b] - 2026-04-22
 ### ✨ Neu
 - Konfigurierbarer Lademodus nach Fahrzeug-Abstecken (`ModeAfterUnplug`)
@@ -18,6 +31,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 ### 🧹 Refactoring
 - Entferntes hartes Zurücksetzen auf „Nur PV“
 - Bereinigung der Lademodus-Logik in den Modus-Funktionen
+
 
 ## [1.4.2b] - 2026-04-21
 ### Update
