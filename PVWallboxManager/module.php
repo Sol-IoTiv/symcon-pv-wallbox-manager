@@ -1209,25 +1209,34 @@ class PVWallboxManager extends IPSModule
         ];
     }
 
-    private function applyFilters(array $data): array
+    private function applyFilters(array $data): array 
     {
         $raw = max(0, $data['haus'] - $data['wallbox']);
 
         $buf = json_decode($this->ReadAttributeString('HausverbrauchAbzWallboxBuffer'), true) ?: [];
-        $buf[] = $raw;
-        if (count($buf) > 3) {
-            array_shift($buf);
-        }
-        $mean = array_sum($buf) / count($buf);
+        $last = floatval($this->ReadAttributeFloat('HausverbrauchAbzWallboxLast'));
 
         $threshold = 1.5 * $this->ReadPropertyInteger('MaxAmpere') * 230;
-        $last      = floatval($this->ReadAttributeFloat('HausverbrauchAbzWallboxLast'));
 
-        if ($last > 0 && abs($raw - $last) > $threshold) {
+        /*
+        * Nur starke Anstiege als Spike blockieren.
+        * Starke Abfälle sind erlaubt, damit z.B. Wärmepumpe/Boiler
+        * nach dem Abschalten nicht künstlich im Filter hängen bleiben.
+        */
+        if ($last > 0 && ($raw - $last) > $threshold) {
             $filtered = $last;
             $this->LogTemplate('warn', "Spike erkannt: {$raw}W → bleibe bei {$last}W");
         } else {
+            $buf[] = $raw;
+
+            if (count($buf) > 3) {
+                array_shift($buf);
+            }
+
+            $mean = array_sum($buf) / count($buf);
+
             $filtered = $mean;
+
             $this->WriteAttributeString('HausverbrauchAbzWallboxBuffer', json_encode($buf));
             $this->WriteAttributeFloat('HausverbrauchAbzWallboxLast', $mean);
         }
