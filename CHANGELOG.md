@@ -11,6 +11,9 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Magic Numbers in zentralen Logikbereichen durch Konstanten ersetzt
 - Mapping-Funktionen für Lademodi auf Konstanten umgestellt
 
+### 🛠️ Fixes
+- Spike-Filter verbessert: starke Lastabfälle (z. B. nach Abschalten der Wärmepumpe) werden nicht mehr blockiert → verhindert „festhängenden“ Hausverbrauch und ermöglicht korrektes Wiederanlaufen der PV-Ladung
+
 ### 🔧 Wartbarkeit
 - Lesbarkeit und Orientierung im Code verbessert
 - Grundlage für weitere Code-Verschlankung geschaffen
