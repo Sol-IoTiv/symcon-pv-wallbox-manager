@@ -409,7 +409,7 @@ class PVWallboxManager extends IPSModule
 
     private function handleLademodusAuswahl(int $mode): void
     {
-        if (!in_array($mode, [0, 1, 2], true)) {
+        if (!in_array($mode, [self::MODE_PVONLY, self::MODE_PV2CAR, self::MODE_MANUELL], true)) {
             throw new Exception("Ungültiger Wert für LademodusAuswahl: $mode");
         }
 
@@ -2208,11 +2208,11 @@ class PVWallboxManager extends IPSModule
     private function mapSelectionToMode(int $selection): string
     {
         switch ($selection) {
-            case 1:
+            case self::MODE_PV2CAR:
                 return 'pv2car';
-            case 2:
+            case self::MODE_MANUELL:
                 return 'manuell';
-            case 0:
+            case self::MODE_PVONLY:
             default:
                 return 'pvonly';
         }
@@ -2222,12 +2222,12 @@ class PVWallboxManager extends IPSModule
     {
         switch ($mode) {
             case 'pv2car':
-                return 1;
+                return self::MODE_PV2CAR;
             case 'manuell':
-                return 2;
+                return self::MODE_MANUELL;
             case 'pvonly':
             default:
-                return 0;
+                return self::MODE_PVONLY;
         }
     }
 
