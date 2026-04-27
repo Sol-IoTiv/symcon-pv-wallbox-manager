@@ -1100,25 +1100,26 @@ class PVWallboxManager extends IPSModule
         $aktuellerModus  = (int) $this->GetValue('LademodusAuswahl');
 
         if ($modeAfterUnplug === self::MODE_KEEP_CURRENT) {
-            $this->LogTemplate('info', $reason . ' → aktueller Lademodus bleibt erhalten.');
+            $this->LogTemplate('info', 'Lademodus bleibt erhalten', $reason);
             return;
         }
 
         if (!in_array($modeAfterUnplug, [self::MODE_PVONLY, self::MODE_PV2CAR, self::MODE_MANUELL], true)) {
-            $this->LogTemplate('warn', "Ungültiger ModeAfterUnplug-Wert: {$modeAfterUnplug} – fallback auf Nur PV.");
+            $this->LogTemplate('warn', 'Ungültiger ModeAfterUnplug-Wert', "{$modeAfterUnplug} → Fallback auf Nur PV");
             $modeAfterUnplug = 0;
         }
 
         if ($aktuellerModus === $modeAfterUnplug) {
-            $this->LogTemplate('debug', $reason . ' → Lademodus bleibt unverändert.');
+            $this->LogTemplate('debug', 'Lademodus bleibt unverändert', $reason);
             return;
         }
 
         $this->SetValue('LademodusAuswahl', $modeAfterUnplug);
         $this->LogTemplate(
             'info',
+            'Lademodus gewechselt',
             sprintf(
-                '%s → Lademodus gewechselt: %s → %s',
+                '%s | %s → %s',
                 $reason,
                 $this->getModeSelectionLabel($aktuellerModus),
                 $this->getModeSelectionLabel($modeAfterUnplug)
@@ -1130,7 +1131,7 @@ class PVWallboxManager extends IPSModule
     {
         if ($this->GetValue('AccessStateV2') != 1) {
             $this->SetForceState(1);
-            $this->LogTemplate('info', 'Kein Fahrzeug verbunden – Wallbox gesperrt.');
+            $this->LogTemplate('info', 'Kein Fahrzeug verbunden', 'Wallbox gesperrt');
         }
 
         $this->ResetWallboxVisualisierungKeinFahrzeug();
@@ -1687,10 +1688,10 @@ class PVWallboxManager extends IPSModule
 
         if ($apiKey != '') {
             $url = "http://$ip/api/set?dwo=0&alw=$alwValue&key=" . urlencode($apiKey);
-            $this->LogTemplate('info', "SetChargingEnabled: Sende Ladefreigabe '$statusText' ($alwValue) mit API-Key an $url");
+            $this->LogTemplate('debug', 'SetChargingEnabled', "{$statusText} ({$alwValue}) mit API-Key → {$url}");
         } else {
             $url = "http://$ip/api/set?dwo=0&alw=$alwValue";
-            $this->LogTemplate('info', "SetChargingEnabled: Sende Ladefreigabe '$statusText' ($alwValue) an $url");
+            $this->LogTemplate('debug', 'SetChargingEnabled', "{$statusText} ({$alwValue}) → {$url}");
         }
 
         $response = $this->simpleCurlGet($url);
@@ -1698,11 +1699,12 @@ class PVWallboxManager extends IPSModule
         if ($response['result'] === false || $response['httpcode'] != 200) {
             $this->LogTemplate(
                 'error',
-                "SetChargingEnabled: Fehler beim Setzen der Ladefreigabe ($alwValue)! HTTP-Code: {$response['httpcode']}, cURL-Fehler: {$response['error']}"
+                'SetChargingEnabled fehlgeschlagen',
+                "ALW={$alwValue}, HTTP={$response['httpcode']}, cURL={$response['error']}"
             );
             return false;
         } else {
-            $this->LogTemplate('ok', "SetChargingEnabled: Ladefreigabe wurde auf '$statusText' ($alwValue) gesetzt. (HTTP {$response['httpcode']})");
+            $this->LogTemplate('info', "SetChargingEnabled: Sende Ladefreigabe '$statusText' ($alwValue) mit API-Key an $url");
             return true;
         }
     }
@@ -1857,7 +1859,7 @@ class PVWallboxManager extends IPSModule
         $car        = @$this->GetValue('Status');
         $lastStatus = $this->ReadAttributeInteger('LastTimerStatus');
         if ($car !== $lastStatus) {
-            $this->LogTemplate('debug', "SetTimerNachModusUndAuto: Status={$car}");
+            $this->LogTemplate('debug', 'SetTimerNachModusUndAuto', "Status={$car}");
             $this->WriteAttributeInteger('LastTimerStatus', $car);
         }
 
@@ -1977,10 +1979,10 @@ class PVWallboxManager extends IPSModule
 
     private function AktualisiereMarktpreise()
     {
-        $this->LogTemplate('debug', "AktualisiereMarktpreise wurde aufgerufen.");
+        $this->LogTemplate('debug', 'AktualisiereMarktpreise', 'aufgerufen');
 
         if (!$this->ReadPropertyBoolean('UseMarketPrices')) {
-            $this->LogTemplate('info', "Börsenpreis-Update übersprungen (deaktiviert).");
+            $this->LogTemplate('debug', 'Börsenpreis-Update übersprungen', 'deaktiviert');
             return;
         }
 
@@ -1994,7 +1996,7 @@ class PVWallboxManager extends IPSModule
             $apiUrl = $this->ReadPropertyString('MarketPriceAPI');
         }
         if ($apiUrl == '') {
-            $this->LogTemplate('error', "Keine gültige API-URL für Strompreis-Provider!");
+            $this->LogTemplate('error', 'Keine gültige API-URL', 'Strompreis-Provider');
             return;
         }
 
@@ -2213,7 +2215,7 @@ class PVWallboxManager extends IPSModule
     {
         $varID = @$this->GetIDForIdent($ident);
         if ($varID === false || $varID === 0) {
-            $this->LogTemplate('warn', "Variable mit Ident '$ident' nicht gefunden!");
+            $this->LogTemplate('warn', 'Variable nicht gefunden', "Ident={$ident}");
             return;
         }
 
