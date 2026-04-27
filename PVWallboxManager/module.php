@@ -2168,25 +2168,39 @@ class PVWallboxManager extends IPSModule
 
     private function renderStatusHtml(array $d): string
     {
-        $html  = '<div style="font-size:15px; line-height:1.7em;">';
+        $html  = '<div style="font-size:15px; line-height:1.75em;">';
+
         if (!$d['moduleActive']) {
-            $html .= "<span style=\"color:red; font-weight:bold;\">● Modul deaktiviert</span><br>";
+            $html .= '<div style="color:red; font-weight:bold; margin-bottom:6px;">● Modul deaktiviert</div>';
         }
 
         if ($d['inInitial']) {
-            $html .= "<b>Initial-Check:</b> Aktiv (Intervall: {$d['initialInt']} s)<br>";
+            $html .= "🔄 <b>Initial-Check:</b> Aktiv ({$d['initialInt']} s)<br>";
         }
+
         if ($d['neutralActive']) {
-            $t = date("H:i:s", $d['neutralUntil']);
-            $html .= "<b>Neutralmodus:</b> aktiv bis {$t}<br>";
+            $t = date('H:i:s', $d['neutralUntil']);
+            $html .= "⏸️ <b>Neutralmodus:</b> aktiv bis {$t}<br>";
         }
-        $html .= "<b>Lademodus:</b> {$d['modusText']}<br>";
-        $html .= "<b>Status:</b> {$d['statusTxt']}<br>";
-        $html .= "<b>Wallbox Modus:</b> {$d['frcTxt']}<br>";
-        $html .= "<b>SOC Auto (Ist / Ziel):</b> {$d['socAktuell']} / {$d['socZiel']}<br>";
-        $html .= "<b>Phasen Wallbox-Einstellung:</b> {$d['psmSollTxt']}<br>";
-        $html .= "<b>Genutzte Phasen (Fahrzeug):</b> {$d['psmIstTxt']}<br>";
+
+        $html .= "☀️ <b>Lademodus:</b> {$d['modusText']}<br>";
+
+        $html .= '<div style="height:6px;"></div>';
+
+        $html .= "🚗 <b>Fahrzeug:</b> {$d['statusTxt']}<br>";
+        $html .= "🔌 <b>Wallbox:</b> {$d['frcTxt']}<br>";
+
+        $html .= '<div style="height:6px;"></div>';
+
+        $html .= "⚡ <b>Wallbox-Phasen:</b> {$d['psmSollTxt']}<br>";
+        $html .= "🚘 <b>Fahrzeug-Phasen:</b> {$d['psmIstTxt']}<br>";
+
+        $html .= '<div style="height:6px;"></div>';
+
+        $html .= "🔋 <b>SOC:</b> {$d['socAktuell']} / Ziel: {$d['socZiel']}";
+
         $html .= '</div>';
+
         return $html;
     }
 
