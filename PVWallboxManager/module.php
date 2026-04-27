@@ -1704,7 +1704,7 @@ class PVWallboxManager extends IPSModule
             );
             return false;
         } else {
-            $this->LogTemplate('info', "SetChargingEnabled: Sende Ladefreigabe '$statusText' ($alwValue) mit API-Key an $url");
+            $this->LogTemplate('debug', 'SetChargingEnabled gesetzt', "{$statusText} ({$alwValue}), HTTP={$response['httpcode']}");
             return true;
         }
     }
@@ -2004,14 +2004,15 @@ class PVWallboxManager extends IPSModule
         if ($response['result'] === false || $response['httpcode'] != 200) {
             $this->LogTemplate(
                 'error',
-                "Abruf der Börsenpreise fehlgeschlagen! HTTP-Code: {$response['httpcode']}, cURL-Fehler: {$response['error']} (URL: $apiUrl)"
+                'Abruf der Börsenpreise fehlgeschlagen',
+                "HTTP={$response['httpcode']}, cURL={$response['error']}, URL={$apiUrl}"
             );
             return;
         }
         $json = $response['result'];
         $data = json_decode($json, true);
         if (!is_array($data) || !isset($data['data'])) {
-            $this->LogTemplate('error', "Fehlerhafte Antwort der API (keine 'data').");
+            $this->LogTemplate('error', 'Fehlerhafte API-Antwort', "Feld 'data' fehlt");
             return;
         }
 
@@ -2044,13 +2045,14 @@ class PVWallboxManager extends IPSModule
         unset($p);
 
         $this->SetValueAndLogChange('MarketPrices', json_encode($preise));
-        $this->LogTemplate('debug', "MarketPrices wurde gesetzt: " . substr(json_encode($preise), 0, 100) . "...");
+        $this->LogTemplate('debug', 'MarketPrices gesetzt', substr(json_encode($preise), 0, 100) . '...');
 
         $this->SetValue('MarketPricesPreview', $this->FormatMarketPricesPreviewHTML(24));
 
-        $this->LogTemplate('ok',
-            "Börsenpreise aktualisiert: Aktuell {$preisBrutto} ct/kWh – " .
-            count($preise) . " Preispunkte gespeichert."
+        $this->LogTemplate(
+            'ok',
+            'Börsenpreise aktualisiert',
+            "{$preisBrutto} ct/kWh aktuell, " . count($preise) . ' Preispunkte gespeichert'
         );
     }
 
@@ -2182,10 +2184,10 @@ class PVWallboxManager extends IPSModule
         if ($last !== $html) {
             SetValue($this->GetIDForIdent('StatusInfo'), $html);
             $this->WriteAttributeString('LastStatusInfoHTML', $html);
-            $this->LogTemplate('debug', "Status-Info HTMLBox aktualisiert.");
+            $this->LogTemplate('debug', 'Status-Info HTMLBox', 'aktualisiert');
         }
         else {
-            $this->LogTemplate('debug', "Status-Info HTMLBox unverändert, kein Update.");
+            $this->LogTemplate('debug', 'Status-Info HTMLBox', 'unverändert');
         }
     }
 

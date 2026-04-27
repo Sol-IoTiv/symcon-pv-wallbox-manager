@@ -12,7 +12,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ### 🛠️ Änderungen
 - `PV2Car`:
-  - Ramp-Up wird beim ersten Start übersgangen (direkter Start mit berechnetem Strom)
+  - Ramp-Up wird beim ersten Start übersprungen (direkter Start mit berechnetem Strom)
   - Schnellere Reaktion auf verfügbaren PV-Überschuss
 
 ### 🔧 Intern
@@ -25,8 +25,16 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Sicherer Idle-Zustand nach Ladeende zentralisiert
 - Fallback-Sperren für Ladeende zentral gebündelt
 
+### 🧾 Logging
+- Einheitliches Logging-Format (`Kurztext | Detail`)
+- Einführung der Log-Typen `start` und `stop`
+- Reduktion von Log-Spam durch konsequente Nutzung von `debug`
+- Vereinheitlichung aller API-, Hysterese- und Zustands-Logs
+- Entfernung doppelter Emojis und uneinheitlicher Textformate
+
 ### 🔧 Wartbarkeit
-- Vorbereitung für weitere Bereinigung der Logging-Ausgaben
+- Logging zentralisiert über `LogTemplate()`
+- Grundlage für zukünftige Erweiterungen und bessere Analyse im IPS-Log
 
 ## [1.4.4b] - 2026-04-24
 ### 🧹 Refactoring
