@@ -3,6 +3,17 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.5b] - 2026-04-27
+### 🧹 Refactoring
+- Wiederkehrende Ladeende-Logik in Helper-Funktionen ausgelagert
+- `PruefeLadeendeAutomatisch()` weiter verschlankt
+- NoPowerCounter-Reset zentralisiert
+- Sicherer Idle-Zustand nach Ladeende zentralisiert
+- Fallback-Sperren für Ladeende zentral gebündelt
+
+### 🔧 Wartbarkeit
+- Vorbereitung für weitere Bereinigung der Logging-Ausgaben
+
 ## [1.4.4b] - 2026-04-24
 ### 🧹 Refactoring
 - Methodenstruktur in `module.php` neu sortiert und thematisch gruppiert

@@ -894,6 +894,46 @@ class PVWallboxManager extends IPSModule
         return false;
     }
 
+    private function resetNoPowerCounter(): void
+    {
+        $this->WriteAttributeInteger('NoPowerCounter', 0);
+    }
+
+    private function applySafeIdleState(): void
+    {
+        $this->SetForceState(1);
+        $this->SetPhaseMode(self::PHASE_MODE_1P);
+        $this->SetChargingCurrent(6);
+    }
+
+    private function isChargeEndFallbackBlocked(): bool
+    {
+        $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+
+        if ($cooldownSeconds < self::PHASE_SWITCH_COOLDOWN_S) {
+            $this->resetNoPowerCounter();
+            $this->LogTemplate(
+                'debug',
+                "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . "s"
+            );
+            return true;
+        }
+
+        $lastCurrentChange  = $this->ReadAttributeInteger('LastChargingCurrentChange');
+        $sinceCurrentChange = time() - $lastCurrentChange;
+
+        if ($sinceCurrentChange < self::CURRENT_CHANGE_COOLDOWN_S) {
+            $this->resetNoPowerCounter();
+            $this->LogTemplate(
+                'debug',
+                "Fallback gesperrt: {$sinceCurrentChange}s seit Stromänderung < " . self::CURRENT_CHANGE_COOLDOWN_S . "s"
+            );
+            return true;
+        }
+
+        return false;
+    }
+
     private function PruefeLadeendeAutomatisch()
     {
         $currentFRC = $this->GetValue('AccessStateV2');
@@ -922,11 +962,9 @@ class PVWallboxManager extends IPSModule
                     'ok',
                     "🔌 Ziel-SOC erreicht ({$socAktuell}% ≥ {$socZiel}%) – beende Ladung."
                 );
-                $this->SetForceState(1);
-                $this->SetPhaseMode(self::PHASE_MODE_1P);
-                $this->SetChargingCurrent(6);
+                $this->applySafeIdleState();
                 $this->ResetModiNachLadeende();
-                $this->WriteAttributeInteger('NoPowerCounter', 0);
+                $this->resetNoPowerCounter();
                 return;
             }
 
@@ -937,24 +975,17 @@ class PVWallboxManager extends IPSModule
         }
 
         if ($loadActive && $currentFRC === 2) {
-            $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
-            if ($cooldownSeconds < self::PHASE_SWITCH_COOLDOWN_S) {
-                $this->WriteAttributeInteger('NoPowerCounter', 0);
-                $this->LogTemplate('debug', "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . "s");
-                return;
-            }
-
-            $lastCurrentChange  = $this->ReadAttributeInteger('LastChargingCurrentChange');
-            $sinceCurrentChange = time() - $lastCurrentChange;
-            if ($sinceCurrentChange < self::CURRENT_CHANGE_COOLDOWN_S) {
-                $this->WriteAttributeInteger('NoPowerCounter', 0);
-                $this->LogTemplate('debug', "Fallback gesperrt: {$sinceCurrentChange}s seit Stromänderung < " . self::CURRENT_CHANGE_COOLDOWN_S . "s");
+            if ($this->isChargeEndFallbackBlocked()) {
                 return;
             }
 
             $leistung  = intval(round($this->GetValue('Leistung')));
             $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
-            $this->LogTemplate('debug', "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}");
+
+            $this->LogTemplate(
+                'debug',
+                "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}"
+            );
 
             if ($leistung < self::NO_POWER_THRESHOLD_W) {
                 $cnt = $cntVorher + 1;
@@ -962,19 +993,23 @@ class PVWallboxManager extends IPSModule
                 $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
 
                 if ($cnt >= self::NO_POWER_COUNTER_LIMIT) {
-                    $this->LogTemplate('ok', "🔌 Ladeende erkannt: Ladeleistung < " . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates – beende Ladung.");
-                    $this->SetForceState(1);
-                    $this->SetPhaseMode(self::PHASE_MODE_1P);
-                    $this->SetChargingCurrent(6);
+                    $this->LogTemplate(
+                        'ok',
+                        "🔌 Ladeende erkannt: Ladeleistung < " . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates – beende Ladung."
+                    );
+                    $this->applySafeIdleState();
                     $this->ResetModiNachLadeende();
-                    $this->WriteAttributeInteger('NoPowerCounter', 0);
+                    $this->resetNoPowerCounter();
                 }
             } else {
-                $this->WriteAttributeInteger('NoPowerCounter', 0);
-                $this->LogTemplate('debug', 'Ladeleistung ≥ 300 W → NoPowerCounter zurückgesetzt');
+                $this->resetNoPowerCounter();
+                $this->LogTemplate(
+                    'debug',
+                    'Ladeleistung ≥ ' . self::NO_POWER_THRESHOLD_W . ' W → NoPowerCounter zurückgesetzt'
+                );
             }
         } else {
-            $this->WriteAttributeInteger('NoPowerCounter', 0);
+            $this->resetNoPowerCounter();
             $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
         }
     }
