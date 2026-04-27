@@ -5,41 +5,30 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ## [1.4.5b] - 2026-04-27
 ### 🚀 Neu
-- Schnellstart für Lademodi `PVonly` und `PV2Car`
-  - Ladebeginn erfolgt sofort bei ausreichendem PV-Überschuss
-  - Start-Hysterese (`LadeStartZaehler`) wird beim ersten Start übersprungen
-  - Automatische initiale Phasenwahl beim Start
+- Schnellstart für `PVonly` und `PV2Car`
+  - sofortiger Ladebeginn bei ausreichendem Überschuss
+  - Start-Hysterese wird beim ersten Start übersprungen
+  - automatische initiale Phasenwahl
 
 ### 🛠️ Änderungen
-- `PV2Car`:
-  - Ramp-Up wird beim ersten Start übersprungen (direkter Start mit berechnetem Strom)
-  - Schnellere Reaktion auf verfügbaren PV-Überschuss
-
-### 🔧 Intern
-- Reset von `LadeStartZaehler` und `LadeStopZaehler` beim Schnellstart
-
-### 🧹 Refactoring
-- Wiederkehrende Ladeende-Logik in Helper-Funktionen ausgelagert
-- `PruefeLadeendeAutomatisch()` weiter verschlankt
-- NoPowerCounter-Reset zentralisiert
-- Sicherer Idle-Zustand nach Ladeende zentralisiert
-- Fallback-Sperren für Ladeende zentral gebündelt
-
-### 🧾 Logging
-- Einheitliches Logging-Format (`Kurztext | Detail`)
-- Einführung der Log-Typen `start` und `stop`
-- Reduktion von Log-Spam durch konsequente Nutzung von `debug`
-- Vereinheitlichung aller API-, Hysterese- und Zustands-Logs
-- Entfernung doppelter Emojis und uneinheitlicher Textformate
+- `PV2Car`: direkter Start ohne Ramp-Up → schnellere Reaktion auf PV-Überschuss
 
 ### ⚙️ Optimierung
-- API-Schreibzugriffe zur Wallbox reduziert
-- Ladestrom wird nur noch gesendet, wenn sich der Ampere-Wert tatsächlich geändert hat
-- Letzter gesendeter Ladestrom wird intern über `LastSentChargingCurrent` gespeichert
+- API-Schreibzugriffe reduziert
+  - Ladestrom nur bei Änderung
+  - Tracking über `LastSentChargingCurrent`
 
-### 🔧 Wartbarkeit
-- Logging zentralisiert über `LogTemplate()`
-- Grundlage für zukünftige Erweiterungen und bessere Analyse im IPS-Log
+### 🧾 Logging
+- Einheitliches Format (`Kurztext | Detail`)
+- Neue Log-Typen: `start`, `stop`
+- Weniger Log-Spam durch konsequentes `debug`
+
+### 🧹 Refactoring
+- Ladeende-Logik zentralisiert und vereinfacht
+- Hysterese- und Fallback-Handling gebündelt
+
+### 🎨 UI
+- Status-Info übersichtlicher strukturiert (Icons, Gruppierung, kompakter)
 
 ## [1.4.4b] - 2026-04-24
 ### 🧹 Refactoring
