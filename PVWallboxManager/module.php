@@ -45,6 +45,7 @@ class PVWallboxManager extends IPSModule
             'LastStatusInfoHTML'             => '',
             'LastChargingCurrent'            => 0,
             'LastChargingCurrentChange'      => 0,
+            'LastSentChargingCurrent'        => 0,
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
         ]);
@@ -954,7 +955,8 @@ class PVWallboxManager extends IPSModule
             $this->resetNoPowerCounter();
             $this->LogTemplate(
                 'debug',
-                "Fallback gesperrt: {$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . "s"
+                'Fallback gesperrt',
+                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . 's'
             );
             return true;
         }
@@ -1242,7 +1244,7 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null) 
+    private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null)
     {
         $minUeberschuss = $this->ReadPropertyInteger('MinLadeWatt');
 
@@ -1258,13 +1260,26 @@ class PVWallboxManager extends IPSModule
 
         if ($aktFRC !== $sollFRC) {
             $this->LogTemplate('debug', 'SetForceState', "FRC={$sollFRC}, Modus={$modus}");
-            $this->SetForceState($sollFRC);
+
+                if ($this->SetForceState($sollFRC)) {
+                    if ($sollFRC === 1 || $sollFRC === 2) {
+                        $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
+                    }
+                }
+
             IPS_Sleep(1000);
         }
 
         if ($sollFRC === 2 && $ampere > 0) {
-            $this->LogTemplate('debug', 'SetChargingCurrent', "{$ampere} A");
-            $this->SetChargingCurrent($ampere);
+            $lastSentAmpere = $this->ReadAttributeInteger('LastSentChargingCurrent');
+
+            if ($lastSentAmpere !== $ampere) {
+                $this->LogTemplate('debug', 'SetChargingCurrent', "{$lastSentAmpere} A → {$ampere} A");
+
+                if ($this->SetChargingCurrent($ampere)) {
+                    $this->WriteAttributeInteger('LastSentChargingCurrent', $ampere);
+                }
+            }
         }
     }
 

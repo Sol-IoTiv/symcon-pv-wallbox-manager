@@ -32,6 +32,11 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Vereinheitlichung aller API-, Hysterese- und Zustands-Logs
 - Entfernung doppelter Emojis und uneinheitlicher Textformate
 
+### ⚙️ Optimierung
+- API-Schreibzugriffe zur Wallbox reduziert
+- Ladestrom wird nur noch gesendet, wenn sich der Ampere-Wert tatsächlich geändert hat
+- Letzter gesendeter Ladestrom wird intern über `LastSentChargingCurrent` gespeichert
+
 ### 🔧 Wartbarkeit
 - Logging zentralisiert über `LogTemplate()`
 - Grundlage für zukünftige Erweiterungen und bessere Analyse im IPS-Log
