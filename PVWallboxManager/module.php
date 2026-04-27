@@ -420,7 +420,7 @@ class PVWallboxManager extends IPSModule
     {
         $value = max(0, min(100, $value));
         $this->SetValue('PVAnteil', $value);
-        $this->LogTemplate('info', "🌞 PV-Anteil geändert: {$value}%");
+        $this->LogTemplate('info', "PV-Anteil geändert", "{$value}%");
 
         if ($this->getCurrentModeKey() === 'pv2car') {
             $this->UpdateStatus('pv2car');
@@ -472,13 +472,13 @@ class PVWallboxManager extends IPSModule
 
         switch ($mode) {
             case 'pvonly':
-                $this->LogTemplate('info', '🔁 Lademodus: Nur PV');
+                $this->LogTemplate('info', 'Lademodus geändert', 'Nur PV');
                 break;
             case 'pv2car':
-                $this->LogTemplate('info', '🔁 Lademodus: PV-Anteil');
+                $this->LogTemplate('info', 'Lademodus geändert', 'PV-Anteil');
                 break;
             case 'manuell':
-                $this->LogTemplate('info', '🔁 Lademodus: Manuell');
+                $this->LogTemplate('info', 'Lademodus geändert', 'Manuell');
                 break;
         }
 
@@ -494,18 +494,18 @@ class PVWallboxManager extends IPSModule
     {
         $this->SetPhaseMode(self::PHASE_MODE_1P);
         $this->SetChargingCurrent(6);
-        $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
+        $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'debug');
 
-        $this->LogTemplate('ok', 'Wallbox auf 1-phasig/6A als PVonly-Basis zurückgesetzt.');
+        $this->LogTemplate('ok', 'PVonly-Basis gesetzt', '1-phasig / 6A');
 
         if ($fromManual) {
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
-            $this->LogTemplate('debug', 'Hysterese-Zähler nach Verlassen von Manuell zurückgesetzt.');
+            $this->LogTemplate('debug', 'Hysterese-Zähler zurückgesetzt', 'nach Verlassen von Manuell');
 
             $neutralUntil = time() + 30;
             $this->WriteAttributeInteger('NeutralModeUntil', $neutralUntil);
-            $this->LogTemplate('debug', 'Neutralmodus nach Moduswechsel aktiv bis ' . date('H:i:s', $neutralUntil));
+            $this->LogTemplate('debug', 'Neutralmodus aktiv', 'bis ' . date('H:i:s', $neutralUntil));
 
             IPS_Sleep(1000);
             $this->UpdateStatus();
@@ -519,7 +519,7 @@ class PVWallboxManager extends IPSModule
     public function UpdateStatus(string $triggerMode = '')
     {
         $activeMode = $this->getCurrentModeKey();
-        $this->LogTemplate('debug', "UpdateStatus getriggert (Modus: {$activeMode}, Zeit: " . date("H:i:s") . ")");
+        $this->LogTemplate('debug', 'UpdateStatus', "Modus={$activeMode}, Zeit=" . date('H:i:s'));
 
         if ($this->handleNeutralMode()) {
             return;
@@ -630,7 +630,7 @@ class PVWallboxManager extends IPSModule
         $key = $this->getCurrentModeKey();
 
         if (!isset($handlers[$key])) {
-            $this->LogTemplate('warn', "Unbekannter Lademodus: {$key}");
+            $this->LogTemplate('warn', 'Unbekannter Lademodus', $key);
             return;
         }
 
@@ -648,7 +648,7 @@ class PVWallboxManager extends IPSModule
     {
         $until = $this->ReadAttributeInteger('NeutralModeUntil');
         if ($until > time()) {
-            $this->LogTemplate('debug', 'Neutralmodus aktiv – Ladefreigabe gesperrt bis ' . date('H:i:s', $until));
+            $this->LogTemplate('debug', 'Neutralmodus aktiv', 'Ladefreigabe gesperrt bis ' . date('H:i:s', $until));
             $this->SetForceState(1);
             return true;
         }
@@ -660,7 +660,7 @@ class PVWallboxManager extends IPSModule
         $status    = $this->GetValue('Status');
         $inInitial = ($status === false || $status <= 1);
         if ($inInitial) {
-            $this->LogTemplate('debug', "Initial-Check aktiv (Status={$status})");
+            $this->LogTemplate('debug', 'Initial-Check aktiv', "Status={$status}");
         }
         return $inInitial;
     }
@@ -691,8 +691,15 @@ class PVWallboxManager extends IPSModule
 
         if ($aktFRC === 1 && $pvUeberschuss >= $minLadeWatt) {
             $desiredFRC = 2;
+
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
+
+            $this->LogTemplate(
+                'start',
+                'PVonly Schnellstart',
+                'Überschuss=' . round($pvUeberschuss) . ' W, Mindestleistung=' . $minLadeWatt . ' W'
+            );
         } else {
             $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
         }
@@ -770,8 +777,15 @@ class PVWallboxManager extends IPSModule
 
         if ($isFastStart) {
             $desiredFRC = 2;
+
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
+
+            $this->LogTemplate(
+                'start',
+                'PV2Car Schnellstart',
+                'Anteil=' . round($anteilWatt) . ' W, Strom=' . $ampere . ' A, Phasen=' . $newPhasen
+            );
         } else {
             $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
         }
@@ -801,7 +815,7 @@ class PVWallboxManager extends IPSModule
         $aktPhasen = $this->GetValue('Phasenmodus');
         if ($aktPhasen !== $anzPhasenGewuenscht) {
             $this->SetPhaseMode($anzPhasenGewuenscht);
-            $this->LogTemplate('debug', "Manuell: Phasenmodus gewechselt {$aktPhasen} → {$anzPhasenGewuenscht}");
+            $this->LogTemplate('debug', 'Manuell Phasenmodus gewechselt', "{$aktPhasen} → {$anzPhasenGewuenscht}");
         }
 
         $anzPhasenIst = max(1, $this->GetValue('Phasenmodus'));
@@ -822,12 +836,13 @@ class PVWallboxManager extends IPSModule
 
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
-        $this->LogTemplate('debug', "Manuell: Kein Hysterese- oder Phasenumschalt-Check aktiv.");
+        $this->LogTemplate('debug', 'Manuell aktiv', 'Hysterese und automatische Phasenumschaltung deaktiviert');
 
         $this->LogTemplate(
             'ok',
+            'Manuelles Vollladen aktiv',
             sprintf(
-                "🔌 Manuelles Vollladen aktiv (%d-phasig, %d A). PV=%dW, Haus=%dW, Wallbox=%dW, Batterie=%dW, Überschuss=%dW / %dA",
+                '%d-phasig / %d A | PV=%d W, Haus=%d W, Wallbox=%d W, Batterie=%d W, Überschuss=%d W / %d A',
                 $anzPhasenIst,
                 $ampereGewuenscht,
                 $energy['pv'],
@@ -869,9 +884,9 @@ class PVWallboxManager extends IPSModule
                 $startZ++;
                 $this->WriteAttributeInteger('LadeStartZaehler', $startZ);
                 $this->WriteAttributeInteger('LadeStopZaehler', 0);
-                $this->LogTemplate('info', "Start-Hysterese: {$startZ}/{$startHys} Zyklen ≥ {$minLadeWatt} W");
+                $this->LogTemplate('debug', 'Start-Hysterese', "{$startZ}/{$startHys} ≥ {$minLadeWatt} W");
                 if ($startZ >= $startHys) {
-                    $this->LogTemplate('ok', "Start-Hysterese erreicht → Freigabe an.");
+                    $this->LogTemplate('start', 'Ladefreigabe aktiviert', "{$pvUeberschuss} W verfügbar");
                     $desiredFRC = 2;
                     $this->WriteAttributeInteger('LadeStartZaehler', 0);
                 }
@@ -887,9 +902,9 @@ class PVWallboxManager extends IPSModule
                 $stopZ++;
                 $this->WriteAttributeInteger('LadeStopZaehler', $stopZ);
                 $this->WriteAttributeInteger('LadeStartZaehler', 0);
-                $this->LogTemplate('info', "Stop-Hysterese: {$stopZ}/{$stopHys} Zyklen ≤ {$minStopWatt} W");
+                $this->LogTemplate('debug', 'Stop-Hysterese', "{$stopZ}/{$stopHys} ≤ {$minStopWatt} W");
                 if ($stopZ >= $stopHys) {
-                    $this->LogTemplate('warn', "Stop-Hysterese erreicht → Freigabe aus.");
+                    $this->LogTemplate('stop', 'Ladefreigabe beendet', "{$pvUeberschuss} W verfügbar");
                     $desiredFRC = 1;
                     $this->WriteAttributeInteger('LadeStopZaehler', 0);
                 }
@@ -911,7 +926,8 @@ class PVWallboxManager extends IPSModule
         if ($vergangen < $cooldownSekunden) {
             $this->LogTemplate(
                 'debug',
-                "Stop-Hysterese unterdrückt ({$vergangen}s seit Phasenwechsel < {$cooldownSekunden}s)"
+                'Stop-Hysterese unterdrückt',
+                "{$vergangen}s seit Phasenwechsel < {$cooldownSekunden}s"
             );
             return true;
         }
@@ -950,7 +966,8 @@ class PVWallboxManager extends IPSModule
             $this->resetNoPowerCounter();
             $this->LogTemplate(
                 'debug',
-                "Fallback gesperrt: {$sinceCurrentChange}s seit Stromänderung < " . self::CURRENT_CHANGE_COOLDOWN_S . "s"
+                'Fallback gesperrt',
+                "{$sinceCurrentChange}s seit Stromänderung < " . self::CURRENT_CHANGE_COOLDOWN_S . 's'
             );
             return true;
         }
@@ -965,7 +982,8 @@ class PVWallboxManager extends IPSModule
 
         $this->LogTemplate(
             'debug',
-            "PruefeLadeendeAutomatisch aufgerufen: FRC={$currentFRC}, Modus={$modeKey}"
+            'PruefeLadeendeAutomatisch',
+            "FRC={$currentFRC}, Modus={$modeKey}"
         );
 
         $socID       = $this->ReadPropertyInteger('CarSOCID');
@@ -977,14 +995,16 @@ class PVWallboxManager extends IPSModule
 
         $this->LogTemplate(
             'debug',
-            'Ladefreigabe/Modus aktiv: ' . ($loadActive ? 'ja' : 'nein')
+            'Ladefreigabe/Modus aktiv',
+            $loadActive ? 'ja' : 'nein'
         );
 
         if ($loadActive && $socAktuell !== null && $socZiel !== null) {
             if ($socAktuell >= $socZiel) {
                 $this->LogTemplate(
-                    'ok',
-                    "🔌 Ziel-SOC erreicht ({$socAktuell}% ≥ {$socZiel}%) – beende Ladung."
+                    'stop',
+                    'Ziel-SOC erreicht',
+                    "{$socAktuell}% ≥ {$socZiel}%"
                 );
                 $this->applySafeIdleState();
                 $this->ResetModiNachLadeende();
@@ -994,7 +1014,8 @@ class PVWallboxManager extends IPSModule
 
             $this->LogTemplate(
                 'debug',
-                "SOC ({$socAktuell}%) < Ziel ({$socZiel}%) – Fallback wird geprüft."
+                'SOC-Ziel noch nicht erreicht',
+                "{$socAktuell}% < {$socZiel}%"
             );
         }
 
@@ -1008,18 +1029,20 @@ class PVWallboxManager extends IPSModule
 
             $this->LogTemplate(
                 'debug',
-                "Fallback-Pfad: Leistung={$leistung} W, NoPowerCounter vorher={$cntVorher}"
+                'Fallback-Pfad',
+                "Leistung={$leistung} W, NoPowerCounter={$cntVorher}"
             );
 
             if ($leistung < self::NO_POWER_THRESHOLD_W) {
                 $cnt = $cntVorher + 1;
                 $this->WriteAttributeInteger('NoPowerCounter', $cnt);
-                $this->LogTemplate('debug', "NoPowerCounter erhöht auf {$cnt}");
+                $this->LogTemplate('debug', 'NoPowerCounter erhöht', (string) $cnt);
 
                 if ($cnt >= self::NO_POWER_COUNTER_LIMIT) {
                     $this->LogTemplate(
-                        'ok',
-                        "🔌 Ladeende erkannt: Ladeleistung < " . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates – beende Ladung."
+                        'stop',
+                        'Ladeende erkannt',
+                        'Ladeleistung < ' . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates"
                     );
                     $this->applySafeIdleState();
                     $this->ResetModiNachLadeende();
@@ -1029,12 +1052,13 @@ class PVWallboxManager extends IPSModule
                 $this->resetNoPowerCounter();
                 $this->LogTemplate(
                     'debug',
-                    'Ladeleistung ≥ ' . self::NO_POWER_THRESHOLD_W . ' W → NoPowerCounter zurückgesetzt'
+                    'NoPowerCounter zurückgesetzt',
+                    'Ladeleistung ≥ ' . self::NO_POWER_THRESHOLD_W . ' W'
                 );
             }
         } else {
             $this->resetNoPowerCounter();
-            $this->LogTemplate('debug', 'Kein aktiver Lademodus oder keine Freigabe – Fallback übersprungen.');
+            $this->LogTemplate('debug', 'Fallback übersprungen', 'kein aktiver Lademodus oder keine Freigabe');
         }
     }
 
@@ -1048,8 +1072,11 @@ class PVWallboxManager extends IPSModule
         if ($oldMode === 'manuell') {
             $this->SetPhaseMode(self::PHASE_MODE_1P);
             $this->SetChargingCurrent(6);
-            $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'ok');
-            $this->LogTemplate('ok', "Nach Ladeende: Zurück auf 1-phasig/6A/0A.");
+
+            $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'debug');
+
+            $this->LogTemplate('stop', 'Ladevorgang beendet');
+            $this->LogTemplate('ok', 'Basiszustand gesetzt', '1-phasig / 6A / 0A');
         }
     }
 
@@ -1144,9 +1171,17 @@ class PVWallboxManager extends IPSModule
                 $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
                 if ($ok) {
-                    $this->LogTemplate('ok', "Manueller Modus: 3-phasig *erzwingend* geschaltet!");
+                    $this->LogTemplate(
+                        'ok',
+                        'Manueller Modus',
+                        '3-phasig erzwungen'
+                    );
                 } else {
-                    $this->LogTemplate('error', 'Manueller Modus: Umschalten auf 3-phasig fehlgeschlagen!');
+                    $this->LogTemplate(
+                        'error',
+                        'Manueller Modus',
+                        'Umschalten auf 3-phasig fehlgeschlagen'
+                    );
                 }
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
@@ -1157,7 +1192,7 @@ class PVWallboxManager extends IPSModule
 
         if (($now - $letzteUmschaltung) < $umschaltCooldown) {
             $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
-            $this->LogTemplate('debug', "Phasenumschaltung: Cooldown aktiv, noch $rest Sekunden warten.");
+            $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
             return;
         }
 
@@ -1172,11 +1207,13 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
             $this->WriteAttributeInteger('Phasen1Zaehler', 0);
 
-            $this->LogTemplate('debug', "Phasen-Hysterese: $zaehler/$limit3 Zyklen > Schwelle3");
+            $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
             if ($zaehler >= $limit3) {
                 $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
-                if (!$ok) $this->LogTemplate('error', 'PruefeUndSetzePhasenmodus: Umschalten auf 3-phasig fehlgeschlagen!');
+                if (!$ok) {
+                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '1→3');
+                }
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
                 $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
@@ -1189,11 +1226,13 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
             $this->WriteAttributeInteger('Phasen3Zaehler', 0);
 
-            $this->LogTemplate('debug', "Phasen-Hysterese: $zaehler/$limit1 Zyklen < Schwelle1");
+            $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
             if ($zaehler >= $limit1) {
                 $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
-                if (!$ok) $this->LogTemplate('error', 'PruefeUndSetzePhasenmodus: Umschalten auf 1-phasig fehlgeschlagen!');
+                if (!$ok) {
+                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '3→1');
+                }
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
                 $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
@@ -1202,28 +1241,28 @@ class PVWallboxManager extends IPSModule
         }
     }
 
-    private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null)
+    private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null) 
     {
         $minUeberschuss = $this->ReadPropertyInteger('MinLadeWatt');
 
         if ($overrideFRC !== null) {
             $sollFRC = $overrideFRC;
-        }
-        else {
+        } else {
             $sollFRC = ($modus === 'manuell' || ($modus === 'pvonly' && $pvUeberschuss >= $minUeberschuss))
                 ? 2
                 : 1;
         }
 
         $aktFRC = $this->GetValue('AccessStateV2');
+
         if ($aktFRC !== $sollFRC) {
-            $this->LogTemplate('debug', "SetForceState: sende FRC={$sollFRC} (Modus={$modus})");
+            $this->LogTemplate('debug', 'SetForceState', "FRC={$sollFRC}, Modus={$modus}");
             $this->SetForceState($sollFRC);
             IPS_Sleep(1000);
         }
 
         if ($sollFRC === 2 && $ampere > 0) {
-            $this->LogTemplate('debug', "SetChargingCurrent: sende {$ampere}A");
+            $this->LogTemplate('debug', 'SetChargingCurrent', "{$ampere} A");
             $this->SetChargingCurrent($ampere);
         }
     }
@@ -1284,7 +1323,7 @@ class PVWallboxManager extends IPSModule
         */
         if ($last > 0 && ($raw - $last) > $threshold) {
             $filtered = $last;
-            $this->LogTemplate('warn', "Spike erkannt: {$raw}W → bleibe bei {$last}W");
+            $this->LogTemplate('warn', 'Spike erkannt', "{$raw} W → {$last} W beibehalten");
         } else {
             $buf[] = $raw;
 
@@ -1341,7 +1380,7 @@ class PVWallboxManager extends IPSModule
                 min($this->ReadPropertyInteger('MaxAmpere'), $desiredAmp)
             );
         } elseif ($log) {
-            $this->LogTemplate('debug', "PV-Überschuss <{$cutoff}W → auf 0 gesetzt)");
+            $this->LogTemplate('debug', 'PV-Überschuss unter Cutoff', "< {$cutoff} W → 0 W");
         }
 
         $lastAmp  = $this->ReadAttributeInteger('LastChargingCurrent');
@@ -1351,19 +1390,20 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('LastChargingCurrent', $amp);
 
         if ($log) {
-            $this->LogTemplate(
-                'debug',
-                sprintf(
-                    "Berechnung (geglättet): PV=%dW, Haus=%dW, Batt=%dW → Überschuss≈%.0fW, Amp=%dA (Δ%+dA), Phasen=%d",
-                    $data['pv'],
-                    $data['hausFiltered'],
-                    $batLoad,
-                    $useSurplus,
-                    $amp,
-                    $delta,
-                    $anzPhasen
-                )
-            );
+        $this->LogTemplate(
+            'debug',
+            'Berechnung geglättet',
+            sprintf(
+                'PV=%d W, Haus=%d W, Batt=%d W, Überschuss≈%.0f W, Strom=%d A, Δ%+d A, Phasen=%d',
+                $data['pv'],
+                $data['hausFiltered'],
+                $batLoad,
+                $useSurplus,
+                $amp,
+                $delta,
+                $anzPhasen
+            )
+        );
             $this->SetValueAndLogChange('PV_Ueberschuss',   round($useSurplus),   'PV-Überschuss',     'W', 'debug');
             $this->SetValueAndLogChange('PV_Ueberschuss_A', $amp,                 'PV-Überschuss (A)', 'A', 'debug');
         } else {
@@ -1464,16 +1504,16 @@ class PVWallboxManager extends IPSModule
         $ip = trim($this->ReadPropertyString('WallboxIP'));
 
         if ($ip == "" || $ip == "0.0.0.0") {
-            $this->LogTemplate('error', "Keine IP-Adresse für Wallbox konfiguriert.");
+            $this->LogTemplate('error', 'Keine IP-Adresse für Wallbox konfiguriert');
             return false;
         }
         if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-            $this->LogTemplate('error', "Ungültige IP-Adresse konfiguriert: $ip");
+            $this->LogTemplate('error', 'Ungültige IP-Adresse konfiguriert', $ip);
             $this->SetStatus(201);
             return false;
         }
         if (!$this->ping($ip, 80, 1)) {
-            $this->LogTemplate('error', "Wallbox unter $ip:80 nicht erreichbar.");
+            $this->LogTemplate('error', 'Wallbox nicht erreichbar', "{$ip}:80");
             return false;
         }
 
@@ -1487,18 +1527,18 @@ class PVWallboxManager extends IPSModule
             $json = curl_exec($ch);
             curl_close($ch);
         } catch (Exception $e) {
-            $this->LogTemplate('error', "HTTP Fehler: " . $e->getMessage());
+            $this->LogTemplate('error', 'HTTP-Fehler', $e->getMessage());
             return false;
         }
 
         if ($json === false || strlen($json) < 2) {
-            $this->LogTemplate('error', "Fehler: Keine Antwort von Wallbox ($url)");
+            $this->LogTemplate('error', 'Keine Antwort von Wallbox', $url);
             return false;
         }
 
         $data = json_decode($json, true);
         if (!is_array($data)) {
-            $this->LogTemplate('error', "Fehler: Ungültiges JSON von Wallbox ($url)");
+            $this->LogTemplate('error', 'Ungültiges JSON von Wallbox', $url);
             return false;
         }
 
@@ -1542,22 +1582,23 @@ class PVWallboxManager extends IPSModule
         if ($requestedAmpere !== $ampere) {
             $this->LogTemplate(
                 'warn',
-                "SetChargingCurrent: Angefordert {$requestedAmpere} A, begrenzt auf {$ampere} A."
+                'Ladestrom begrenzt',
+                "{$requestedAmpere} A → {$ampere} A"
             );
         }
 
         $ip = $this->ReadPropertyString('WallboxIP');
         $url = "http://$ip/api/set?amp=" . intval($ampere);
 
-        $this->LogTemplate('info', "SetChargingCurrent: Sende Ladestrom $ampere A an $url");
+        $this->LogTemplate('debug', 'SetChargingCurrent', "{$ampere} A → {$url}");
 
         $response = $this->simpleCurlGet($url);
 
         if ($response['result'] === false || $response['httpcode'] != 200) {
             $this->LogTemplate(
                 'error',
-                "SetChargingCurrent: Fehler beim Setzen auf $ampere A! " .
-                "HTTP-Code: {$response['httpcode']}, cURL-Fehler: {$response['error']}"
+                'SetChargingCurrent fehlgeschlagen',
+                "{$ampere} A, HTTP={$response['httpcode']}, cURL={$response['error']}"
             );
             return false;
         }
@@ -1565,14 +1606,14 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
         $this->WriteAttributeInteger('LastChargingCurrentChange', time());
 
-        $this->LogTemplate('ok', "SetChargingCurrent: Ladestrom auf $ampere A gesetzt. (HTTP {$response['httpcode']})");
+        $this->LogTemplate('debug', 'Ladestrom gesetzt', "{$ampere} A, HTTP={$response['httpcode']}");
         return true;
     }
 
     public function SetPhaseMode(int $mode)
     {
         if ($mode < 0 || $mode > 2) {
-            $this->LogTemplate('warn', "SetPhaseMode: Ungültiger Wert ($mode). Erlaubt: 0=Auto, 1=1-phasig, 2=3-phasig!");
+            $this->LogTemplate('warn', 'SetPhaseMode ungültig', "{$mode} (0=Auto, 1=1-phasig, 2=3-phasig)");
             return false;
         }
 
@@ -1582,18 +1623,19 @@ class PVWallboxManager extends IPSModule
         $modes = [0 => "Auto", 1 => "1-phasig", 2 => "3-phasig"];
         $modeText = $modes[$mode] ?? $mode;
 
-        $this->LogTemplate('info', "SetPhaseMode: Sende Phasenmodus '$modeText' ($mode) an $url");
+        $this->LogTemplate('debug', 'SetPhaseMode', "{$modeText} ({$mode}) → {$url}");
 
         $response = $this->simpleCurlGet($url);
 
         if ($response['result'] === false || $response['httpcode'] != 200) {
             $this->LogTemplate(
                 'error',
-                "SetPhaseMode: Fehler beim Setzen auf '$modeText' ($mode)! HTTP-Code: {$response['httpcode']}, cURL-Fehler: {$response['error']}"
+                'SetPhaseMode fehlgeschlagen',
+                "{$modeText} ({$mode}), HTTP={$response['httpcode']}, cURL={$response['error']}"
             );
             return false;
         } else {
-            $this->LogTemplate('ok', "SetPhaseMode: Phasenmodus auf '$modeText' ($mode) gesetzt. (HTTP {$response['httpcode']})");
+            $this->LogTemplate('debug', 'SetPhaseMode gesetzt', "{$modeText} ({$mode}), HTTP={$response['httpcode']}");
             return true;
         }
     }
@@ -1601,7 +1643,7 @@ class PVWallboxManager extends IPSModule
     public function SetForceState(int $state)
     {
         if ($state < 0 || $state > 2) {
-            $this->LogTemplate('warn', "SetForceState: Ungültiger Wert ($state). Erlaubt: 0=Neutral, 1=OFF, 2=ON!");
+            $this->LogTemplate('warn', 'SetForceState ungültig', "{$state} (0=Neutral, 1=OFF, 2=ON)");
             return false;
         }
 
@@ -1614,19 +1656,20 @@ class PVWallboxManager extends IPSModule
         ];
         $modeText = $modes[$state] ?? $state;
 
-        $this->LogTemplate('debug', "SetForceState: HTTP GET {$url}");
+        $this->LogTemplate('debug', 'SetForceState', "HTTP GET → {$url}");
 
         $response = $this->simpleCurlGet($url);
 
         if ($response['result'] === false || $response['httpcode'] != 200) {
             $this->LogTemplate(
                 'error',
-                "SetForceState-Fehler: {$modeText} ({$state}), HTTP {$response['httpcode']}, cURL: {$response['error']}"
+                'SetForceState fehlgeschlagen',
+                "{$modeText} ({$state}), HTTP={$response['httpcode']}, cURL={$response['error']}"
             );
             return false;
         }
 
-        $this->LogTemplate('ok', "SetForceState: {$modeText} ({$state}) gesetzt. (HTTP {$response['httpcode']})");
+        $this->LogTemplate('debug', 'SetForceState gesetzt', "{$modeText} ({$state}), HTTP={$response['httpcode']}");
         $varID = $this->GetIDForIdent('AccessStateV2');
         if ($varID) {
             SetValue($varID, $state);
@@ -2324,23 +2367,30 @@ class PVWallboxManager extends IPSModule
     // 16. LOGGING / ALLGEMEINE HILFSFUNKTIONEN
     // =========================================================================
 
-    private function LogTemplate($type, $short, $detail = '')
+    private function LogTemplate(string $type, string $short, string $detail = ''): void
     {
+        if ($type === 'debug' && !$this->ReadPropertyBoolean('DebugLogging')) {
+            return;
+        }
+
         $emojis = [
             'info'  => 'ℹ️',
             'warn'  => '⚠️',
             'error' => '❌',
             'ok'    => '✅',
-            'debug' => '🐞'
+            'debug' => '🐞',
+            'start' => '🚀',
+            'stop'  => '⏹️'
         ];
-        $icon = isset($emojis[$type]) ? $emojis[$type] : 'ℹ️';
-        $msg = $icon . ' ' . $short;
+
+        $icon = $emojis[$type] ?? 'ℹ️';
+
+        $msg = trim($icon . ' ' . $short);
+
         if ($detail !== '') {
             $msg .= ' | ' . $detail;
         }
-        if ($type === 'debug' && !$this->ReadPropertyBoolean('DebugLogging')) {
-            return;
-        }
+
         IPS_LogMessage('[PVWM]', $msg);
     }
 
