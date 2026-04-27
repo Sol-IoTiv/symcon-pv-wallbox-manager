@@ -686,7 +686,16 @@ class PVWallboxManager extends IPSModule
 
         $this->PruefeUndSetzePhasenmodus($pvUeberschuss);
 
-        $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
+        $minLadeWatt = $this->ReadPropertyInteger('MinLadeWatt');
+        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+
+        if ($aktFRC === 1 && $pvUeberschuss >= $minLadeWatt) {
+            $desiredFRC = 2;
+            $this->WriteAttributeInteger('LadeStartZaehler', 0);
+            $this->WriteAttributeInteger('LadeStopZaehler', 0);
+        } else {
+            $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
+        }
 
         $anzPhasenNeu = max(1, $this->GetValue('Phasenmodus'));
         $this->SteuerungLadefreigabe(
@@ -736,21 +745,36 @@ class PVWallboxManager extends IPSModule
 
         $minAmp   = $this->ReadPropertyInteger('MinAmpere');
         $maxAmp   = $this->ReadPropertyInteger('MaxAmpere');
-        $desiredA = $newPhasen
-            ? (int)ceil($anteilWatt / (230 * $newPhasen))
-            : 0;
+        $desiredA = (int)ceil($anteilWatt / (230 * $newPhasen));
         $desiredA = max($minAmp, min($maxAmp, $desiredA));
+
+        $minLadeWatt = $this->ReadPropertyInteger('MinLadeWatt');
+        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $isFastStart = ($aktFRC === 1 && $anteilWatt >= $minLadeWatt);
 
         $lastA    = $this->ReadAttributeInteger('LastChargingCurrent');
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-        $diff     = max(-$maxDelta, min($maxDelta, $desiredA - $lastA));
-        $ampere   = $lastA + $diff;
+
+        if ($isFastStart) {
+            // Schnellstart: Ramp-Up beim ersten Start überspringen
+            $ampere = $desiredA;
+        } else {
+            $diff   = max(-$maxDelta, min($maxDelta, $desiredA - $lastA));
+            $ampere = $lastA + $diff;
+        }
+
         $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
 
         $this->SetValueAndLogChange('PV_Ueberschuss',   round($smooth), 'PV-Überschuss',     'W', 'debug');
         $this->SetValueAndLogChange('PV_Ueberschuss_A', $ampere,         'PV-Überschuss (A)', 'A', 'debug');
 
-        $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
+        if ($isFastStart) {
+            $desiredFRC = 2;
+            $this->WriteAttributeInteger('LadeStartZaehler', 0);
+            $this->WriteAttributeInteger('LadeStopZaehler', 0);
+        } else {
+            $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
+        }
 
         $this->SteuerungLadefreigabe(
             $smooth,

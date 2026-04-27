@@ -4,6 +4,20 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
 ## [1.4.5b] - 2026-04-27
+### 🚀 Neu
+- Schnellstart für Lademodi `PVonly` und `PV2Car`
+  - Ladebeginn erfolgt sofort bei ausreichendem PV-Überschuss
+  - Start-Hysterese (`LadeStartZaehler`) wird beim ersten Start übersprungen
+  - Automatische initiale Phasenwahl beim Start
+
+### 🛠️ Änderungen
+- `PV2Car`:
+  - Ramp-Up wird beim ersten Start übersgangen (direkter Start mit berechnetem Strom)
+  - Schnellere Reaktion auf verfügbaren PV-Überschuss
+
+### 🔧 Intern
+- Reset von `LadeStartZaehler` und `LadeStopZaehler` beim Schnellstart
+
 ### 🧹 Refactoring
 - Wiederkehrende Ladeende-Logik in Helper-Funktionen ausgelagert
 - `PruefeLadeendeAutomatisch()` weiter verschlankt
