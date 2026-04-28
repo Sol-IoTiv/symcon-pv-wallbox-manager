@@ -21,6 +21,9 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
   - Regelzyklus wird nach erreichtem Ziel-SOC sofort beendet
   - Verhindert direkten Neustart durch PVonly-Schnellstart
   - Fallback-Ladeende bricht den Zyklus nun ebenfalls sauber ab
+- Statusanzeige nach Ladeende aktualisiert
+  - Anzeige wird jetzt auch nach erreichtem Ziel-SOC korrekt aktualisiert
+  - verhindert veraltete Statusinfos im WebFront
   
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`

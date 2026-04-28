@@ -580,6 +580,9 @@ class PVWallboxManager extends IPSModule
         $this->syncChargerVariables($vars, $phasen);
         
         if ($this->PruefeLadeendeAutomatisch()) {
+            $this->UpdateStatusAnzeige();
+            $this->HandleLadezeitLogging();
+            $this->SetTimerNachModusUndAuto();
             return;
         }
 
@@ -1104,7 +1107,7 @@ class PVWallboxManager extends IPSModule
 
                     return true;
                 }
-                
+
             } else {
                 $this->resetNoPowerCounter();
                 $this->LogTemplate(
