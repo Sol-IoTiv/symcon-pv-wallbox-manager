@@ -48,6 +48,7 @@ class PVWallboxManager extends IPSModule
             'LastSentChargingCurrent'        => 0,
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
+            'StartupTimestamp'               => 0,
         ]);
 
         $this->registerProperties([
@@ -159,6 +160,7 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeBoolean('LastCarConnected', false);
 
         if ($aktiv) {
+            $this->WriteAttributeInteger('StartupTimestamp', time());
             $this->UpdateStatus('startup');
         }
     }
@@ -549,6 +551,25 @@ class PVWallboxManager extends IPSModule
         $phasen = $this->determinePhases($data);
 
         $energyRaw = $this->gatherEnergyData();
+
+        if ($triggerMode === 'startup') {
+            $startupTs = $this->ReadAttributeInteger('StartupTimestamp');
+
+            if ($startupTs > 0 && (time() - $startupTs) < 5) {
+
+                if ($energyRaw['pv'] === 0 || $energyRaw['haus'] === 0) {
+                    $this->LogTemplate(
+                        'debug',
+                        'Startup-Run übersprungen',
+                        'Energiewerte noch nicht valide'
+                    );
+
+                    $this->SetTimerNachModusUndAuto();
+                    return;
+                }
+            }
+        }
+
         $this->updateHousePower($energyRaw);
 
         if (!$this->isCarConnected($data)) {

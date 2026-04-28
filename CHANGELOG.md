@@ -13,6 +13,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
   - Ampere werden nach Umschaltung (1↔3-phasig) neu berechnet
   - Verhindert kurzfristige Überladung (z. B. ~11 kW bei 3-phasigem Start)
   - Stabileres Regelverhalten direkt nach Phasenwechsel
+- Startup-Regelung nach Modulstart stabilisiert
+  - Erster Startup-Run wird übersprungen, wenn Energiewerte noch nicht valide sind
+  - Verhindert falsche Startberechnung direkt nach Modulupdate/-neustart
+  - Reduziert fehlerhafte Phasen-/Ampere-Entscheidungen beim ersten Ladestart
   
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`
