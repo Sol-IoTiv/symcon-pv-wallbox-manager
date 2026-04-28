@@ -12,9 +12,7 @@
           { "caption": "PV-Anteil", "value": 1 },
           { "caption": "Manuell laden", "value": 2 }
         ]},
-        { "type": "Label", "caption": "Legt fest, in welchen Lademodus das Modul nach dem Abstecken des Fahrzeugs wechselt."},
-        { "type": "Button", "caption": "Lock zurücksetzen", "icon": "Unlock", "onClick": "ResetLock"},
-        { "type": "Label", "caption": "Verwenden Sie diesen Button nur, wenn das Modul nicht mehr automatisch arbeitet und wiederholt die Warnung 'UpdateCharging() läuft bereits – neuer Aufruf wird abgebrochen.' anzeigt.\nDer Button setzt den internen Schutzmechanismus (Lock) zurück, sodass das Modul wieder ausgeführt werden kann."}
+        { "type": "Label", "caption": "Legt fest, in welchen Lademodus das Modul nach dem Abstecken des Fahrzeugs wechselt."}
       ]
     },
     {

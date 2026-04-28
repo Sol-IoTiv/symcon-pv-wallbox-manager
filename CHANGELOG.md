@@ -45,6 +45,11 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Ladeende-Logik zentralisiert und vereinfacht
 - Hysterese- und Fallback-Handling gebündelt
 
+### 🧹 Bereinigung
+- Ungenutzten Button „Lock zurücksetzen“ aus der Modulsteuerung entfernt
+  - `ResetLock` war im Modul nicht mehr angebunden
+  - Modulsteuerung im Formular vereinfacht
+
 ### 🎨 UI
 - Status-Info übersichtlicher strukturiert (Icons, Gruppierung, kompakter)
 
