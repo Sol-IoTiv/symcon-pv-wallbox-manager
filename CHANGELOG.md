@@ -4,6 +4,12 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
 ## [1.4.5b] - 2026-04-27
+### 🛠️ Fixes
+- Verzögerter Ladestart nach Modul-Update behoben
+  - Initialer `UpdateStatus('startup')` Run beim Modulstart hinzugefügt
+  - Interne Zähler und Statuswerte werden sauber zurückgesetzt
+  - Schnellere Reaktion beim ersten Anstecken nach Update
+  
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`
   - sofortiger Ladebeginn bei ausreichendem Überschuss

@@ -149,6 +149,18 @@ class PVWallboxManager extends IPSModule
         $this->SetMarketPriceTimerZurVollenStunde();
         $this->UpdateHausverbrauchEvent();
         $this->validateAmpereConfiguration();
+
+        $this->WriteAttributeInteger('LadeStartZaehler', 0);
+        $this->WriteAttributeInteger('LadeStopZaehler', 0);
+        $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+        $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+        $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
+        $this->WriteAttributeInteger('LastChargingCurrent', 0);
+        $this->WriteAttributeBoolean('LastCarConnected', false);
+
+        if ($aktiv) {
+            $this->UpdateStatus('startup');
+        }
     }
 
     public function GetConfigurationForm()
@@ -547,6 +559,7 @@ class PVWallboxManager extends IPSModule
         $this->syncChargerVariables($vars, $phasen);
         $this->PruefeLadeendeAutomatisch();
         $this->routeChargingMode($data, $phasen);
+        $this->SetTimerNachModusUndAuto();
         $this->UpdateStatusAnzeige();
         $this->HandleLadezeitLogging();
     }
