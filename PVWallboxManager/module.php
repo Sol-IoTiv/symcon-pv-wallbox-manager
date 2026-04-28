@@ -2413,32 +2413,40 @@ class PVWallboxManager extends IPSModule
     // 16. LOGGING / ALLGEMEINE HILFSFUNKTIONEN
     // =========================================================================
 
-    private function LogTemplate(string $type, string $short, string $detail = ''): void
-    {
-        if ($type === 'debug' && !$this->ReadPropertyBoolean('DebugLogging')) {
-            return;
-        }
+private function LogTemplate(string $type, string $short, string $detail = ''): void
+{
+    $debugActive = $this->ReadPropertyBoolean('DebugLogging');
 
-        $emojis = [
-            'info'  => 'ℹ️',
-            'warn'  => '⚠️',
-            'error' => '❌',
-            'ok'    => '✅',
-            'debug' => '🐞',
-            'start' => '🚀',
-            'stop'  => '⏹️'
-        ];
-
-        $icon = $emojis[$type] ?? 'ℹ️';
-
-        $msg = trim($icon . ' ' . $short);
-
-        if ($detail !== '') {
-            $msg .= ' | ' . $detail;
-        }
-
-        IPS_LogMessage('[PVWM]', $msg);
+    if ($type === 'debug' && !$debugActive) {
+        return;
     }
+
+    $emojis = [
+        'info'  => 'ℹ️',
+        'warn'  => '⚠️',
+        'error' => '❌',
+        'ok'    => '✅',
+        'debug' => '🐞',
+        'start' => '🚀',
+        'stop'  => '⏹️'
+    ];
+
+    $icon = $emojis[$type] ?? 'ℹ️';
+
+    $msg = trim($icon . ' ' . $short);
+
+    if ($detail !== '') {
+        $msg .= ' | ' . $detail;
+    }
+
+    // normales Log (wie bisher)
+    IPS_LogMessage('[PVWM]', $msg);
+
+    // NEU: Debug-Fenster
+    if ($debugActive) {
+        $this->SendDebug($type . ' | ' . $short, $detail !== '' ? $detail : '-', 0);
+    }
+}
 
 }
 
