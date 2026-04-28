@@ -17,6 +17,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
   - Erster Startup-Run wird übersprungen, wenn Energiewerte noch nicht valide sind
   - Verhindert falsche Startberechnung direkt nach Modulupdate/-neustart
   - Reduziert fehlerhafte Phasen-/Ampere-Entscheidungen beim ersten Ladestart
+- Ladeende-Logik stabilisiert
+  - Regelzyklus wird nach erreichtem Ziel-SOC sofort beendet
+  - Verhindert direkten Neustart durch PVonly-Schnellstart
+  - Fallback-Ladeende bricht den Zyklus nun ebenfalls sauber ab
   
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`

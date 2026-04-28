@@ -578,7 +578,11 @@ class PVWallboxManager extends IPSModule
 
         $vars = $this->extractChargerVariables($data);
         $this->syncChargerVariables($vars, $phasen);
-        $this->PruefeLadeendeAutomatisch();
+        
+        if ($this->PruefeLadeendeAutomatisch()) {
+            return;
+        }
+
         $this->routeChargingMode($data, $phasen);
         $this->SetTimerNachModusUndAuto();
         $this->UpdateStatusAnzeige();
@@ -1057,7 +1061,8 @@ class PVWallboxManager extends IPSModule
                 $this->applySafeIdleState();
                 $this->ResetModiNachLadeende();
                 $this->resetNoPowerCounter();
-                return;
+
+                return true;
             }
 
             $this->LogTemplate(
@@ -1069,7 +1074,7 @@ class PVWallboxManager extends IPSModule
 
         if ($loadActive && $currentFRC === 2) {
             if ($this->isChargeEndFallbackBlocked()) {
-                return;
+                return false;
             }
 
             $leistung  = intval(round($this->GetValue('Leistung')));
@@ -1092,10 +1097,14 @@ class PVWallboxManager extends IPSModule
                         'Ladeende erkannt',
                         'Ladeleistung < ' . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates"
                     );
+
                     $this->applySafeIdleState();
                     $this->ResetModiNachLadeende();
                     $this->resetNoPowerCounter();
+
+                    return true;
                 }
+                
             } else {
                 $this->resetNoPowerCounter();
                 $this->LogTemplate(
@@ -1104,10 +1113,13 @@ class PVWallboxManager extends IPSModule
                     'Ladeleistung ≥ ' . self::NO_POWER_THRESHOLD_W . ' W'
                 );
             }
+
         } else {
             $this->resetNoPowerCounter();
             $this->LogTemplate('debug', 'Fallback übersprungen', 'kein aktiver Lademodus oder keine Freigabe');
         }
+
+        return false;
     }
 
     private function ResetModiNachLadeende()
