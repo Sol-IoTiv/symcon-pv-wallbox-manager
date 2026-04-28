@@ -9,6 +9,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
   - Initialer `UpdateStatus('startup')` Run beim Modulstart hinzugefügt
   - Interne Zähler und Statuswerte werden sauber zurückgesetzt
   - Schnellere Reaktion beim ersten Anstecken nach Update
+- Falsche Ladeleistung nach Phasenwechsel behoben
+  - Ampere werden nach Umschaltung (1↔3-phasig) neu berechnet
+  - Verhindert kurzfristige Überladung (z. B. ~11 kW bei 3-phasigem Start)
+  - Stabileres Regelverhalten direkt nach Phasenwechsel
   
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`

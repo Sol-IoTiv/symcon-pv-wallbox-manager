@@ -719,6 +719,18 @@ class PVWallboxManager extends IPSModule
         }
 
         $anzPhasenNeu = max(1, $this->GetValue('Phasenmodus'));
+
+        if ($anzPhasenNeu !== $anzPhasenAlt) {
+            $surplus = $this->calculateSurplus($energy, $anzPhasenNeu, true);
+            $ampere  = $surplus['ueberschuss_a'];
+
+            $this->LogTemplate(
+                'debug',
+                'Ampere nach Phasenwechsel neu berechnet',
+                "Phasen={$anzPhasenNeu}, Strom={$ampere} A"
+            );
+        }
+
         $this->SteuerungLadefreigabe(
             $pvUeberschuss,
             'pvonly',
