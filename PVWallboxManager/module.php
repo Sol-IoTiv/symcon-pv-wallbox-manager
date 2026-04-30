@@ -1422,9 +1422,18 @@ class PVWallboxManager extends IPSModule
 
     private function calculateSurplus(array $data, int $anzPhasen, bool $log = true): array
     {
-        $batLoad = max(0, $data['batt']);
+// Batterie berücksichtigen (inkl. Invert-Option)
+$battRaw = $data['batt'];
 
-        $cons = $data['hausFiltered'] + $batLoad;
+// ggf. invertieren (je nach Datenquelle)
+if ($this->ReadPropertyBoolean('InvertBatterieladung')) {
+    $battRaw *= -1;
+}
+
+// nur Ladevorgang berücksichtigen
+$batLoad = max(0, $battRaw);
+
+$cons = $data['hausFiltered'] + $batLoad;
 
         $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
         $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
