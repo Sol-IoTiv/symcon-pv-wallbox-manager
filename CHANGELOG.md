@@ -24,6 +24,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Statusanzeige nach Ladeende aktualisiert
   - Anzeige wird jetzt auch nach erreichtem Ziel-SOC korrekt aktualisiert
   - verhindert veraltete Statusinfos im WebFront
+- Batterieleistung in PV-only korrekt berücksichtigt
+  - Vorzeichenprobleme bei der Batterieladung behoben
+  - Speicherladung wird nun zuverlässig vom PV-Überschuss abgezogen
+  - Laden erfolgt nur noch bei echtem PV-Überschuss
   
 ### 🚀 Neu
 - Schnellstart für `PVonly` und `PV2Car`
