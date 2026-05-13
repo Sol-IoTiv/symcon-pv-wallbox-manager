@@ -21,6 +21,12 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Neue Hilfsfunktion `applyMaxGridLoadLimit()` integriert
 - Ladefreigabe-Logik um Netzlimit-Prüfung erweitert
 
+### 🛠️ Fixes
+- Rückschaltung von 3-phasig auf 1-phasig entschärft
+  - kurze PV-Einbrüche führen nicht mehr sofort zur Phasenumschaltung
+  - 3-phasiges Laden wird bei wechselhaftem Wetter länger gehalten
+  - reduziert Cooldown-Zeiten und unnötige Umschaltungen
+
 ## [1.4.5b] - 2026-04-27
 ### 🛠️ Fixes
 - Verzögerter Ladestart nach Modul-Update behoben
