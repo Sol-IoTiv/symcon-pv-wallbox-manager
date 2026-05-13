@@ -178,14 +178,40 @@
       "type": "ExpansionPanel",
       "caption": "🧠 Intelligente Logik",
       "items": [
-        { "type": "Label", "caption": "    " },
-        { "type": "Label", "label": "⚖️ PV-Leistung zwischen Haus und Auto aufteilen (PV2Car-Regelung)." },
-        { "type": "Label", "label": "☀️ **Die Aktivierung und der Anteil fürs Fahrzeug werden direkt im WebFront gesteuert!**" },
-        { "type": "RowLayout", "items": [
-          { "type": "SelectVariable", "name": "HausakkuSOCID", "caption": "Hausakku SoC (%)" },
-          { "type": "Label", "caption": "    " },
-          { "type": "NumberSpinner", "name": "HausakkuSOCVollSchwelle", "caption": "Voll-Schwelle Hausbatterie (%)", "suffix": "%", "minimum": 50, "maximum": 100 }
-        ]}
+        {
+          "type": "Label",
+          "label": "🔋 Optional: Hausakku-SoC für intelligente Ladeentscheidungen verwenden."
+        },
+        {
+          "type": "Label",
+          "label": "Im Lademodus „Nur PV“ startet die Fahrzeugladung erst, wenn der konfigurierte Hausakku-SoC erreicht wurde."
+        },
+        {
+          "type": "Label",
+          "label": "☀️ Im Lademodus „PV-Anteil“ werden Ladefreigabe und PV-Anteil direkt im WebFront gesteuert."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "SelectVariable",
+              "name": "HausakkuSOCID",
+              "caption": "Hausakku SoC (%)"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "HausakkuSOCVollSchwelle",
+              "caption": "Hausakku gilt als voll ab",
+              "suffix": "%",
+              "minimum": 50,
+              "maximum": 100
+            }
+          ]
+        }
       ]
     },
     {
