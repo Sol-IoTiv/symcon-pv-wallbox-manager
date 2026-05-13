@@ -1445,6 +1445,7 @@ class PVWallboxManager extends IPSModule
         }
 
         $limitedAmpere = $this->clampAmpere($limitedAmpere);
+        $limitedAmpere = min($ampere, $this->clampAmpere($limitedAmpere));
 
         if ($limitedAmpere < $ampere) {
             $this->LogTemplate(
