@@ -127,15 +127,6 @@
           "type": "RowLayout",
           "items": [
             {
-              "type": "CheckBox",
-              "name": "UseMaxGridLoad",
-              "caption": "Maximale Netzbelastung begrenzen"
-            },
-            {
-              "type": "Label",
-              "caption": "    "
-            },
-            {
               "type": "NumberSpinner",
               "name": "MaxGridLoadWatt",
               "caption": "Maximale Netzbelastung",

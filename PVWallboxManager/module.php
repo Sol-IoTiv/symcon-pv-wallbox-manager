@@ -86,7 +86,6 @@ class PVWallboxManager extends IPSModule
 
             'NetzleistungID'         => ['type'=>'integer', 'default'=>0],
             'NetzleistungEinheit'    => ['type'=>'string',  'default'=>'W'],
-            'UseMaxGridLoad'         => ['type'=>'boolean', 'default'=>false],
             'MaxGridLoadWatt'        => ['type'=>'integer', 'default'=>0],
 
             'UseMarketPrices'       => ['type'=>'boolean', 'default'=>false],
@@ -1346,16 +1345,25 @@ class PVWallboxManager extends IPSModule
         if ($aktFRC !== $sollFRC) {
             $this->LogTemplate('debug', 'SetForceState', "FRC={$sollFRC}, Modus={$modus}");
 
-                if ($this->SetForceState($sollFRC)) {
-                    if ($sollFRC === 1 || $sollFRC === 2) {
-                        $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
-                    }
+            if ($this->SetForceState($sollFRC)) {
+                if ($sollFRC === 1 || $sollFRC === 2) {
+                    $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
                 }
+            }
 
             IPS_Sleep(1000);
         }
 
         if ($sollFRC === 2 && $ampere > 0) {
+            $ampere = $this->applyMaxGridLoadLimit((int)$ampere, (int)$anzPhasen);
+
+            if ($ampere <= 0) {
+                $this->LogTemplate('warn', 'Netzbegrenzung aktiv', 'Kein freier Netzspielraum → Laden gesperrt');
+                $this->SetForceState(1);
+                $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
+                return;
+            }
+
             $lastSentAmpere = $this->ReadAttributeInteger('LastSentChargingCurrent');
 
             if ($lastSentAmpere !== $ampere) {
@@ -1371,6 +1379,73 @@ class PVWallboxManager extends IPSModule
     // =========================================================================
     // 9. ENERGIEDATEN / BERECHNUNG / FILTER
     // =========================================================================
+
+private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
+{
+    $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
+
+    // 0 W = deaktiviert
+    if ($maxGridLoad <= 0) {
+        return $ampere;
+    }
+
+    $netzID = (int)$this->ReadPropertyInteger('NetzleistungID');
+    if ($netzID <= 0 || !@IPS_VariableExists($netzID)) {
+        return $ampere;
+    }
+
+    $gridPower = (float)GetValue($netzID);
+
+    if ($this->ReadPropertyString('NetzleistungEinheit') === 'kW') {
+        $gridPower *= 1000;
+    }
+
+    // Nur Netzbezug begrenzen. Einspeisung ist negativ.
+    if ($gridPower <= 0) {
+        return $ampere;
+    }
+
+    $anzPhasen = max(1, min(3, $anzPhasen));
+    $currentWallboxPower = max(0, (float)$this->GetValue('Leistung'));
+
+    // Netzbezug enthält die aktuelle Wallboxleistung bereits.
+    // Daher wird der freie Spielraum aus aktueller Ladeleistung + Restspielraum berechnet.
+    $allowedWallboxPower = $currentWallboxPower + ($maxGridLoad - $gridPower);
+
+    if ($allowedWallboxPower <= 0) {
+        $this->LogTemplate(
+            'warn',
+            'Netzbegrenzung aktiv',
+            sprintf(
+                'Netzbezug=%.0f W > Limit=%d W → Laden sperren',
+                $gridPower,
+                $maxGridLoad
+            )
+        );
+
+        return 0;
+    }
+
+    $limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
+    $limitedAmpere = $this->clampAmpere($limitedAmpere);
+
+    if ($limitedAmpere < $ampere) {
+        $this->LogTemplate(
+            'warn',
+            'Netzbegrenzung aktiv',
+            sprintf(
+                '%d A → %d A | Netzbezug=%.0f W, Limit=%d W, Phasen=%d',
+                $ampere,
+                $limitedAmpere,
+                $gridPower,
+                $maxGridLoad,
+                $anzPhasen
+            )
+        );
+    }
+
+    return $limitedAmpere;
+}
 
     private function gatherEnergyData(): array
     {
