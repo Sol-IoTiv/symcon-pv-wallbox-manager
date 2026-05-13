@@ -1380,72 +1380,89 @@ class PVWallboxManager extends IPSModule
     // 9. ENERGIEDATEN / BERECHNUNG / FILTER
     // =========================================================================
 
-private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
-{
-    $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
+    private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
+    {
+        $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
 
-    // 0 W = deaktiviert
-    if ($maxGridLoad <= 0) {
-        return $ampere;
+        // 0 W = deaktiviert
+        if ($maxGridLoad <= 0) {
+            return $ampere;
+        }
+
+        $netzID = (int)$this->ReadPropertyInteger('NetzleistungID');
+        if ($netzID <= 0 || !@IPS_VariableExists($netzID)) {
+            return $ampere;
+        }
+
+        $gridPower = (float)GetValue($netzID);
+
+        if ($this->ReadPropertyString('NetzleistungEinheit') === 'kW') {
+            $gridPower *= 1000;
+        }
+
+        // Nur Netzbezug begrenzen. Einspeisung ist negativ.
+        if ($gridPower <= 0) {
+            return $ampere;
+        }
+
+        $anzPhasen = max(1, min(3, $anzPhasen));
+        $currentWallboxPower = max(0, (float)$this->GetValue('Leistung'));
+
+        // Netzbezug enthält die aktuelle Wallboxleistung bereits.
+        // Daher wird der freie Spielraum aus aktueller Ladeleistung + Restspielraum berechnet.
+        $allowedWallboxPower = $currentWallboxPower + ($maxGridLoad - $gridPower);
+
+        if ($allowedWallboxPower <= 0) {
+            $this->LogTemplate(
+                'warn',
+                'Netzbegrenzung aktiv',
+                sprintf(
+                    'Netzbezug=%.0f W > Limit=%d W → Laden sperren',
+                    $gridPower,
+                    $maxGridLoad
+                )
+            );
+
+            return 0;
+        }
+
+        $limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
+        $minAmpere = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
+
+        if ($limitedAmpere < $minAmpere) {
+            $this->LogTemplate(
+                'warn',
+                'Netzbegrenzung aktiv',
+                sprintf(
+                    'Netzbezug=%.0f W, Limit=%d W, freier Spielraum=%.0f W → unter Mindeststrom, Laden sperren',
+                    $gridPower,
+                    $maxGridLoad,
+                    $allowedWallboxPower
+                )
+            );
+
+            return 0;
+        }
+
+        $limitedAmpere = $this->clampAmpere($limitedAmpere);
+
+        if ($limitedAmpere < $ampere) {
+            $this->LogTemplate(
+                'warn',
+                'Netzbegrenzung aktiv',
+                sprintf(
+                    '%d A → %d A | Netzbezug=%.0f W, Limit=%d W, Phasen=%d',
+                    $ampere,
+                    $limitedAmpere,
+                    $gridPower,
+                    $maxGridLoad,
+                    $anzPhasen
+                )
+            );
+        }
+
+        return $limitedAmpere;
     }
-
-    $netzID = (int)$this->ReadPropertyInteger('NetzleistungID');
-    if ($netzID <= 0 || !@IPS_VariableExists($netzID)) {
-        return $ampere;
-    }
-
-    $gridPower = (float)GetValue($netzID);
-
-    if ($this->ReadPropertyString('NetzleistungEinheit') === 'kW') {
-        $gridPower *= 1000;
-    }
-
-    // Nur Netzbezug begrenzen. Einspeisung ist negativ.
-    if ($gridPower <= 0) {
-        return $ampere;
-    }
-
-    $anzPhasen = max(1, min(3, $anzPhasen));
-    $currentWallboxPower = max(0, (float)$this->GetValue('Leistung'));
-
-    // Netzbezug enthält die aktuelle Wallboxleistung bereits.
-    // Daher wird der freie Spielraum aus aktueller Ladeleistung + Restspielraum berechnet.
-    $allowedWallboxPower = $currentWallboxPower + ($maxGridLoad - $gridPower);
-
-    if ($allowedWallboxPower <= 0) {
-        $this->LogTemplate(
-            'warn',
-            'Netzbegrenzung aktiv',
-            sprintf(
-                'Netzbezug=%.0f W > Limit=%d W → Laden sperren',
-                $gridPower,
-                $maxGridLoad
-            )
-        );
-
-        return 0;
-    }
-
-    $limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
-    $limitedAmpere = $this->clampAmpere($limitedAmpere);
-
-    if ($limitedAmpere < $ampere) {
-        $this->LogTemplate(
-            'warn',
-            'Netzbegrenzung aktiv',
-            sprintf(
-                '%d A → %d A | Netzbezug=%.0f W, Limit=%d W, Phasen=%d',
-                $ampere,
-                $limitedAmpere,
-                $gridPower,
-                $maxGridLoad,
-                $anzPhasen
-            )
-        );
-    }
-
-    return $limitedAmpere;
-}
 
     private function gatherEnergyData(): array
     {
@@ -1545,43 +1562,40 @@ private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
 
     private function calculateSurplus(array $data, int $anzPhasen, bool $log = true): array
     {
-        // Batterie berücksichtigen (inkl. Invert-Option)
         $battRaw = $data['batt'];
-
-        // ggf. invertieren (je nach Datenquelle)
-        if ($this->ReadPropertyBoolean('InvertBatterieladung')) {
-            $battRaw *= -1;
-        }
-
-        // nur Ladevorgang berücksichtigen
         $batLoad = max(0, $battRaw);
 
         $cons = $data['hausFiltered'] + $batLoad;
 
-        $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
-        $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
-        $soc    = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
+        $socID = $this->ReadPropertyInteger('HausakkuSOCID');
+        $voll  = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
+        $soc   = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
+
         if ($soc !== null && $soc >= $voll) {
             $cons = $data['hausFiltered'];
         }
 
         $rawSurplus = max(0, $data['pv'] - $cons);
+
         if (abs($rawSurplus) < 1) {
             $rawSurplus = 0;
         }
 
         $alpha      = $this->ReadPropertyFloat('SmoothingAlpha');
         $lastSmooth = $this->ReadAttributeFloat('SmoothedSurplus');
+
         if ($lastSmooth <= 0) {
             $smoothed = $rawSurplus;
         } else {
             $smoothed = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
         }
+
         $this->WriteAttributeFloat('SmoothedSurplus', $smoothed);
         $useSurplus = $smoothed;
 
         $cutoff     = 250;
         $desiredAmp = 0;
+
         if ($useSurplus >= $cutoff) {
             $desiredAmp = (int)ceil($useSurplus / (230 * $anzPhasen));
             $desiredAmp = max(
@@ -1596,27 +1610,29 @@ private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
         $delta    = max(-$maxDelta, min($maxDelta, $desiredAmp - $lastAmp));
         $amp      = $lastAmp + $delta;
+
         $this->WriteAttributeInteger('LastChargingCurrent', $amp);
 
         if ($log) {
-        $this->LogTemplate(
-            'debug',
-            'Berechnung geglättet',
-            sprintf(
-                'PV=%d W, Haus=%d W, Batt=%d W, Überschuss≈%.0f W, Strom=%d A, Δ%+d A, Phasen=%d',
-                $data['pv'],
-                $data['hausFiltered'],
-                $batLoad,
-                $useSurplus,
-                $amp,
-                $delta,
-                $anzPhasen
-            )
-        );
-            $this->SetValueAndLogChange('PV_Ueberschuss',   round($useSurplus),   'PV-Überschuss',     'W', 'debug');
-            $this->SetValueAndLogChange('PV_Ueberschuss_A', $amp,                 'PV-Überschuss (A)', 'A', 'debug');
+            $this->LogTemplate(
+                'debug',
+                'Berechnung geglättet',
+                sprintf(
+                    'PV=%d W, Haus=%d W, Batt=%d W, Überschuss≈%.0f W, Strom=%d A, Δ%+d A, Phasen=%d',
+                    $data['pv'],
+                    $data['hausFiltered'],
+                    $batLoad,
+                    $useSurplus,
+                    $amp,
+                    $delta,
+                    $anzPhasen
+                )
+            );
+
+            $this->SetValueAndLogChange('PV_Ueberschuss', round($useSurplus), 'PV-Überschuss', 'W', 'debug');
+            $this->SetValueAndLogChange('PV_Ueberschuss_A', $amp, 'PV-Überschuss (A)', 'A', 'debug');
         } else {
-            $this->SetValue('PV_Ueberschuss',   round($useSurplus));
+            $this->SetValue('PV_Ueberschuss', round($useSurplus));
             $this->SetValue('PV_Ueberschuss_A', $amp);
         }
 
