@@ -3,6 +3,25 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.6b] - 2026-05-13
+
+### 🚀 Neu
+- Begrenzung der maximalen Netzbelastung (Peak-Shaving / Lastbegrenzung)
+  - Eigene Smartmeter-/Netzleistungsvariable für den Hausanschluss integriert
+  - Automatische Reduktion des Ladestroms bei überschrittenem Netzbezug
+  - Globale Begrenzung unabhängig vom Lademodus
+  - Erweiterte Debug-Logs bei aktiver Netzbegrenzung
+
+### 🧠 Konfiguration
+- Neuer Bereich „Netzanschluss / Netzbezug“
+  - Unterstützung für Smartmeter-/Hausanschluss-Leistungswerte
+  - Unterstützung für W/kW
+  - `0 W` = Funktion deaktiviert
+
+### 🔧 Intern
+- Neue Hilfsfunktion `applyMaxGridLoadLimit()` integriert
+- Ladefreigabe-Logik um Netzlimit-Prüfung erweitert
+
 ## [1.4.5b] - 2026-04-27
 ### 🛠️ Fixes
 - Verzögerter Ladestart nach Modul-Update behoben
