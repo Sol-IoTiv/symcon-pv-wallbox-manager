@@ -88,6 +88,75 @@
     },
     {
       "type": "ExpansionPanel",
+      "caption": "🌐 Netzanschluss / Netzbezug",
+      "items": [
+        {
+          "type": "Label",
+          "label": "⚠️ Optional: Begrenzung des maximalen Netzbezugs am Hausanschluss (Peak-Shaving / Lastbegrenzung)."
+        },
+        {
+          "type": "Label",
+          "label": "Die Netzleistung muss vom Smartmeter oder Hausanschluss-Zähler kommen. Positiv = Netzbezug, negativ = Einspeisung."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "SelectVariable",
+              "name": "NetzleistungID",
+              "caption": "Netzleistung Hausanschluss",
+              "validVariableTypes": [2]
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "Select",
+              "name": "NetzleistungEinheit",
+              "caption": "Einheit",
+              "options": [
+                { "caption": "Watt (W)", "value": "W" },
+                { "caption": "Kilowatt (kW)", "value": "kW" }
+              ],
+              "default": "W"
+            }
+          ]
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "CheckBox",
+              "name": "UseMaxGridLoad",
+              "caption": "Maximale Netzbelastung begrenzen"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "MaxGridLoadWatt",
+              "caption": "Maximale Netzbelastung",
+              "suffix": "W",
+              "minimum": 0,
+              "default": 0
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "label": "0 = deaktiviert. Die Wallbox wird automatisch zurückgeregelt, sobald der Netzbezug am Hausanschluss den eingestellten Wert überschreiten würde."
+        },
+        {
+          "type": "Label",
+          "label": "Beispiel: Bei 8000W wird die Wallbox zurückgeregelt, sobald der gesamte Netzbezug am Hausanschluss über 8000W steigen würde."
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
       "caption": "⚡ Phasenumschaltung",
       "items": [
         { "type": "Label", "label": "⬇️ Schwelle in Watt zum Umschalten auf 1-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 1-phasig." },
