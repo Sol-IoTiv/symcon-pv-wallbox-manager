@@ -718,6 +718,23 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
+        if (!$this->isHausakkuVoll()) {
+            $this->LogTemplate(
+                'stop',
+                'PVonly blockiert',
+                'Hausspeicher noch nicht voll'
+            );
+
+            $this->WriteAttributeInteger('LadeStartZaehler', 0);
+            $this->WriteAttributeInteger('LadeStopZaehler', 0);
+
+            $this->SetForceState(1);
+            $this->SetChargingCurrent(6);
+            $this->SetValue('PV_Ueberschuss_A', 0);
+
+            return;
+        }
+
         $energy = $this->gatherEnergyData();
 
         $energy = $this->applyFilters($energy);
@@ -1420,20 +1437,44 @@ class PVWallboxManager extends IPSModule
         return $data;
     }
 
+    private function isHausakkuVoll(): bool
+    {
+        $socID = $this->ReadPropertyInteger('HausakkuSOCID');
+        $vollSchwelle = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
+
+        if ($socID <= 0 || !@IPS_VariableExists($socID)) {
+            return true;
+        }
+
+        $soc = (float) GetValue($socID);
+
+        if ($soc >= $vollSchwelle) {
+            return true;
+        }
+
+        $this->LogTemplate(
+            'debug',
+            'Hausspeicher SOC',
+            round($soc, 1) . '% < ' . $vollSchwelle . '%'
+        );
+
+        return false;
+    }
+
     private function calculateSurplus(array $data, int $anzPhasen, bool $log = true): array
     {
-// Batterie berücksichtigen (inkl. Invert-Option)
-$battRaw = $data['batt'];
+        // Batterie berücksichtigen (inkl. Invert-Option)
+        $battRaw = $data['batt'];
 
-// ggf. invertieren (je nach Datenquelle)
-if ($this->ReadPropertyBoolean('InvertBatterieladung')) {
-    $battRaw *= -1;
-}
+        // ggf. invertieren (je nach Datenquelle)
+        if ($this->ReadPropertyBoolean('InvertBatterieladung')) {
+            $battRaw *= -1;
+        }
 
-// nur Ladevorgang berücksichtigen
-$batLoad = max(0, $battRaw);
+        // nur Ladevorgang berücksichtigen
+        $batLoad = max(0, $battRaw);
 
-$cons = $data['hausFiltered'] + $batLoad;
+        $cons = $data['hausFiltered'] + $batLoad;
 
         $socID  = $this->ReadPropertyInteger('HausakkuSOCID');
         $voll   = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');

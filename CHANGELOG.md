@@ -37,6 +37,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ### 🛠️ Änderungen
 - `PV2Car`: direkter Start ohne Ramp-Up → schnellere Reaktion auf PV-Überschuss
+- `PVonly` startet jetzt erst, wenn der konfigurierte Hausakku-SoC erreicht wurde
+  - Sperre greift direkt vor der PV-Überschussberechnung und verhindert ungewollte Ladestarts
 
 ### ⚙️ Optimierung
 - API-Schreibzugriffe reduziert
