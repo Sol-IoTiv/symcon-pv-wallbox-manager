@@ -74,6 +74,7 @@ class PVWallboxManager extends IPSModule
             'StartLadeHysterese'    => ['type'=>'integer', 'default'=>3],
             'StopLadeHysterese'     => ['type'=>'integer', 'default'=>3],
             'InitialCheckInterval'  => ['type'=>'integer', 'default'=>10],
+
             'PVErzeugungID'         => ['type'=>'integer', 'default'=>0],
             'PVErzeugungEinheit'    => ['type'=>'string',  'default'=>'W'],
             'HausverbrauchID'       => ['type'=>'integer', 'default'=>0],
@@ -82,6 +83,12 @@ class PVWallboxManager extends IPSModule
             'BatterieladungID'      => ['type'=>'integer', 'default'=>0],
             'BatterieladungEinheit' => ['type'=>'string',  'default'=>'W'],
             'InvertBatterieladung'  => ['type'=>'boolean', 'default'=>false],
+
+            'NetzleistungID'         => ['type'=>'integer', 'default'=>0],
+            'NetzleistungEinheit'    => ['type'=>'string',  'default'=>'W'],
+            'UseMaxGridLoad'         => ['type'=>'boolean', 'default'=>false],
+            'MaxGridLoadWatt'        => ['type'=>'integer', 'default'=>0],
+
             'UseMarketPrices'       => ['type'=>'boolean', 'default'=>false],
             'MarketPriceProvider'   => ['type'=>'string',  'default'=>'awattar_at'],
             'MarketPriceAPI'        => ['type'=>'string',  'default'=>''],
