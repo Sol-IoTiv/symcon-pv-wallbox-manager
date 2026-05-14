@@ -19,6 +19,7 @@ class PVWallboxManager extends IPSModule
     private const NO_POWER_COUNTER_LIMIT = 3;
     private const PHASE_SWITCH_COOLDOWN_S = 30;
     private const CURRENT_CHANGE_COOLDOWN_S = 20;
+    private const MANUAL_START_GRACE_S = 180;
 
     // =========================================================================
     // 2. CREATE / APPLYCHANGES / FORM
@@ -47,6 +48,7 @@ class PVWallboxManager extends IPSModule
             'LastChargingCurrent'            => 0,
             'LastChargingCurrentChange'      => 0,
             'LastSentChargingCurrent'        => 0,
+            'LastManualStartTimestamp'       => 0,
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
             'StartupTimestamp'               => 0,
@@ -884,55 +886,67 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        $anzPhasenGewuenscht = $this->GetValue('ManuellPhasen') == 2 ? 2 : 1;
-        $ampereGewuenscht    = intval($this->GetValue('ManuellAmpere'));
-        $minAmp = $this->ReadPropertyInteger('MinAmpere');
-        $maxAmp = $this->ReadPropertyInteger('MaxAmpere');
-        $ampereGewuenscht = max($minAmp, min($maxAmp, $ampereGewuenscht));
+        $phaseMode = ($this->GetValue('ManuellPhasen') == self::PHASE_MODE_3P)
+            ? self::PHASE_MODE_3P
+            : self::PHASE_MODE_1P;
 
-        $aktPhasen = $this->GetValue('Phasenmodus');
-        if ($aktPhasen !== $anzPhasenGewuenscht) {
-            $this->SetPhaseMode($anzPhasenGewuenscht);
-            $this->LogTemplate('debug', 'Manuell Phasenmodus gewechselt', "{$aktPhasen} → {$anzPhasenGewuenscht}");
+        $phaseCount = ($phaseMode === self::PHASE_MODE_3P) ? 3 : 1;
+
+        $ampere = (int)$this->GetValue('ManuellAmpere');
+        $ampere = $this->clampAmpere($ampere);
+        $ampere = $this->applyMaxGridLoadLimit($ampere, $phaseCount);
+
+        if ($ampere <= 0) {
+            $this->LogTemplate('warn', 'Manuelles Laden blockiert', 'Netzbegrenzung erlaubt keinen Ladestrom');
+            $this->SetForceState(1);
+            return;
         }
 
-        $anzPhasenIst = max(1, $this->GetValue('Phasenmodus'));
+        $changed = false;
 
-        $energy   = $this->gatherEnergyData();
-        $energy   = $this->applyFilters($energy);
-        $surplus  = $this->calculateSurplus($energy, $anzPhasenIst, false);
+        $currentPsm = (int)$this->GetValue('PhasenmodusEinstellung');
+        if ($currentPsm !== $phaseMode) {
+            if ($this->SetPhaseMode($phaseMode)) {
+                $this->SetValueAndLogChange('PhasenmodusEinstellung', $phaseMode, 'Wallbox-Phasen Soll', '', 'debug');
+                $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
+                $this->resetNoPowerCounter();
+                $changed = true;
+                IPS_Sleep(500);
+            }
+        }
 
-        $ueberschuss_w = $surplus['ueberschuss_w'];
-        $ueberschuss_a = $surplus['ueberschuss_a'];
+        $lastSentAmpere = $this->ReadAttributeInteger('LastSentChargingCurrent');
+        if ($lastSentAmpere !== $ampere) {
+            if ($this->SetChargingCurrent($ampere)) {
+                $this->WriteAttributeInteger('LastSentChargingCurrent', $ampere);
+                $changed = true;
+                IPS_Sleep(300);
+            }
+        }
 
-        $this->SetValue('PV_Ueberschuss',   $ueberschuss_w);
-        $this->SetValue('PV_Ueberschuss_A', $ueberschuss_a);
+        if ((int)$this->GetValue('AccessStateV2') !== 2) {
+            if ($this->SetForceState(2)) {
+                $changed = true;
+            }
+        }
 
-        $this->SetValueAndLogChange('Phasenmodus', $anzPhasenIst, 'Genutzte Phasen (Fahrzeug)', '', 'debug');
-
-        $this->SteuerungLadefreigabe(0, 'manuell', $ampereGewuenscht, $anzPhasenIst);
+        if ($changed) {
+            $this->WriteAttributeInteger('LastManualStartTimestamp', time());
+            $this->resetNoPowerCounter();
+        }
 
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
-        $this->LogTemplate('debug', 'Manuell aktiv', 'Hysterese und automatische Phasenumschaltung deaktiviert');
 
         $this->LogTemplate(
             'ok',
             'Manuelles Vollladen aktiv',
             sprintf(
-                '%d-phasig / %d A | PV=%d W, Haus=%d W, Wallbox=%d W, Batterie=%d W, Überschuss=%d W / %d A',
-                $anzPhasenIst,
-                $ampereGewuenscht,
-                $energy['pv'],
-                $energy['hausFiltered'],
-                $energy['wallbox'],
-                $energy['batt'],
-                $ueberschuss_w,
-                $ueberschuss_a
+                '%d-phasig / %d A | FRC=2',
+                $phaseCount,
+                $ampere
             )
         );
-
-        $this->SetTimerNachModusUndAuto();
     }
 
     // =========================================================================
