@@ -1112,6 +1112,33 @@ class PVWallboxManager extends IPSModule
                 "{$socAktuell}% < {$socZiel}%"
             );
         }
+if ($modeKey === 'manuell') {
+    $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
+
+    if ($lastManualStart > 0) {
+        $sinceManualStart = time() - $lastManualStart;
+
+        if ($sinceManualStart < self::MANUAL_START_GRACE_S) {
+            $this->resetNoPowerCounter();
+            $this->LogTemplate(
+                'debug',
+                'Fallback gesperrt',
+                "{$sinceManualStart}s seit manuellem Start < " . self::MANUAL_START_GRACE_S . 's'
+            );
+
+            return false;
+        }
+    }
+
+    $this->resetNoPowerCounter();
+    $this->LogTemplate(
+        'debug',
+        'Fallback übersprungen',
+        'manueller Modus aktiv'
+    );
+
+    return false;
+}
 
         if ($loadActive && $currentFRC === 2) {
             if ($this->isChargeEndFallbackBlocked()) {
