@@ -27,6 +27,11 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
   - 3-phasiges Laden wird bei wechselhaftem Wetter länger gehalten
   - reduziert Cooldown-Zeiten und unnötige Umschaltungen
 
+- Manuellen Lademodus stabilisiert
+  - manueller Modus vom automatischen Ladeende-Fallback entkoppelt
+  - verhindert vorzeitiges Ladeende bei verzögerter Leistungsrückmeldung
+  - robusteres Verhalten nach Ladefreigabe und Phasenwechsel
+
 ## [1.4.5b] - 2026-04-27
 ### 🛠️ Fixes
 - Verzögerter Ladestart nach Modul-Update behoben
