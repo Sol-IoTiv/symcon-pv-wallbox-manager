@@ -896,6 +896,10 @@ class PVWallboxManager extends IPSModule
         $ampere = $this->clampAmpere($ampere);
         $ampere = $this->applyMaxGridLoadLimit($ampere, $phaseCount);
 
+        if ($phaseCount === 1) {
+            $phaseMode = self::PHASE_MODE_1P;
+        }
+
         if ($ampere <= 0) {
             $this->LogTemplate('warn', 'Manuelles Laden blockiert', 'Netzbegrenzung erlaubt keinen Ladestrom');
             $this->SetForceState(1);
@@ -1433,7 +1437,16 @@ private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePha
         }
 
         if ($sollFRC === 2 && $ampere > 0) {
-            $ampere = $this->applyMaxGridLoadLimit((int)$ampere, (int)$anzPhasen);
+            $ampere = $this->applyMaxGridLoadLimit($ampere, $anzPhasen);
+
+           if ($anzPhasen === 1 && (int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
+                if ($this->SetPhaseMode(self::PHASE_MODE_1P)) {
+                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
+                    $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
+                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
+                    IPS_Sleep(500);
+                }
+            }
 
             if ($ampere <= 0) {
                 $this->LogTemplate('warn', 'Netzbegrenzung aktiv', 'Kein freier Netzspielraum → Laden gesperrt');
@@ -1458,7 +1471,6 @@ private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePha
     // 9. ENERGIEDATEN / BERECHNUNG / FILTER
     // =========================================================================
 
-    private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
     private function applyMaxGridLoadLimit(int $ampere, int &$anzPhasen): int
     {
         $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
@@ -2746,4 +2758,3 @@ private function LogTemplate(string $type, string $short, string $detail = ''): 
 }
 
 }
-
