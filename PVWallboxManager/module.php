@@ -1504,10 +1504,31 @@ private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePha
             return 0;
         }
 
-        $limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
-        $minAmpere = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
+$minAmpere = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
 
-        if ($limitedAmpere < $minAmpere) {
+$minPowerCurrentPhases = 230 * $minAmpere * $anzPhasen;
+$minPower1P = 230 * $minAmpere;
+
+// Wenn aktueller Phasenmodus nicht möglich ist,
+// aber 1-phasig noch möglich wäre, nicht sperren.
+if ($allowedWallboxPower < $minPowerCurrentPhases && $anzPhasen > 1 && $allowedWallboxPower >= $minPower1P) {
+    $this->LogTemplate(
+        'warn',
+        'Netzbegrenzung aktiv',
+        sprintf(
+            'Netzbezug=%.0f W, Limit=%d W, verfügbar=%.0f W → 3-phasig unter Mindeststrom, 1-phasig möglich',
+            $gridPower,
+            $maxGridLoad,
+            $allowedWallboxPower
+        )
+    );
+
+    $anzPhasen = 1;
+}
+
+$limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
+
+if ($limitedAmpere < $minAmpere) {
             $this->LogTemplate(
                 'warn',
                 'Netzbegrenzung aktiv',
