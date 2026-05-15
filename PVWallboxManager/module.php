@@ -898,6 +898,8 @@ class PVWallboxManager extends IPSModule
 
         if ($phaseCount === 1) {
             $phaseMode = self::PHASE_MODE_1P;
+        } else {
+            $phaseMode = self::PHASE_MODE_3P;
         }
 
         if ($ampere <= 0) {
