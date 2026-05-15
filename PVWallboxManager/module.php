@@ -1459,6 +1459,7 @@ private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePha
     // =========================================================================
 
     private function applyMaxGridLoadLimit(int $ampere, int $anzPhasen): int
+    private function applyMaxGridLoadLimit(int $ampere, int &$anzPhasen): int
     {
         $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
 
