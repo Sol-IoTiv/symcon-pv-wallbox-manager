@@ -2525,12 +2525,16 @@ if ($limitedAmpere < $minAmpere) {
         $html .= "🚗 <b>Fahrzeug:</b> {$d['statusTxt']}<br>";
         $html .= "🔌 <b>Wallbox:</b> {$d['frcTxt']}<br>";
 
-        // Ladehinweise nur anzeigen wenn Fahrzeug vorhanden
-        $carConnected = stripos($d['statusTxt'], 'kein fahrzeug') === false;
+        $noChargeReason = trim((string)$d['noChargeReason']);
+        $carConnected   = stripos($d['statusTxt'], 'kein fahrzeug') === false;
 
-        if ($d['noChargeReason'] !== '' && $carConnected) {
-            $html .= '<div style="color:#2563eb; font-weight:bold;">⏸️ <b>Ladehinweis:</b> '
-                . htmlspecialchars($d['noChargeReason'])
+        if ($carConnected && $noChargeReason === 'Kein Fahrzeug verbunden') {
+            $noChargeReason = '';
+        }
+
+        if ($noChargeReason !== '' && $carConnected) {
+            $html .= '<div style="color:#2563eb; font-weight:bold;">ℹ️ <b>Ladehinweis:</b> '
+                . htmlspecialchars($noChargeReason)
                 . '</div>';
         }
 
