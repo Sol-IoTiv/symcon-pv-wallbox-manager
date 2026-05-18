@@ -45,6 +45,7 @@ class PVWallboxManager extends IPSModule
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
             'LastStatusInfoHTML'             => '',
+            'LastNoChargeReason'             => '',
             'LastChargingCurrent'            => 0,
             'LastChargingCurrentChange'      => 0,
             'LastSentChargingCurrent'        => 0,
@@ -661,6 +662,7 @@ class PVWallboxManager extends IPSModule
             'statusTxt'     => $statusTxt,
             'frcTxt'        => $frcTxt,
             'moduleActive'  => $moduleActive,
+            'noChargeReason' => $this->GetNoChargeReason(),
         ];
     }
 
@@ -1263,6 +1265,8 @@ if ($modeKey === 'manuell') {
 
     private function handleNoCarConnected(): void
     {
+        $this->SetNoChargeReason('Kein Fahrzeug verbunden');
+
         if ($this->GetValue('AccessStateV2') != 1) {
             $this->SetForceState(1);
             $this->LogTemplate('info', 'Kein Fahrzeug verbunden', 'Wallbox gesperrt');
@@ -2096,6 +2100,7 @@ if ($limitedAmpere < $minAmpere) {
     private function handleChargerUnavailable(): void
     {
         $this->ResetWallboxVisualisierungKeinFahrzeug();
+        $this->SetNoChargeReason('Wallbox nicht erreichbar');
         $this->LogTemplate('debug', 'Wallbox nicht erreichbar – Visualisierung zurückgesetzt');
         $this->UpdateStatusAnzeige();
     }
@@ -2514,6 +2519,12 @@ if ($limitedAmpere < $minAmpere) {
         $html .= "🚗 <b>Fahrzeug:</b> {$d['statusTxt']}<br>";
         $html .= "🔌 <b>Wallbox:</b> {$d['frcTxt']}<br>";
 
+        if ($d['noChargeReason'] !== '') {
+            $html .= '<div style="color:#b36b00; font-weight:bold;">⏸️ Lädt nicht: '
+                . htmlspecialchars($d['noChargeReason'])
+                . '</div>';
+        }
+
         $html .= '<div style="height:6px;"></div>';
 
         $html .= "⚡ <b>Wallbox-Phasen:</b> {$d['psmSollTxt']}<br>";
@@ -2720,43 +2731,58 @@ if ($limitedAmpere < $minAmpere) {
         }
     }
 
+    private function SetNoChargeReason(string $reason): void
+    {
+        $this->WriteAttributeString('LastNoChargeReason', $reason);
+    }
+
+    private function ClearNoChargeReason(): void
+    {
+        $this->WriteAttributeString('LastNoChargeReason', '');
+    }
+
+    private function GetNoChargeReason(): string
+    {
+        return $this->ReadAttributeString('LastNoChargeReason');
+    }
+
     // =========================================================================
     // 16. LOGGING / ALLGEMEINE HILFSFUNKTIONEN
     // =========================================================================
 
-private function LogTemplate(string $type, string $short, string $detail = ''): void
-{
-    $debugActive = $this->ReadPropertyBoolean('DebugLogging');
+    private function LogTemplate(string $type, string $short, string $detail = ''): void
+    {
+        $debugActive = $this->ReadPropertyBoolean('DebugLogging');
 
-    if ($type === 'debug' && !$debugActive) {
-        return;
+        if ($type === 'debug' && !$debugActive) {
+            return;
+        }
+
+        $emojis = [
+            'info'  => 'ℹ️',
+            'warn'  => '⚠️',
+            'error' => '❌',
+            'ok'    => '✅',
+            'debug' => '🐞',
+            'start' => '🚀',
+            'stop'  => '⏹️'
+        ];
+
+        $icon = $emojis[$type] ?? 'ℹ️';
+
+        $msg = trim($icon . ' ' . $short);
+
+        if ($detail !== '') {
+            $msg .= ' | ' . $detail;
+        }
+
+        // normales Log (wie bisher)
+        IPS_LogMessage('[PVWM]', $msg);
+
+        // NEU: Debug-Fenster
+        if ($debugActive) {
+            $this->SendDebug($type . ' | ' . $short, $detail !== '' ? $detail : '-', 0);
+        }
     }
-
-    $emojis = [
-        'info'  => 'ℹ️',
-        'warn'  => '⚠️',
-        'error' => '❌',
-        'ok'    => '✅',
-        'debug' => '🐞',
-        'start' => '🚀',
-        'stop'  => '⏹️'
-    ];
-
-    $icon = $emojis[$type] ?? 'ℹ️';
-
-    $msg = trim($icon . ' ' . $short);
-
-    if ($detail !== '') {
-        $msg .= ' | ' . $detail;
-    }
-
-    // normales Log (wie bisher)
-    IPS_LogMessage('[PVWM]', $msg);
-
-    // NEU: Debug-Fenster
-    if ($debugActive) {
-        $this->SendDebug($type . ' | ' . $short, $detail !== '' ? $detail : '-', 0);
-    }
-}
 
 }
