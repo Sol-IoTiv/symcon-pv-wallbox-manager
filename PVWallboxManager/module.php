@@ -618,7 +618,7 @@ class PVWallboxManager extends IPSModule
         $inInitial  = ($status === false || $status <= 1);
         $initialInt = $this->ReadPropertyInteger('InitialCheckInterval');
 
-        $until        = intval($this->ReadAttributeInteger('NeutralModeUntil'));
+        $until         = intval($this->ReadAttributeInteger('NeutralModeUntil'));
         $neutralActive = ($until > time());
 
         $modeKey = $this->getCurrentModeKey();
@@ -649,20 +649,42 @@ class PVWallboxManager extends IPSModule
         $statusTxt  = $this->GetProfileText('Status');
         $frcTxt     = $this->GetProfileText('AccessStateV2');
 
+        // Dynamische Ladehinweise aufbereiten
+        $noChargeReason = trim((string)$this->GetNoChargeReason());
+
+        $letzteUmschaltung = (int)$this->ReadAttributeInteger('LetztePhasenUmschaltung');
+        $phaseCooldownRest = 0;
+
+        if ($letzteUmschaltung > 0) {
+            $phaseCooldownRest = self::PHASE_SWITCH_COOLDOWN_S - (time() - $letzteUmschaltung);
+        }
+
+        $isPhaseReason =
+            strpos($noChargeReason, 'Cooldown nach Phasenumschaltung') === 0
+            || strpos($noChargeReason, 'Phasenumschaltung') !== false;
+
+        if ($phaseCooldownRest > 0 && ($noChargeReason === '' || $isPhaseReason)) {
+            $noChargeReason = "Cooldown nach Phasenumschaltung aktiv ({$phaseCooldownRest}s)";
+        }
+
+        if ($phaseCooldownRest <= 0 && strpos($noChargeReason, 'Cooldown nach Phasenumschaltung') === 0) {
+            $noChargeReason = '';
+        }
+
         return [
-            'socAktuell'    => $socAktuell,
-            'socZiel'       => $socZiel,
-            'inInitial'     => $inInitial,
-            'initialInt'    => $initialInt,
-            'neutralActive' => $neutralActive,
-            'neutralUntil'  => $until,
-            'modusText'     => $modusText,
-            'psmSollTxt'    => $psmSollTxt,
-            'psmIstTxt'     => $psmIstTxt,
-            'statusTxt'     => $statusTxt,
-            'frcTxt'        => $frcTxt,
-            'moduleActive'  => $moduleActive,
-            'noChargeReason' => $this->GetNoChargeReason(),
+            'socAktuell'     => $socAktuell,
+            'socZiel'        => $socZiel,
+            'inInitial'      => $inInitial,
+            'initialInt'     => $initialInt,
+            'neutralActive'  => $neutralActive,
+            'neutralUntil'   => $until,
+            'modusText'      => $modusText,
+            'psmSollTxt'     => $psmSollTxt,
+            'psmIstTxt'      => $psmIstTxt,
+            'statusTxt'      => $statusTxt,
+            'frcTxt'         => $frcTxt,
+            'moduleActive'   => $moduleActive,
+            'noChargeReason' => $noChargeReason,
         ];
     }
 
@@ -1298,129 +1320,127 @@ if ($modeKey === 'manuell') {
         return max(1, $cnt);
     }
 
-private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
-{
-    $umschaltCooldown = 30;
-    $rueckfallLimit = 10;
+    private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
+    {
+        $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
+        $rueckfallLimit = 10;
 
-    $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
-    if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
-        $letzteUmschaltung = 0;
-    }
-
-    $now = time();
-
-    if ($forceThreePhase) {
-        $aktModus = $this->GetValue('Phasenmodus');
-
-        if ($aktModus != 2) {
-            $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
-
-            $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
-
-            if ($ok) {
-                $this->LogTemplate('ok', 'Manueller Modus', '3-phasig erzwungen');
-            } else {
-                $this->LogTemplate('error', 'Manueller Modus', 'Umschalten auf 3-phasig fehlgeschlagen');
-            }
-
-            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-            $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+        $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
+        if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
+            $letzteUmschaltung = 0;
         }
 
-        return;
-    }
+        $now = time();
 
-if (($now - $letzteUmschaltung) < $umschaltCooldown) {
-    $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
+        if ($forceThreePhase) {
+            $aktModus = $this->GetValue('Phasenmodus');
 
-    $this->SetNoChargeReason("Cooldown nach Phasenumschaltung aktiv ({$rest}s)");
+            if ($aktModus != 2) {
+                $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
 
-    $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
-    return;
-}
+                $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
-    $schwelle1 = $this->ReadPropertyInteger('Phasen1Schwelle');
-    $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
-    $limit1    = $this->ReadPropertyInteger('Phasen1Limit');
-    $limit3    = $this->ReadPropertyInteger('Phasen3Limit');
-    $aktModus  = $this->GetValue('Phasenmodus');
+                if ($ok) {
+                    $this->LogTemplate('ok', 'Manueller Modus', '3-phasig erzwungen');
+                } else {
+                    $this->LogTemplate('error', 'Manueller Modus', 'Umschalten auf 3-phasig fehlgeschlagen');
+                }
 
-    if ($aktModus == 1 && $pvUeberschuss >= $schwelle3) {
-        $zaehler = $this->ReadAttributeInteger('Phasen3Zaehler') + 1;
-
-        $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
-        $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-        $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-
-        $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
-
-        if ($zaehler >= $limit3) {
-            $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
-
-            $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
-
-            if (!$ok) {
-                $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '1→3');
+                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
+                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
-
-            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-            $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
-        }
-
-        return;
-    }
-
-    if ($aktModus > 1 && $pvUeberschuss > $schwelle1) {
-        $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-        $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-    }
-
-    if ($aktModus > 1 && $pvUeberschuss <= $schwelle1) {
-        $rueckfallZaehler = $this->ReadAttributeInteger('PhasenRueckfallZaehler') + 1;
-        $this->WriteAttributeInteger('PhasenRueckfallZaehler', $rueckfallZaehler);
-
-        if ($rueckfallZaehler < $rueckfallLimit) {
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-
-            $this->LogTemplate(
-                'debug',
-                '3-phasig gehalten',
-                "{$rueckfallZaehler}/{$rueckfallLimit} unter {$schwelle1} W"
-            );
 
             return;
         }
 
-        $zaehler = $this->ReadAttributeInteger('Phasen1Zaehler') + 1;
+        if (($now - $letzteUmschaltung) < $umschaltCooldown) {
+            $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
 
-        $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
-        $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-
-        $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
-
-        if ($zaehler >= $limit1) {
-            $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
-
-            $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
-
-            if (!$ok) {
-                $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '3→1');
-            }
-
-            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-            $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+            $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
+            return;
         }
 
-        return;
+        $schwelle1 = $this->ReadPropertyInteger('Phasen1Schwelle');
+        $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
+        $limit1    = $this->ReadPropertyInteger('Phasen1Limit');
+        $limit3    = $this->ReadPropertyInteger('Phasen3Limit');
+        $aktModus  = $this->GetValue('Phasenmodus');
+
+        if ($aktModus == 1 && $pvUeberschuss >= $schwelle3) {
+            $zaehler = $this->ReadAttributeInteger('Phasen3Zaehler') + 1;
+
+            $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
+            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
+
+            $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
+
+            if ($zaehler >= $limit3) {
+                $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
+
+                $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
+
+                if (!$ok) {
+                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '1→3');
+                }
+
+                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
+                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+            }
+
+            return;
+        }
+
+        if ($aktModus > 1 && $pvUeberschuss > $schwelle1) {
+            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
+            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+        }
+
+        if ($aktModus > 1 && $pvUeberschuss <= $schwelle1) {
+            $rueckfallZaehler = $this->ReadAttributeInteger('PhasenRueckfallZaehler') + 1;
+            $this->WriteAttributeInteger('PhasenRueckfallZaehler', $rueckfallZaehler);
+
+            if ($rueckfallZaehler < $rueckfallLimit) {
+                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+
+                $this->LogTemplate(
+                    'debug',
+                    '3-phasig gehalten',
+                    "{$rueckfallZaehler}/{$rueckfallLimit} unter {$schwelle1} W"
+                );
+
+                return;
+            }
+
+            $zaehler = $this->ReadAttributeInteger('Phasen1Zaehler') + 1;
+
+            $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
+            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+
+            $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
+
+            if ($zaehler >= $limit1) {
+                $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
+
+                $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
+
+                if (!$ok) {
+                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '3→1');
+                }
+
+                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
+                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+            }
+
+            return;
+        }
     }
-}
 
     private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null)
     {
