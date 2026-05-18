@@ -1102,11 +1102,14 @@ class PVWallboxManager extends IPSModule
 
         if ($loadActive && $socAktuell !== null && $socZiel !== null) {
             if ($socAktuell >= $socZiel) {
+                $this->SetNoChargeReason('Ziel-SoC erreicht');
+
                 $this->LogTemplate(
                     'stop',
                     'Ziel-SOC erreicht',
                     "{$socAktuell}% ≥ {$socZiel}%"
                 );
+
                 $this->applySafeIdleState();
                 $this->ResetModiNachLadeende();
                 $this->resetNoPowerCounter();
@@ -1330,11 +1333,14 @@ private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePha
         return;
     }
 
-    if (($now - $letzteUmschaltung) < $umschaltCooldown) {
-        $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
-        $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
-        return;
-    }
+if (($now - $letzteUmschaltung) < $umschaltCooldown) {
+    $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
+
+    $this->SetNoChargeReason("Cooldown nach Phasenumschaltung aktiv ({$rest}s)");
+
+    $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
+    return;
+}
 
     $schwelle1 = $this->ReadPropertyInteger('Phasen1Schwelle');
     $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
@@ -2520,7 +2526,7 @@ if ($limitedAmpere < $minAmpere) {
         $html .= "🔌 <b>Wallbox:</b> {$d['frcTxt']}<br>";
 
         if ($d['noChargeReason'] !== '') {
-            $html .= '<div style="color:#b36b00; font-weight:bold;">⏸️ Lädt nicht: '
+            $html .= '<div style="color:#b36b00; font-weight:bold;">⏸️ <b>Ladehinweis:</b> '
                 . htmlspecialchars($d['noChargeReason'])
                 . '</div>';
         }
