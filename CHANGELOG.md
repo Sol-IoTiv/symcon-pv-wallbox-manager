@@ -3,6 +3,28 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.7b] - 2026-05-18
+### 🚀 Neu
+- HTML-Status um dynamische Ladehinweise erweitert
+- Anzeige von Ladeblockierungsgründen direkt im WebFront
+- Neue Hinweise für:
+  - Ziel-SoC erreicht
+  - Cooldown nach Phasenumschaltung aktiv
+  - Start-Hysterese aktiv
+  - Stop-Hysterese aktiv
+  - Hausspeicher noch nicht voll
+  - PV-Überschuss zu gering
+  - Netzlimit aktiv
+  - Phasenumschaltung aktiv
+  - Wallbox nicht erreichbar
+  - Kein Fahrzeug verbunden
+
+### 🛠️ Verbesserungen
+- Ladehinweise werden nur bei verbundenem Fahrzeug angezeigt
+- HTML-Status optisch überarbeitet und Ladehinweise hervorgehoben
+- Doppelanzeigen bei „Kein Fahrzeug verbunden“ reduziert
+- Verbesserte Transparenz der Ladeentscheidungen und Regelzustände
+
 ## [1.4.6b] - 2026-05-13
 ### 🚀 Neu
 - Begrenzung der maximalen Netzbelastung (Peak-Shaving / Lastbegrenzung)
