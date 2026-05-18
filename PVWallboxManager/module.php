@@ -649,8 +649,10 @@ class PVWallboxManager extends IPSModule
         $statusTxt  = $this->GetProfileText('Status');
         $frcTxt     = $this->GetProfileText('AccessStateV2');
 
-        // Dynamische Ladehinweise aufbereiten
         $noChargeReason = trim((string)$this->GetNoChargeReason());
+
+        $carConnected   = stripos($statusTxt, 'kein fahrzeug') === false;
+        $wallboxLocked  = stripos($frcTxt, 'gesperrt') !== false;
 
         $letzteUmschaltung = (int)$this->ReadAttributeInteger('LetztePhasenUmschaltung');
         $phaseCooldownRest = 0;
@@ -658,6 +660,8 @@ class PVWallboxManager extends IPSModule
         if ($letzteUmschaltung > 0) {
             $phaseCooldownRest = self::PHASE_SWITCH_COOLDOWN_S - (time() - $letzteUmschaltung);
         }
+
+        $phaseCooldownRest = max(0, $phaseCooldownRest);
 
         $isPhaseReason =
             strpos($noChargeReason, 'Cooldown nach Phasenumschaltung') === 0
@@ -669,6 +673,10 @@ class PVWallboxManager extends IPSModule
 
         if ($phaseCooldownRest <= 0 && strpos($noChargeReason, 'Cooldown nach Phasenumschaltung') === 0) {
             $noChargeReason = '';
+        }
+
+        if ($noChargeReason === '' && $carConnected && $wallboxLocked) {
+            $noChargeReason = 'Wallbox gesperrt – keine Ladefreigabe aktiv';
         }
 
         return [
@@ -2817,5 +2825,5 @@ if ($limitedAmpere < $minAmpere) {
             $this->SendDebug($type . ' | ' . $short, $detail !== '' ? $detail : '-', 0);
         }
     }
-
+    
 }
