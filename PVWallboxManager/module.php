@@ -2048,6 +2048,11 @@ if ($limitedAmpere < $minAmpere) {
         }
 
         $this->LogTemplate('debug', 'SetForceState gesetzt', "{$modeText} ({$state}), HTTP={$response['httpcode']}");
+
+        if ($this->GetNoChargeReason() === 'Wallbox nicht erreichbar') {
+            $this->ClearNoChargeReason();
+        }
+        
         $varID = $this->GetIDForIdent('AccessStateV2');
         if ($varID) {
             SetValue($varID, $state);
