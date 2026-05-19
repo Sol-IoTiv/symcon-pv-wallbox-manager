@@ -25,6 +25,9 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 - Doppelanzeigen bei „Kein Fahrzeug verbunden“ reduziert
 - Verbesserte Transparenz der Ladeentscheidungen und Regelzustände
 
+### 🛠️ Fixes
+- Fehlerstatus „Wallbox nicht erreichbar“ wird nach erfolgreicher HTTP-Kommunikation automatisch zurückgesetzt
+
 ## [1.4.6b] - 2026-05-13
 ### 🚀 Neu
 - Begrenzung der maximalen Netzbelastung (Peak-Shaving / Lastbegrenzung)
