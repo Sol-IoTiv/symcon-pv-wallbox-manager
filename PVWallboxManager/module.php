@@ -18,8 +18,8 @@ class PVWallboxManager extends IPSModule
     private const NO_POWER_THRESHOLD_W = 300;
     private const NO_POWER_COUNTER_LIMIT = 3;
     private const PHASE_SWITCH_COOLDOWN_S = 15;
-    private const CURRENT_CHANGE_COOLDOWN_S = 15;
-    private const MANUAL_START_GRACE_S = 180;
+    private const CURRENT_CHANGE_COOLDOWN_S = 10;
+    private const MANUAL_START_GRACE_S = 90;
 
     // =========================================================================
     // 2. CREATE / APPLYCHANGES / FORM
@@ -1004,7 +1004,7 @@ class PVWallboxManager extends IPSModule
         $desiredFRC = $aktFRC;
 
         // 🛑 Sperre nach Moduswechsel – kein Start erlaubt
-        if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(15)) {
+        if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(self::PHASE_SWITCH_COOLDOWN_S)) {
             return $aktFRC;
         }
 
