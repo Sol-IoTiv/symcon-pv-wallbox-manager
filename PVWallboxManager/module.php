@@ -17,8 +17,8 @@ class PVWallboxManager extends IPSModule
 
     private const NO_POWER_THRESHOLD_W = 300;
     private const NO_POWER_COUNTER_LIMIT = 3;
-    private const PHASE_SWITCH_COOLDOWN_S = 30;
-    private const CURRENT_CHANGE_COOLDOWN_S = 20;
+    private const PHASE_SWITCH_COOLDOWN_S = 15;
+    private const CURRENT_CHANGE_COOLDOWN_S = 15;
     private const MANUAL_START_GRACE_S = 180;
 
     // =========================================================================
@@ -1331,7 +1331,7 @@ if ($modeKey === 'manuell') {
     private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
     {
         $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
-        $rueckfallLimit = 10;
+        $rueckfallLimit = 5;
 
         $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
         if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
