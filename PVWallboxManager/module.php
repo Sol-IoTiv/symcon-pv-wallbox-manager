@@ -726,6 +726,10 @@ class PVWallboxManager extends IPSModule
 
         $key = $this->getCurrentModeKey();
 
+        if ($key !== 'hybrid') {
+            $this->SetNoChargeReason('');
+        }
+
         if (!isset($handlers[$key])) {
             $this->LogTemplate('warn', 'Unbekannter Lademodus', $key);
             return;
@@ -1848,14 +1852,18 @@ if ($limitedAmpere < $minAmpere) {
 
     private function isHausakkuVoll(): bool
     {
-        $socID = $this->ReadPropertyInteger('HausakkuSOCID');
+        $socID         = $this->ReadPropertyInteger('HausakkuSOCID');
         $vollSchwelle = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
 
         if ($socID <= 0 || !@IPS_VariableExists($socID)) {
             return true;
         }
 
-        $soc = (float) GetValue($socID);
+        $soc = (float)GetValue($socID);
+
+        if ($this->GetValue('AccessStateV2') === 2) {
+            return true;
+        }
 
         if ($soc >= $vollSchwelle) {
             return true;
