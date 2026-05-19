@@ -651,8 +651,8 @@ class PVWallboxManager extends IPSModule
 
         $noChargeReason = trim((string)$this->GetNoChargeReason());
 
-        $carConnected   = stripos($statusTxt, 'kein fahrzeug') === false;
-        $wallboxLocked  = stripos($frcTxt, 'gesperrt') !== false;
+        $carConnected  = stripos($statusTxt, 'kein fahrzeug') === false;
+        $wallboxLocked = ((int)$this->GetValue('AccessStateV2') === 1);
 
         $letzteUmschaltung = (int)$this->ReadAttributeInteger('LetztePhasenUmschaltung');
         $phaseCooldownRest = 0;
@@ -2052,7 +2052,7 @@ if ($limitedAmpere < $minAmpere) {
         if ($this->GetNoChargeReason() === 'Wallbox nicht erreichbar') {
             $this->ClearNoChargeReason();
         }
-        
+
         $varID = $this->GetIDForIdent('AccessStateV2');
         if ($varID) {
             SetValue($varID, $state);
