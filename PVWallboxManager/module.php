@@ -11,6 +11,7 @@ class PVWallboxManager extends IPSModule
     private const MODE_MANUELL = 2;
     private const MODE_TARGET_TIME = 3;
     private const MODE_TARGET_TIME_PV = 4;
+    private const MODE_HYBRID = 5;
 
     private const PHASE_MODE_1P = 1;
     private const PHASE_MODE_3P = 2;
@@ -267,9 +268,9 @@ class PVWallboxManager extends IPSModule
         ]);
 
         $create('PVWM.AccessStateV2', VARIABLETYPE_INTEGER, 0, '', 'Lock', [
-            [0, 'Neutral (Wallbox entscheidet)', 'LockOpen', 0xAAAAAA],
-            [1, 'Nicht Laden (gesperrt)',        'Lock', 0xFF4444],
-            [2, 'Laden (erzwungen)',             'Power', 0x44FF44]
+            [0, 'Neutral (Wallbox entscheidet)', 'LockOpen',    0xAAAAAA],
+            [1, 'Nicht Laden (gesperrt)',        'Lock',        0xFF4444],
+            [2, 'Laden (erzwungen)',             'Power',       0x44FF44]
         ]);
 
         $create('PVWM.PSM', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
@@ -279,9 +280,10 @@ class PVWallboxManager extends IPSModule
         ]);
 
         $create('PVWM.Lademodus', VARIABLETYPE_INTEGER, 0, '', 'Shuffle', [
-            [0, 'Nur PV',     'SolarPanel', 0x44AA44],
-            [1, 'PV-Anteil',  'Sun',        0xFFCC00],
-            [2, 'Manuell',    'Power',      0xFF8800]
+            [0, 'Nur PV',       'SolarPanel',   0x44AA44],
+            [1, 'PV-Anteil',    'Sun',          0xFFCC00],
+            [2, 'Manuell',      'Power',        0xFF8800],
+            [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
         ]);
 
         $create('PVWM.PhasenText', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
@@ -434,7 +436,7 @@ class PVWallboxManager extends IPSModule
 
     private function handleLademodusAuswahl(int $mode): void
     {
-        if (!in_array($mode, [self::MODE_PVONLY, self::MODE_PV2CAR, self::MODE_MANUELL], true)) {
+        if (!in_array($mode, [self::MODE_PVONLY, self::MODE_PV2CAR, self::MODE_MANUELL, self::MODE_HYBRID], true)) {
             throw new Exception("Ungültiger Wert für LademodusAuswahl: $mode");
         }
 
@@ -478,7 +480,7 @@ class PVWallboxManager extends IPSModule
 
     private function applyChargingMode(string $mode): void
     {
-        $allowedModes = ['pvonly', 'pv2car', 'manuell'];
+        $allowedModes = ['pvonly', 'pv2car', 'manuell', 'hybrid'];
         if (!in_array($mode, $allowedModes, true)) {
             throw new Exception("Ungültiger Modus: $mode");
         }
@@ -504,6 +506,9 @@ class PVWallboxManager extends IPSModule
                 break;
             case 'manuell':
                 $this->LogTemplate('info', 'Lademodus geändert', 'Manuell');
+                break;
+            case 'hybrid':
+                $this->LogTemplate('info', 'Lademodus geändert', 'Hybrid-Laden');
                 break;
         }
 
@@ -636,6 +641,10 @@ class PVWallboxManager extends IPSModule
                 $modusText = '🌞 PV-Anteil (' . $this->GetValue('PVAnteil') . '%)';
                 break;
 
+            case 'hybrid':
+                $modusText = '🔋 Hybrid-Laden';
+                break;
+
             case 'pvonly':
             default:
                 $modusText = '☀️ Nur PV (PV-Überschuss)';
@@ -702,6 +711,7 @@ class PVWallboxManager extends IPSModule
             'manuell' => 'ModusManuellVollladen',
             'pv2car'  => 'ModusPV2CarLaden',
             'pvonly'  => 'ModusPVonlyLaden',
+            'hybrid'  => 'ModusHybridLaden',
         ];
 
         if (!$this->handleCarConnectionState($data)) {
@@ -719,7 +729,7 @@ class PVWallboxManager extends IPSModule
 
         $method = $handlers[$key];
 
-        if ($key === 'pvonly') {
+        if (in_array($key, ['pvonly', 'hybrid'], true)) {
             $this->$method($data, $phasen);
             return;
         }
@@ -824,6 +834,15 @@ class PVWallboxManager extends IPSModule
             $anzPhasenNeu,
             $desiredFRC
         );
+    }
+
+    private function ModusHybridLaden(array $data, int $anzPhasenAlt)
+    {
+        // Schritt 2:
+        // Hybrid-Laden läuft vorerst technisch identisch wie Nur PV.
+        // Die eigene Funktion bleibt bewusst getrennt,
+        // damit wir im nächsten Schritt die Minimumladung sauber ergänzen können.
+        $this->ModusPVonlyLaden($data, $anzPhasenAlt);
     }
 
     private function ModusPV2CarLaden(array $data)
@@ -2737,6 +2756,8 @@ if ($limitedAmpere < $minAmpere) {
                 return 'pv2car';
             case self::MODE_MANUELL:
                 return 'manuell';
+            case self::MODE_HYBRID:
+                return 'hybrid';
             case self::MODE_PVONLY:
             default:
                 return 'pvonly';
@@ -2750,6 +2771,8 @@ if ($limitedAmpere < $minAmpere) {
                 return self::MODE_PV2CAR;
             case 'manuell':
                 return self::MODE_MANUELL;
+            case 'hybrid':
+                return self::MODE_HYBRID;
             case 'pvonly':
             default:
                 return self::MODE_PVONLY;
@@ -2772,6 +2795,8 @@ if ($limitedAmpere < $minAmpere) {
                 return 'PV-Anteil';
             case self::MODE_MANUELL:
                 return 'Manuell';
+            case self::MODE_HYBRID:
+                return 'Hybrid-Laden';
             default:
                 return 'Unbekannt';
         }
