@@ -879,6 +879,7 @@ class PVWallboxManager extends IPSModule
 
         if ($pvUeberschuss > $minStopWatt) {
             $this->ModusPVonlyLaden($data, $anzPhasenAlt);
+            $this->SetNoChargeReason('Hybrid-Laden aktiv');
             return;
         }
 
