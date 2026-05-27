@@ -287,7 +287,7 @@ class PVWallboxManager extends IPSModule
             [0, 'Nur PV',       'SolarPanel',   0x44AA44],
             [1, 'PV-Anteil',    'Sun',          0xFFCC00],
             [2, 'Manuell',      'Power',        0xFF8800],
-            [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
+ //           [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
         ]);
 
         $create('PVWM.PhasenText', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
@@ -891,7 +891,7 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        if ($pvErzeugung <= $hybridStopPVPower) {
+/*        if ($pvErzeugung <= $hybridStopPVPower) {
             $this->LogTemplate(
                 'stop',
                 'Hybrid-Laden beendet',
@@ -910,7 +910,7 @@ class PVWallboxManager extends IPSModule
             );
             return;
         }
-
+*/
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
@@ -1590,10 +1590,9 @@ if ($modeKey === 'manuell') {
         if ($sollFRC === 2 && $ampere > 0) {
             $ampere = $this->applyMaxGridLoadLimit($ampere, $anzPhasen);
 
-           if ($anzPhasen === 1 && (int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
+            if ($anzPhasen === 1 && (int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
                 if ($this->SetPhaseMode(self::PHASE_MODE_1P)) {
                     $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
-                    $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
                     $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
                     IPS_Sleep(500);
                 }
