@@ -287,7 +287,7 @@ class PVWallboxManager extends IPSModule
             [0, 'Nur PV',       'SolarPanel',   0x44AA44],
             [1, 'PV-Anteil',    'Sun',          0xFFCC00],
             [2, 'Manuell',      'Power',        0xFF8800],
-            [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
+ //           [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
         ]);
 
         $create('PVWM.PhasenText', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
@@ -822,7 +822,8 @@ class PVWallboxManager extends IPSModule
             $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
         }
 
-        $anzPhasenNeu = max(1, $this->GetValue('Phasenmodus'));
+        $phaseModeSoll = (int)$this->GetValue('PhasenmodusEinstellung');
+        $anzPhasenNeu  = $this->phaseModeToPhaseCount($phaseModeSoll);
 
         if ($anzPhasenNeu !== $anzPhasenAlt) {
             $surplus = $this->calculateSurplus($energy, $anzPhasenNeu, true);
@@ -1433,7 +1434,7 @@ if ($modeKey === 'manuell') {
     private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
     {
         $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
-        $rueckfallLimit = 5;
+        $rueckfallLimit   = 5;
 
         $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
         if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
@@ -1443,10 +1444,16 @@ if ($modeKey === 'manuell') {
         $now = time();
 
         if ($forceThreePhase) {
-            $aktModus = $this->GetValue('Phasenmodus');
+            $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
 
-            if ($aktModus != 2) {
-                $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
+            if ($aktModus !== self::PHASE_MODE_3P) {
+                $this->SetValueAndLogChange(
+                    'PhasenmodusEinstellung',
+                    self::PHASE_MODE_3P,
+                    'Wallbox-Phasen Soll',
+                    '',
+                    'ok'
+                );
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
@@ -1467,7 +1474,6 @@ if ($modeKey === 'manuell') {
 
         if (($now - $letzteUmschaltung) < $umschaltCooldown) {
             $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
-
             $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
             return;
         }
@@ -1476,9 +1482,10 @@ if ($modeKey === 'manuell') {
         $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
         $limit1    = $this->ReadPropertyInteger('Phasen1Limit');
         $limit3    = $this->ReadPropertyInteger('Phasen3Limit');
-        $aktModus  = $this->GetValue('Phasenmodus');
 
-        if ($aktModus == 1 && $pvUeberschuss >= $schwelle3) {
+        $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
+
+        if ($aktModus === self::PHASE_MODE_1P && $pvUeberschuss >= $schwelle3) {
             $zaehler = $this->ReadAttributeInteger('Phasen3Zaehler') + 1;
 
             $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
@@ -1488,7 +1495,13 @@ if ($modeKey === 'manuell') {
             $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
 
             if ($zaehler >= $limit3) {
-                $this->SetValueAndLogChange('Phasenmodus', 2, 'Phasenumschaltung', '', 'ok');
+                $this->SetValueAndLogChange(
+                    'PhasenmodusEinstellung',
+                    self::PHASE_MODE_3P,
+                    'Wallbox-Phasen Soll',
+                    '',
+                    'ok'
+                );
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
@@ -1505,12 +1518,13 @@ if ($modeKey === 'manuell') {
             return;
         }
 
-        if ($aktModus > 1 && $pvUeberschuss > $schwelle1) {
+        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss > $schwelle1) {
             $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
             $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+            return;
         }
 
-        if ($aktModus > 1 && $pvUeberschuss <= $schwelle1) {
+        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss <= $schwelle1) {
             $rueckfallZaehler = $this->ReadAttributeInteger('PhasenRueckfallZaehler') + 1;
             $this->WriteAttributeInteger('PhasenRueckfallZaehler', $rueckfallZaehler);
 
@@ -1534,7 +1548,13 @@ if ($modeKey === 'manuell') {
             $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
 
             if ($zaehler >= $limit1) {
-                $this->SetValueAndLogChange('Phasenmodus', 1, 'Phasenumschaltung', '', 'warn');
+                $this->SetValueAndLogChange(
+                    'PhasenmodusEinstellung',
+                    self::PHASE_MODE_1P,
+                    'Wallbox-Phasen Soll',
+                    '',
+                    'warn'
+                );
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
 
@@ -2902,6 +2922,11 @@ if ($limitedAmpere < $minAmpere) {
     private function GetNoChargeReason(): string
     {
         return $this->ReadAttributeString('LastNoChargeReason');
+    }
+
+    private function phaseModeToPhaseCount(int $phaseMode): int
+    {
+        return ($phaseMode === self::PHASE_MODE_3P) ? 3 : 1;
     }
 
     // =========================================================================

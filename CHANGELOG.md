@@ -27,6 +27,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ### 🛠️ Fixes
 - Fehlerstatus „Wallbox nicht erreichbar“ wird nach erfolgreicher HTTP-Kommunikation automatisch zurückgesetzt
+- Stabilisierung der Phasenumschaltung (1P/3P)
+- Saubere Trennung zwischen Wallbox-Sollmodus und tatsächlich genutzten Fahrzeugphasen
+- Verhindert unerwünschte 1P↔3P Umschalt-Schleifen bei manchen Fahrzeugen/go-e Kombinationen
+- Verbesserte Rückfall-Logik nach Phasenwechsel
 
 ## [1.4.6b] - 2026-05-13
 ### 🚀 Neu
