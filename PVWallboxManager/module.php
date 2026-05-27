@@ -866,13 +866,15 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
+        $phaseModeAlt = (int)$this->GetValue('PhasenmodusEinstellung');
+        $anzPhasenAlt = $this->phaseModeToPhaseCount($phaseModeAlt);
+
         $energy = $this->gatherEnergyData();
         $energy = $this->applyFilters($energy);
 
-        $aktFRC       = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-        $minStopWatt  = (int)$this->ReadPropertyInteger('MinStopWatt');
-        $minAmpere    = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
-        $anzPhasenAlt = max(1, (int)$anzPhasenAlt);
+        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $minStopWatt = (int)$this->ReadPropertyInteger('MinStopWatt');
+        $minAmpere   = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
 
         $surplus       = $this->calculateSurplus($energy, $anzPhasenAlt, true);
         $pvUeberschuss = (float)$surplus['ueberschuss_w'];
@@ -903,7 +905,7 @@ class PVWallboxManager extends IPSModule
                 $pvUeberschuss,
                 'hybrid',
                 0,
-                $anzPhasenAlt,
+                1,
                 1
             );
             return;
@@ -912,19 +914,37 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
+        if ((int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
+            $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
+
+            if ($ok) {
+                $this->SetValueAndLogChange(
+                    'PhasenmodusEinstellung',
+                    self::PHASE_MODE_1P,
+                    'Wallbox-Phasen Soll',
+                    '',
+                    'warn'
+                );
+
+                $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
+            } else {
+                $this->LogTemplate('error', 'Hybrid-Minimumladung', 'Umschalten auf 1-phasig fehlgeschlagen');
+            }
+        }
+
         $this->LogTemplate(
             'info',
             'Hybrid-Minimumladung aktiv',
-            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$minAmpere} A"
+            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$minAmpere} A / 1-phasig"
         );
 
-        $this->SetNoChargeReason('Hybrid-Laden: PV zu gering, Minimumladung aktiv');
+        $this->SetNoChargeReason('Hybrid-Laden: PV zu gering, Minimumladung 1P aktiv');
 
         $this->SteuerungLadefreigabe(
             $pvUeberschuss,
             'hybrid',
             $minAmpere,
-            $anzPhasenAlt,
+            1,
             2
         );
     }
@@ -938,7 +958,8 @@ class PVWallboxManager extends IPSModule
 
         $anteil = max(0, min(100, intval($this->GetValue('PVAnteil'))));
 
-        $oldPhasen = max(1, $this->GetValue('Phasenmodus'));
+        $oldPhaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+        $oldPhasen    = $this->phaseModeToPhaseCount($oldPhaseMode);
 
         $energy     = $this->gatherEnergyData();
         $filtered   = $this->applyFilters($energy);
@@ -946,27 +967,36 @@ class PVWallboxManager extends IPSModule
 
         $alpha      = $this->ReadPropertyFloat('SmoothingAlpha');
         $lastSmooth = $this->ReadAttributeFloat('SmoothedSurplus');
+
         if ($lastSmooth <= 0) {
             $smooth = $rawSurplus;
         } else {
             $smooth = $alpha * $rawSurplus + (1 - $alpha) * $lastSmooth;
         }
+
         $this->WriteAttributeFloat('SmoothedSurplus', $smooth);
 
         $anteilWatt = intval(round($smooth * $anteil / 100));
 
         $this->PruefeUndSetzePhasenmodus($smooth);
-        $newPhasen = max(1, $this->GetValue('Phasenmodus'));
+
+        $newPhaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+        $newPhasen    = $this->phaseModeToPhaseCount($newPhaseMode);
+
         if ($newPhasen !== $oldPhasen) {
             $energy     = $this->gatherEnergyData();
             $filtered   = $this->applyFilters($energy);
             $rawSurplus = max(0, $energy['pv'] - $filtered['hausFiltered']);
             $smooth     = $alpha * $rawSurplus + (1 - $alpha) * $smooth;
+
+            $this->WriteAttributeFloat('SmoothedSurplus', $smooth);
+
             $anteilWatt = intval(round($smooth * $anteil / 100));
         }
 
         $minAmp   = $this->ReadPropertyInteger('MinAmpere');
         $maxAmp   = $this->ReadPropertyInteger('MaxAmpere');
+
         $desiredA = (int)ceil($anteilWatt / (230 * $newPhasen));
         $desiredA = max($minAmp, min($maxAmp, $desiredA));
 
@@ -978,7 +1008,6 @@ class PVWallboxManager extends IPSModule
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
 
         if ($isFastStart) {
-            // Schnellstart: Ramp-Up beim ersten Start überspringen
             $ampere = $desiredA;
         } else {
             $diff   = max(-$maxDelta, min($maxDelta, $desiredA - $lastA));
