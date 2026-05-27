@@ -1434,7 +1434,6 @@ if ($modeKey === 'manuell') {
     private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
     {
         $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
-        $rueckfallLimit   = 5;
 
         $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
         if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
@@ -1447,13 +1446,7 @@ if ($modeKey === 'manuell') {
             $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
 
             if ($aktModus !== self::PHASE_MODE_3P) {
-                $this->SetValueAndLogChange(
-                    'PhasenmodusEinstellung',
-                    self::PHASE_MODE_3P,
-                    'Wallbox-Phasen Soll',
-                    '',
-                    'ok'
-                );
+                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
@@ -1465,7 +1458,6 @@ if ($modeKey === 'manuell') {
 
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
                 $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
@@ -1490,18 +1482,11 @@ if ($modeKey === 'manuell') {
 
             $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
             $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
 
             $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
 
             if ($zaehler >= $limit3) {
-                $this->SetValueAndLogChange(
-                    'PhasenmodusEinstellung',
-                    self::PHASE_MODE_3P,
-                    'Wallbox-Phasen Soll',
-                    '',
-                    'ok'
-                );
+                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
@@ -1511,35 +1496,13 @@ if ($modeKey === 'manuell') {
 
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
                 $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
             return;
         }
 
-        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss > $schwelle1) {
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-            return;
-        }
-
         if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss <= $schwelle1) {
-            $rueckfallZaehler = $this->ReadAttributeInteger('PhasenRueckfallZaehler') + 1;
-            $this->WriteAttributeInteger('PhasenRueckfallZaehler', $rueckfallZaehler);
-
-            if ($rueckfallZaehler < $rueckfallLimit) {
-                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-
-                $this->LogTemplate(
-                    'debug',
-                    '3-phasig gehalten',
-                    "{$rueckfallZaehler}/{$rueckfallLimit} unter {$schwelle1} W"
-                );
-
-                return;
-            }
-
             $zaehler = $this->ReadAttributeInteger('Phasen1Zaehler') + 1;
 
             $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
@@ -1548,13 +1511,7 @@ if ($modeKey === 'manuell') {
             $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
 
             if ($zaehler >= $limit1) {
-                $this->SetValueAndLogChange(
-                    'PhasenmodusEinstellung',
-                    self::PHASE_MODE_1P,
-                    'Wallbox-Phasen Soll',
-                    '',
-                    'warn'
-                );
+                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
 
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
 
@@ -1564,11 +1521,14 @@ if ($modeKey === 'manuell') {
 
                 $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                 $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('PhasenRueckfallZaehler', 0);
                 $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
             return;
+        }
+
+        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss > $schwelle1) {
+            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
         }
     }
 
