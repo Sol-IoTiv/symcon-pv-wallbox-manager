@@ -287,7 +287,7 @@ class PVWallboxManager extends IPSModule
             [0, 'Nur PV',       'SolarPanel',   0x44AA44],
             [1, 'PV-Anteil',    'Sun',          0xFFCC00],
             [2, 'Manuell',      'Power',        0xFF8800],
- //           [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
+            [5, 'Hybrid-Laden', 'Plug',         0x33B5E5]
         ]);
 
         $create('PVWM.PhasenText', VARIABLETYPE_INTEGER, 0, '', 'Lightning', [
