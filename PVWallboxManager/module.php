@@ -1471,9 +1471,14 @@ if ($modeKey === 'manuell') {
 
         $now = time();
 
-        if ($forceThreePhase) {
-            $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
+        // Ist-Phasen verwenden, nicht den Sollwert
+        $istPhasen = (int)$this->GetValue('Phasenmodus');
 
+        $aktModus = ($istPhasen === 3)
+            ? self::PHASE_MODE_3P
+            : self::PHASE_MODE_1P;
+
+        if ($forceThreePhase) {
             if ($aktModus !== self::PHASE_MODE_3P) {
                 $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
 
@@ -1503,8 +1508,6 @@ if ($modeKey === 'manuell') {
         $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
         $limit1    = $this->ReadPropertyInteger('Phasen1Limit');
         $limit3    = $this->ReadPropertyInteger('Phasen3Limit');
-
-        $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
 
         if ($aktModus === self::PHASE_MODE_1P && $pvUeberschuss >= $schwelle3) {
             $zaehler = $this->ReadAttributeInteger('Phasen3Zaehler') + 1;
