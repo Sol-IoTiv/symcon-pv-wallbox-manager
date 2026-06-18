@@ -1212,12 +1212,12 @@ class PVWallboxManager extends IPSModule
     {
         $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
 
-        if ($cooldownSeconds < self::PHASE_SWITCH_POWER_GRACE_S) {
+        if ($cooldownSeconds < self::PHASE_SWITCH_COOLDOWN_S) {
             $this->resetNoPowerCounter();
             $this->LogTemplate(
                 'debug',
                 'Fallback gesperrt',
-                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_POWER_GRACE_S . 's'
+                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . 's'
             );
             return true;
         }
