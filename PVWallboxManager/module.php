@@ -1285,33 +1285,33 @@ class PVWallboxManager extends IPSModule
                 "{$socAktuell}% < {$socZiel}%"
             );
         }
-if ($modeKey === 'manuell') {
-    $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
+        if ($modeKey === 'manuell') {
+            $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
 
-    if ($lastManualStart > 0) {
-        $sinceManualStart = time() - $lastManualStart;
+            if ($lastManualStart > 0) {
+                $sinceManualStart = time() - $lastManualStart;
 
-        if ($sinceManualStart < self::MANUAL_START_GRACE_S) {
+                if ($sinceManualStart < self::MANUAL_START_GRACE_S) {
+                    $this->resetNoPowerCounter();
+                    $this->LogTemplate(
+                        'debug',
+                        'Fallback gesperrt',
+                        "{$sinceManualStart}s seit manuellem Start < " . self::MANUAL_START_GRACE_S . 's'
+                    );
+
+                    return false;
+                }
+            }
+
             $this->resetNoPowerCounter();
             $this->LogTemplate(
                 'debug',
-                'Fallback gesperrt',
-                "{$sinceManualStart}s seit manuellem Start < " . self::MANUAL_START_GRACE_S . 's'
+                'Fallback übersprungen',
+                'manueller Modus aktiv'
             );
 
             return false;
         }
-    }
-
-    $this->resetNoPowerCounter();
-    $this->LogTemplate(
-        'debug',
-        'Fallback übersprungen',
-        'manueller Modus aktiv'
-    );
-
-    return false;
-}
 
         if ($loadActive && $currentFRC === 2) {
             if ($this->isChargeEndFallbackBlocked()) {
@@ -1328,6 +1328,18 @@ if ($modeKey === 'manuell') {
             );
 
             if ($leistung < self::NO_POWER_THRESHOLD_W) {
+                $sincePhaseSwitch = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+
+                if ($sincePhaseSwitch >= 0 && $sincePhaseSwitch < 90) {
+                    $this->resetNoPowerCounter();
+                    $this->LogTemplate(
+                        'debug',
+                        'NoPowerCounter unterdrückt',
+                        "{$sincePhaseSwitch}s seit Phasenumschaltung"
+                    );
+                    return false;
+                }
+
                 $cnt = $cntVorher + 1;
                 $this->WriteAttributeInteger('NoPowerCounter', $cnt);
                 $this->LogTemplate('debug', 'NoPowerCounter erhöht', (string) $cnt);
