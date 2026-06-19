@@ -848,8 +848,6 @@ class PVWallboxManager extends IPSModule
 
     private function ModusHybridLaden(array $data, int $anzPhasenAlt)
     {
-        $hybridStopPVPower = self::HYBRID_STOP_PV_POWER_W;
-
         if (!$this->isCarConnected($data)) {
             $this->handleNoCarConnected();
             return;
@@ -892,60 +890,27 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-/*        if ($pvErzeugung <= $hybridStopPVPower) {
-            $this->LogTemplate(
-                'stop',
-                'Hybrid-Laden beendet',
-                "PV-Erzeugung {$pvErzeugung} W ≤ {$hybridStopPVPower} W"
-            );
-
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-
-            $this->SteuerungLadefreigabe(
-                $pvUeberschuss,
-                'hybrid',
-                0,
-                1,
-                1
-            );
-            return;
-        }
-*/
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
-        if ((int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
-            $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
+        $this->PruefeUndSetzePhasenmodus($pvUeberschuss, false);
 
-            if ($ok) {
-                $this->SetValueAndLogChange(
-                    'PhasenmodusEinstellung',
-                    self::PHASE_MODE_1P,
-                    'Wallbox-Phasen Soll',
-                    '',
-                    'warn'
-                );
-
-                $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
-            } else {
-                $this->LogTemplate('error', 'Hybrid-Minimumladung', 'Umschalten auf 1-phasig fehlgeschlagen');
-            }
-        }
+        $phaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+        $anzPhasen = $this->phaseModeToPhaseCount($phaseMode);
 
         $this->LogTemplate(
             'info',
             'Hybrid-Minimumladung aktiv',
-            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$minAmpere} A / 1-phasig"
+            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$minAmpere} A / {$anzPhasen}-phasig"
         );
 
-        $this->SetNoChargeReason('Hybrid-Laden: PV zu gering, Minimumladung 1P aktiv');
+        $this->SetNoChargeReason("Hybrid-Laden: PV zu gering, Minimumladung {$anzPhasen}P aktiv");
 
         $this->SteuerungLadefreigabe(
             $pvUeberschuss,
             'hybrid',
             $minAmpere,
-            1,
+            $anzPhasen,
             2
         );
     }
@@ -1255,7 +1220,7 @@ class PVWallboxManager extends IPSModule
         $socAktuell  = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
         $socZiel     = ($socTargetID > 0 && IPS_VariableExists($socTargetID)) ? GetValue($socTargetID) : null;
 
-        $loadActive = in_array($modeKey, ['pvonly', 'pv2car', 'manuell'], true);
+        $loadActive = in_array($modeKey, ['pvonly', 'pv2car', 'manuell', 'hybrid'], true);
 
         $this->LogTemplate(
             'debug',
@@ -1496,19 +1461,18 @@ class PVWallboxManager extends IPSModule
 
         if ($forceThreePhase) {
             if ($aktModus !== self::PHASE_MODE_3P) {
-                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
-
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
                 if ($ok) {
+                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
                     $this->LogTemplate('ok', 'Manueller Modus', '3-phasig erzwungen');
+
+                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
                 } else {
                     $this->LogTemplate('error', 'Manueller Modus', 'Umschalten auf 3-phasig fehlgeschlagen');
                 }
-
-                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
             return;
@@ -1534,17 +1498,18 @@ class PVWallboxManager extends IPSModule
             $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
 
             if ($zaehler >= $limit3) {
-                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
-
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
-                if (!$ok) {
+                if ($ok) {
+                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
+                    $this->LogTemplate('ok', 'Phasenumschaltung erfolgreich', '1→3');
+
+                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+                } else {
                     $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '1→3');
                 }
-
-                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
             return;
@@ -1559,17 +1524,18 @@ class PVWallboxManager extends IPSModule
             $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
 
             if ($zaehler >= $limit1) {
-                $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
-
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
 
-                if (!$ok) {
+                if ($ok) {
+                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
+                    $this->LogTemplate('warn', 'Phasenumschaltung erfolgreich', '3→1');
+
+                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+                } else {
                     $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '3→1');
                 }
-
-                $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
             }
 
             return;
@@ -1577,6 +1543,10 @@ class PVWallboxManager extends IPSModule
 
         if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss > $schwelle1) {
             $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+        }
+
+        if ($aktModus === self::PHASE_MODE_1P && $pvUeberschuss < $schwelle3) {
+            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
         }
     }
 

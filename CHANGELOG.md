@@ -3,6 +3,15 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [1.4.8b] - 2026-06-19
+### 🛠️ Verbesserungen
+- Log-Ausgaben deutlich reduziert.
+- Wiederkehrende Zustandsmeldungen werden nur noch einmal ausgegeben.
+- Laufende Statuswerte werden nur noch im Debug-Logging protokolliert.
+
+### 🔧 Intern
+- Zustandsbasiertes Logging eingeführt.
+
 ## [1.4.7b] - 2026-05-18
 ### 🚀 Neu
 - HTML-Status um dynamische Ladehinweise erweitert
