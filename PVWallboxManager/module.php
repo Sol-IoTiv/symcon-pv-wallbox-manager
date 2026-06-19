@@ -1281,13 +1281,13 @@ class PVWallboxManager extends IPSModule
                 return true;
             }
 
-                $this->ResetStateLog('target_soc_reached');
+            $this->ResetStateLog('target_soc_reached');
 
-                $this->LogTemplate(
-                    'debug',
-                    'SOC-Ziel noch nicht erreicht',
-                    "{$socAktuell}% < {$socZiel}%"
-                );
+            $this->LogTemplate(
+                'debug',
+                'SOC-Ziel noch nicht erreicht',
+                "{$socAktuell}% < {$socZiel}%"
+            );
         }
         if ($modeKey === 'manuell') {
             $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
@@ -2479,9 +2479,15 @@ if ($limitedAmpere < $minAmpere) {
         $this->SetValueAndLogChange('ChargeTime', $chargeString, '⏳ Ladezeit/Fertigzeit:');
 
         if ($restTime === 'n/a') {
-            $this->LogTemplate('warn', 'Verbleibende Ladezeit nicht berechenbar (fehlende Daten)');
-        }
-        elseif ($restTime !== '00h 00min') {
+            $this->LogStateOnce(
+                'remaining_charge_time_not_calculable',
+                'warn',
+                'Verbleibende Ladezeit nicht berechenbar',
+                'fehlende Daten'
+            );
+        } elseif ($restTime !== '00h 00min') {
+            $this->ResetStateLog('remaining_charge_time_not_calculable');
+
             $this->LogTemplate(
                 'debug',
                 "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertigzeit: {$finishTime} Uhr"
@@ -2844,6 +2850,7 @@ if ($limitedAmpere < $minAmpere) {
 
         $oldText = $formatValue($oldValue);
         $newText = $formatValue($newValue);
+
         if ($caption) {
             $msg = "$caption geändert: $oldText → $newText";
         } else {
@@ -2853,19 +2860,24 @@ if ($limitedAmpere < $minAmpere) {
         $debugOnlyIdents = [
             'Leistung',
             'Energie',
-            'ChargeTime',
+            'Ampere',
+            'PV_Ueberschuss',
+            'PV_Ueberschuss_A',
             'Hausverbrauch_W',
             'Hausverbrauch_abz_Wallbox',
-            'PV_Ueberschuss',
-            'PV_Ueberschuss_A'
+            'ChargeTime',
+            'CurrentSpotPrice',
+            'CheapestHoursInfo',
+            'MarketPriceInfo'
         ];
 
         if (in_array($ident, $debugOnlyIdents, true)) {
             $level = 'debug';
         }
 
-        $this->LogTemplate($level, $msg);
         SetValue($varID, $newValue);
+
+        $this->LogTemplate($level, $msg);
     }
 
     // =========================================================================
