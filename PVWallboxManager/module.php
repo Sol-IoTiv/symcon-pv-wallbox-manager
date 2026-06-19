@@ -51,6 +51,7 @@ class PVWallboxManager extends IPSModule
             'LetztePhasenUmschaltung'        => 0,
             'LastStatusInfoHTML'             => '',
             'LastNoChargeReason'             => '',
+            'LoggedStates'                   => '{}',
             'LastChargingCurrent'            => 0,
             'LastChargingCurrentChange'      => 0,
             'LastSentChargingCurrent'        => 0,
@@ -1266,7 +1267,8 @@ class PVWallboxManager extends IPSModule
             if ($socAktuell >= $socZiel) {
                 $this->SetNoChargeReason('Ziel-SoC erreicht');
 
-                $this->LogTemplate(
+                $this->LogStateOnce(
+                    'target_soc_reached',
                     'stop',
                     'Ziel-SOC erreicht',
                     "{$socAktuell}% ≥ {$socZiel}%"
@@ -1279,11 +1281,13 @@ class PVWallboxManager extends IPSModule
                 return true;
             }
 
-            $this->LogTemplate(
-                'debug',
-                'SOC-Ziel noch nicht erreicht',
-                "{$socAktuell}% < {$socZiel}%"
-            );
+                $this->ResetStateLog('target_soc_reached');
+
+                $this->LogTemplate(
+                    'debug',
+                    'SOC-Ziel noch nicht erreicht',
+                    "{$socAktuell}% < {$socZiel}%"
+                );
         }
         if ($modeKey === 'manuell') {
             $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
@@ -2479,7 +2483,7 @@ if ($limitedAmpere < $minAmpere) {
         }
         elseif ($restTime !== '00h 00min') {
             $this->LogTemplate(
-                'info',
+                'debug',
                 "⏳ Geschätzte Ladezeit: {$restTime} / ⏰ Voraussichtliche Fertigzeit: {$finishTime} Uhr"
             );
         }
@@ -2846,6 +2850,20 @@ if ($limitedAmpere < $minAmpere) {
             $msg = "Wert geändert: $oldText → $newText";
         }
 
+        $debugOnlyIdents = [
+            'Leistung',
+            'Energie',
+            'ChargeTime',
+            'Hausverbrauch_W',
+            'Hausverbrauch_abz_Wallbox',
+            'PV_Ueberschuss',
+            'PV_Ueberschuss_A'
+        ];
+
+        if (in_array($ident, $debugOnlyIdents, true)) {
+            $level = 'debug';
+        }
+
         $this->LogTemplate($level, $msg);
         SetValue($varID, $newValue);
     }
@@ -2935,6 +2953,38 @@ if ($limitedAmpere < $minAmpere) {
     // =========================================================================
     // 16. LOGGING / ALLGEMEINE HILFSFUNKTIONEN
     // =========================================================================
+
+    private function LogStateOnce(string $key, string $type, string $short, string $detail = ''): void
+    {
+        $states = json_decode($this->ReadAttributeString('LoggedStates'), true);
+
+        if (!is_array($states)) {
+            $states = [];
+        }
+
+        if (isset($states[$key])) {
+            return;
+        }
+
+        $states[$key] = true;
+        $this->WriteAttributeString('LoggedStates', json_encode($states));
+
+        $this->LogTemplate($type, $short, $detail);
+    }
+
+    private function ResetStateLog(string $key): void
+    {
+        $states = json_decode($this->ReadAttributeString('LoggedStates'), true);
+
+        if (!is_array($states)) {
+            return;
+        }
+
+        if (isset($states[$key])) {
+            unset($states[$key]);
+            $this->WriteAttributeString('LoggedStates', json_encode($states));
+        }
+    }
 
     private function LogTemplate(string $type, string $short, string $detail = ''): void
     {
