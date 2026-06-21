@@ -2064,11 +2064,20 @@ if ($limitedAmpere < $minAmpere) {
         $ampere = $this->clampAmpere($ampere);
 
         if ($requestedAmpere !== $ampere) {
-            $this->LogTemplate(
-                'warn',
-                'Ladestrom begrenzt',
-                "{$requestedAmpere} A → {$ampere} A"
-            );
+
+            if ($ampere > $requestedAmpere) {
+                $this->LogTemplate(
+                    'debug',
+                    'Mindestladestrom angewendet',
+                    "{$requestedAmpere} A → {$ampere} A"
+                );
+            } else {
+                $this->LogTemplate(
+                    'warn',
+                    'Ladestrom begrenzt',
+                    "{$requestedAmpere} A → {$ampere} A"
+                );
+            }
         }
 
         $ip = $this->ReadPropertyString('WallboxIP');
@@ -2078,7 +2087,7 @@ if ($limitedAmpere < $minAmpere) {
 
         $response = $this->simpleCurlGet($url);
 
-        if ($response['result'] === false || $response['httpcode'] != 200) {
+        if ($response['result'] === false || (int)$response['httpcode'] !== 200) {
             $this->LogTemplate(
                 'error',
                 'SetChargingCurrent fehlgeschlagen',
