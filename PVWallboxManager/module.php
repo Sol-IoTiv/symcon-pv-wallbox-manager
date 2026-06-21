@@ -1464,6 +1464,7 @@ class PVWallboxManager extends IPSModule
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
                 if ($ok) {
+                    $this->SetValueAndLogChange('Phasenmodus', 3, 'Wallbox-Phasen Ist', '', 'ok');
                     $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
                     $this->LogTemplate('ok', 'Manueller Modus', '3-phasig erzwungen');
 
@@ -1501,6 +1502,7 @@ class PVWallboxManager extends IPSModule
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
                 if ($ok) {
+                    $this->SetValueAndLogChange('Phasenmodus', 3, 'Wallbox-Phasen Ist', '', 'ok');
                     $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
                     $this->LogTemplate('ok', 'Phasenumschaltung erfolgreich', '1→3');
 
@@ -1527,6 +1529,7 @@ class PVWallboxManager extends IPSModule
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
 
                 if ($ok) {
+                    $this->SetValueAndLogChange('Phasenmodus', 1, 'Wallbox-Phasen Ist', '', 'warn');
                     $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
                     $this->LogTemplate('warn', 'Phasenumschaltung erfolgreich', '3→1');
 
