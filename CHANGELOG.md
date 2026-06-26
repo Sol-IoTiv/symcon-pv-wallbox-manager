@@ -3,31 +3,24 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
-## [1.4.8b] - 2026-06-19
-
+## [1.4.9b] - 2026-06-26
 ### 🛠️ Verbesserungen
-* Log-Ausgaben deutlich reduziert.
-* Wiederkehrende Zustandsmeldungen werden nur noch einmal ausgegeben.
-* Laufende Statuswerte werden nur noch im Debug-Logging protokolliert.
-* Hybrid-Laden nutzt nun die normale Phasenumschaltung mit Hysterese und Cooldown.
-* Phasenwechsel erfolgen im Hybrid-Modus deutlich ruhiger und nachvollziehbarer.
-* Ladehinweise und Statusmeldungen weiter optimiert.
-
-### 🛠️ Fixes
-* Fehler bei der Aktualisierung des Soll-Phasenmodus behoben.
-* Soll-Phasenmodus wird nun erst nach erfolgreicher Umschaltung übernommen.
-* Verbesserte Behandlung fehlgeschlagener Phasenumschaltungen.
-* Korrekte Berücksichtigung des Hybrid-Modus bei der Ladeende-Prüfung.
+- Hybrid-Laden nutzt nun die normale Phasenumschaltung mit Hysterese und Cooldown.
+- Phasenwechsel erfolgen im Hybrid-Modus deutlich ruhiger und nachvollziehbarer.
+- Hybrid-Endladung kann optional mit Verzögerung aktiviert werden.
 
 ### 🚀 Neu
-* Neuer Lademodus „Hybrid-Laden“.
-* Minimumladung bei geringem PV-Überschuss möglich.
-* Hybrid-Modus kombiniert PV-Überschussladen mit automatischer Weiterladung bei niedriger PV-Leistung.
+- Konfigurierbare Hybrid-Endladung (deaktiviert, fix 1-phasig oder fix 3-phasig).
+- Frei einstellbarer Ladestrom für die Hybrid-Endladung.
+- Einstellbare Verzögerung bis zur Aktivierung der Hybrid-Endladung.
+- Automatischer Wechsel in die Endladung bei dauerhaft zu geringem PV-Überschuss.
+- Automatische Rückkehr zur normalen Hybrid-Regelung bei ausreichendem PV-Überschuss.
 
 ### 🔧 Intern
-* Zustandsbasiertes Logging eingeführt.
-* Phasenumschaltung intern überarbeitet.
-* Zähler- und Cooldown-Logik vereinheitlicht.
+- Hybrid-Logik erweitert und überarbeitet.
+- Zeitgesteuerte Aktivierung der Hybrid-Endladung integriert.
+- Erweiterte Zustands- und Timerverwaltung für Hybrid-Laden.
+
 
 ## [1.4.7b] - 2026-05-18
 ### 🚀 Neu
