@@ -202,6 +202,60 @@
               "maximum": 100
             }
           ]
+        },
+        {
+          "type": "Label",
+          "caption": "    "
+        },
+        {
+          "type": "Label",
+          "label": "🚗 Hybrid-Laden: Verhalten nach Ende des PV-Überschusses"
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "Select",
+              "name": "HybridEndMode",
+              "caption": "Hybrid-Endladung",
+              "options": [
+                { "caption": "Deaktiviert / bisheriges Verhalten", "value": 0 },
+                { "caption": "Fix 1-phasig", "value": 1 },
+                { "caption": "Fix 3-phasig", "value": 2 }
+              ],
+              "default": 0
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "HybridEndAmpere",
+              "caption": "Ladestrom",
+              "suffix": "A",
+              "minimum": 6,
+              "maximum": 32,
+              "default": 6
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "HybridEndDelaySeconds",
+              "caption": "Aktivieren nach",
+              "suffix": "Sek.",
+              "minimum": 60,
+              "maximum": 7200,
+              "default": 600
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "label": "Optional: Wenn im Hybrid-Modus länger kein ausreichender PV-Überschuss erkannt wird, wechselt das Modul nach der eingestellten Zeit auf die fixe Endladung. Bei deaktivierter Endladung bleibt das bisherige Hybrid-Verhalten aktiv."
         }
       ]
     },

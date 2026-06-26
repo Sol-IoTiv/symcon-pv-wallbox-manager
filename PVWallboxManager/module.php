@@ -59,6 +59,7 @@ class PVWallboxManager extends IPSModule
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
             'StartupTimestamp'               => 0,
+            'HybridLowPvSince'               => 0,
         ]);
 
         $this->registerProperties([
@@ -106,6 +107,10 @@ class PVWallboxManager extends IPSModule
             'MarketPriceTaxRate'    => ['type'=>'float',   'default'=>0.00],
             'SmoothingAlpha'        => ['type'=>'float',   'default'=>0.5],
             'MaxRampDeltaAmp'       => ['type'=>'integer', 'default'=>2],
+
+            'HybridEndMode'          => ['type'=>'integer', 'default'=>0],
+            'HybridEndAmpere'        => ['type'=>'integer', 'default'=>6],
+            'HybridEndDelaySeconds'  => ['type'=>'integer', 'default'=>600],
         ]);
 
         $this->RegisterVariableBoolean('ModulAktiv_Switch', '✅ Modul aktiv', '~Switch', 900);
@@ -868,6 +873,7 @@ class PVWallboxManager extends IPSModule
 
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
+            $this->WriteAttributeInteger('HybridLowPvSince', 0);
 
             $this->SetForceState(1);
             $this->SetChargingCurrent(6);
@@ -883,21 +889,33 @@ class PVWallboxManager extends IPSModule
         $energy = $this->gatherEnergyData();
         $energy = $this->applyFilters($energy);
 
-        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-        $minStopWatt = (int)$this->ReadPropertyInteger('MinStopWatt');
-        $minAmpere   = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
+        $aktFRC                 = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $minStopWatt            = (int)$this->ReadPropertyInteger('MinStopWatt');
+        $minAmpere              = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
+        $hybridEndMode          = (int)$this->ReadPropertyInteger('HybridEndMode');
+        $hybridEndDelaySeconds  = max(0, (int)$this->ReadPropertyInteger('HybridEndDelaySeconds'));
+        $hybridEndAmpere        = max(6, min(
+            (int)$this->ReadPropertyInteger('MaxAmpere'),
+            (int)$this->ReadPropertyInteger('HybridEndAmpere')
+        ));
 
         $surplus       = $this->calculateSurplus($energy, $anzPhasenAlt, true);
         $pvUeberschuss = (float)$surplus['ueberschuss_w'];
         $pvErzeugung   = (float)$energy['pv'];
 
         if ($pvUeberschuss > $minStopWatt) {
+            $this->WriteAttributeInteger('HybridLowPvSince', 0);
+            $this->ResetStateLog('hybrid_end_charge_active');
+
             $this->ModusPVonlyLaden($data, $anzPhasenAlt);
             $this->SetNoChargeReason('Hybrid-Laden aktiv');
             return;
         }
 
         if ($aktFRC !== 2) {
+            $this->WriteAttributeInteger('HybridLowPvSince', 0);
+            $this->ResetStateLog('hybrid_end_charge_active');
+
             $this->ModusPVonlyLaden($data, $anzPhasenAlt);
             return;
         }
@@ -905,23 +923,66 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
-        $this->PruefeUndSetzePhasenmodus($pvUeberschuss, false);
+        $now = time();
+        $hybridLowPvSince = (int)$this->ReadAttributeInteger('HybridLowPvSince');
 
-        $phaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
-        $anzPhasen = $this->phaseModeToPhaseCount($phaseMode);
+        if ($hybridLowPvSince <= 0) {
+            $hybridLowPvSince = $now;
+            $this->WriteAttributeInteger('HybridLowPvSince', $hybridLowPvSince);
+        }
 
-        $this->LogTemplate(
-            'info',
-            'Hybrid-Minimumladung aktiv',
-            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$minAmpere} A / {$anzPhasen}-phasig"
+        $hybridLowPvDuration = $now - $hybridLowPvSince;
+        $hybridEndAllowed = (
+            $hybridEndMode > 0 &&
+            $hybridEndDelaySeconds > 0 &&
+            $hybridLowPvDuration >= $hybridEndDelaySeconds
         );
 
-        $this->SetNoChargeReason("Hybrid-Laden: PV zu gering, Minimumladung {$anzPhasen}P aktiv");
+        if (!$hybridEndAllowed) {
+            $this->PruefeUndSetzePhasenmodus($pvUeberschuss, false);
+
+            $phaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+            $anzPhasen = $this->phaseModeToPhaseCount($phaseMode);
+
+            $restSeconds = max(0, $hybridEndDelaySeconds - $hybridLowPvDuration);
+
+            $this->SetNoChargeReason(
+                "Hybrid-Laden: PV zu gering, Minimumladung {$anzPhasen}P / {$minAmpere}A aktiv" .
+                ($hybridEndMode > 0 ? ", Endladung in {$restSeconds}s" : "")
+            );
+
+            $this->SteuerungLadefreigabe(
+                $pvUeberschuss,
+                'hybrid',
+                $minAmpere,
+                $anzPhasen,
+                2
+            );
+
+            return;
+        }
+
+        if ($hybridEndMode === 2) {
+            $this->PruefeUndSetzePhasenmodus($pvUeberschuss, true);
+            $anzPhasen = 3;
+        } else {
+            $this->PruefeUndSetzePhasenmodus($pvUeberschuss, false, true);
+            $anzPhasen = 1;
+        }
+
+        $this->LogStateOnce(
+            'hybrid_end_charge_active',
+            'info',
+            'Hybrid-Endladung aktiv',
+            "PV-Überschuss {$pvUeberschuss} W ≤ {$minStopWatt} W, PV-Erzeugung {$pvErzeugung} W → {$hybridEndAmpere} A / {$anzPhasen}-phasig"
+        );
+
+        $this->SetNoChargeReason("Hybrid-Laden: PV zu gering, Endladung {$anzPhasen}P / {$hybridEndAmpere}A aktiv");
 
         $this->SteuerungLadefreigabe(
             $pvUeberschuss,
             'hybrid',
-            $minAmpere,
+            $hybridEndAmpere,
             $anzPhasen,
             2
         );
@@ -1453,7 +1514,7 @@ class PVWallboxManager extends IPSModule
         return max(1, $cnt);
     }
 
-    private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false)
+    private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false, $forceOnePhase = false)
     {
         $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
 
@@ -1470,19 +1531,38 @@ class PVWallboxManager extends IPSModule
             $aktModus = self::PHASE_MODE_1P;
         }
 
+        if ($forceOnePhase) {
+            if ($aktModus !== self::PHASE_MODE_1P) {
+                $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
+
+                if ($ok) {
+                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
+                    $this->LogTemplate('warn', 'Hybrid-Endladung', '1-phasig erzwungen');
+
+                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
+                } else {
+                    $this->LogTemplate('error', 'Hybrid-Endladung', 'Umschalten auf 1-phasig fehlgeschlagen');
+                }
+            }
+
+            return;
+        }
+
         if ($forceThreePhase) {
             if ($aktModus !== self::PHASE_MODE_3P) {
                 $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
 
                 if ($ok) {
                     $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
-                    $this->LogTemplate('ok', 'Manueller Modus', '3-phasig erzwungen');
+                    $this->LogTemplate('ok', 'Hybrid-Endladung', '3-phasig erzwungen');
 
                     $this->WriteAttributeInteger('Phasen3Zaehler', 0);
                     $this->WriteAttributeInteger('Phasen1Zaehler', 0);
                     $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
                 } else {
-                    $this->LogTemplate('error', 'Manueller Modus', 'Umschalten auf 3-phasig fehlgeschlagen');
+                    $this->LogTemplate('error', 'Hybrid-Endladung', 'Umschalten auf 3-phasig fehlgeschlagen');
                 }
             }
 
