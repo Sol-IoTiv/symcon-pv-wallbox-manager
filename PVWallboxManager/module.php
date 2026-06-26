@@ -779,7 +779,9 @@ class PVWallboxManager extends IPSModule
         }
 
         if (!$this->isHausakkuVoll()) {
-            $this->LogTemplate(
+
+            $this->LogStateOnce(
+                'pvonly_battery_not_full',
                 'stop',
                 'PVonly blockiert',
                 'Hausspeicher noch nicht voll'
@@ -794,6 +796,8 @@ class PVWallboxManager extends IPSModule
 
             return;
         }
+
+        $this->ResetStateLog('pvonly_battery_not_full');
 
         $energy = $this->gatherEnergyData();
 
@@ -854,7 +858,13 @@ class PVWallboxManager extends IPSModule
         }
 
         if (!$this->isHausakkuVoll()) {
-            $this->LogTemplate('stop', 'Hybrid-Laden blockiert', 'Hausspeicher noch nicht voll');
+
+            $this->LogStateOnce(
+                'hybrid_battery_not_full',
+                'stop',
+                'Hybrid-Laden blockiert',
+                'Hausspeicher noch nicht voll'
+            );
 
             $this->WriteAttributeInteger('LadeStartZaehler', 0);
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
@@ -864,6 +874,8 @@ class PVWallboxManager extends IPSModule
             $this->SetValue('PV_Ueberschuss_A', 0);
             return;
         }
+
+        $this->ResetStateLog('hybrid_battery_not_full');
 
         $phaseModeAlt = (int)$this->GetValue('PhasenmodusEinstellung');
         $anzPhasenAlt = $this->phaseModeToPhaseCount($phaseModeAlt);
