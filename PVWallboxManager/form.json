@@ -116,8 +116,14 @@
               "name": "NetzleistungEinheit",
               "caption": "Einheit",
               "options": [
-                { "caption": "Watt (W)", "value": "W" },
-                { "caption": "Kilowatt (kW)", "value": "kW" }
+                {
+                  "caption": "Watt (W)",
+                  "value": "W"
+                },
+                {
+                  "caption": "Kilowatt (kW)",
+                  "value": "kW"
+                }
               ],
               "default": "W"
             }
@@ -127,9 +133,14 @@
           "type": "RowLayout",
           "items": [
             {
+              "type": "CheckBox",
+              "name": "NetzlimitStartAktiv",
+              "caption": "Netzbegrenzung initial aktiv"
+            },
+            {
               "type": "NumberSpinner",
               "name": "MaxGridLoadWatt",
-              "caption": "Maximale Netzbelastung",
+              "caption": "Startwert maximale Netzbelastung",
               "suffix": "W",
               "minimum": 0,
               "default": 0
@@ -138,11 +149,11 @@
         },
         {
           "type": "Label",
-          "label": "0 = deaktiviert. Die Wallbox wird automatisch zurückgeregelt, sobald der Netzbezug am Hausanschluss den eingestellten Wert überschreiten würde."
+          "label": "Diese Einstellungen dienen als Startwerte. Im laufenden Betrieb werden die Netzbegrenzung und der Grenzwert über die Instanzvariablen bedient."
         },
         {
           "type": "Label",
-          "label": "Beispiel: Bei 8000W wird die Wallbox zurückgeregelt, sobald der gesamte Netzbezug am Hausanschluss über 8000W steigen würde."
+          "label": "Beispiel: Bei 8000 W wird die Wallbox zurückgeregelt, sobald der gesamte Netzbezug am Hausanschluss den eingestellten Wert überschreiten würde."
         }
       ]
     },
