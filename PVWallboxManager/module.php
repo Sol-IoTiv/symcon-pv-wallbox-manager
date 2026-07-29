@@ -60,6 +60,7 @@ class PVWallboxManager extends IPSModule
             'LastCarConnected'               => false,
             'StartupTimestamp'               => 0,
             'HybridLowPvSince'               => 0,
+            'NetzlimitInitialisiert'         => false,
         ]);
 
         $this->registerProperties([
@@ -97,6 +98,7 @@ class PVWallboxManager extends IPSModule
 
             'NetzleistungID'         => ['type'=>'integer', 'default'=>0],
             'NetzleistungEinheit'    => ['type'=>'string',  'default'=>'W'],
+            'NetzlimitStartAktiv'    => ['type'=>'boolean', 'default'=>false],
             'MaxGridLoadWatt'        => ['type'=>'integer', 'default'=>0],
 
             'UseMarketPrices'       => ['type'=>'boolean', 'default'=>false],
@@ -136,6 +138,8 @@ class PVWallboxManager extends IPSModule
             ['integer', 'PVAnteil',                     'PV-Anteil (%)',                            'PVWM.Percent',             43, 'Percent'],
             ['integer', 'ManuellAmpere',                '🔌 Ampere (manuell)',                      'PVWM.Ampere',              44, null],
             ['integer', 'ManuellPhasen',                '🔀 Phasen (manuell)',                      'PVWM.PSM',                 45, null],
+            ['boolean', 'NetzlimitAktiv',               '🌐 Netzbegrenzung aktiv',                  '~Switch',                  46, 'Switch'],
+            ['integer', 'MaxNetzbezugWatt',             '⚡ Maximale Netzbelastung',                'PVWM.GridLimitWatt',       47, 'Flash'],
             ['integer', 'PhasenmodusEinstellung',       '🟢 Wallbox Phasen (Soll)',                 'PVWM.PSM',                 50, 'Lightning'],
             ['integer', 'Phasenmodus',                  '🔵 Fahrzeug nutzt Phasen (Ist)',           'PVWM.PhasenText',          51, 'Lightning'],
             ['string',  'StatusInfo',                   'ℹ️ Status-Info',                            '~HTMLBox',                70,  null],
@@ -147,6 +151,8 @@ class PVWallboxManager extends IPSModule
         $this->EnableAction('ManuellAmpere');
         $this->EnableAction('ManuellPhasen');
         $this->EnableAction('PVAnteil');
+        $this->EnableAction('NetzlimitAktiv');
+        $this->EnableAction('MaxNetzbezugWatt');
 
         $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
         $this->RegisterTimer('PVWM_UpdateMarketPrices', 0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateMarketPrices","");');
@@ -162,6 +168,30 @@ class PVWallboxManager extends IPSModule
 
         $aktiv = $this->ReadPropertyBoolean('ModulAktiv');
         $this->SetValue('ModulAktiv_Switch', $aktiv);
+
+        /*
+        * Die Werte aus der Modulkonfiguration werden nur einmal übernommen.
+        * Danach sind ausschließlich die bedienbaren Instanzvariablen maßgeblich.
+        */
+        if (!$this->ReadAttributeBoolean('NetzlimitInitialisiert')) {
+            $startAktiv = $this->ReadPropertyBoolean('NetzlimitStartAktiv');
+            $startWatt  = max(0, (int)$this->ReadPropertyInteger('MaxGridLoadWatt'));
+
+            $this->SetValue('NetzlimitAktiv', $startAktiv);
+            $this->SetValue('MaxNetzbezugWatt', $startWatt);
+
+            $this->WriteAttributeBoolean('NetzlimitInitialisiert', true);
+
+            $this->LogTemplate(
+                'info',
+                'Netzbegrenzung initialisiert',
+                sprintf(
+                    '%s, Grenzwert=%d W',
+                    $startAktiv ? 'aktiv' : 'deaktiviert',
+                    $startWatt
+                )
+            );
+        }
 
         $this->SetTimerInterval('PVWM_UpdateStatus', 0);
         $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
@@ -310,12 +340,18 @@ class PVWallboxManager extends IPSModule
 
         $create('PVWM.AmpereCable', VARIABLETYPE_INTEGER, 0, ' A', 'Energy');
         
-        $create('PVWM.Ampere',      VARIABLETYPE_INTEGER, 0, ' A',      'Energy');
-        IPS_SetVariableProfileValues("PVWM.Ampere", 6, 32, 1);
-        $create('PVWM.Percent',     VARIABLETYPE_INTEGER, 0, ' %',      'Percent');
+        $create('PVWM.Ampere', VARIABLETYPE_INTEGER, 0, ' A', 'Energy');
+        IPS_SetVariableProfileValues('PVWM.Ampere', 6, 32, 1);
+
+        $create('PVWM.Percent', VARIABLETYPE_INTEGER, 0, ' %', 'Percent');
         IPS_SetVariableProfileValues('PVWM.Percent', 0, 100, 1);
-        $create('PVWM.Watt',        VARIABLETYPE_FLOAT,   0, ' W',      'Flash');
-        $create('PVWM.W',           VARIABLETYPE_FLOAT,   0, ' W',      'Flash');
+
+        $create('PVWM.GridLimitWatt', VARIABLETYPE_INTEGER, 0, ' W', 'Flash');
+        IPS_SetVariableProfileValues('PVWM.GridLimitWatt', 0, 50000, 100);
+
+        $create('PVWM.Watt', VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
+        $create('PVWM.W',    VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
+
         $create('PVWM.CentPerKWh',  VARIABLETYPE_FLOAT,   3, ' ct/kWh', 'Euro');
         $create('PVWM.Wh',          VARIABLETYPE_FLOAT,   0, ' Wh',     'Lightning');
 
@@ -413,6 +449,14 @@ class PVWallboxManager extends IPSModule
                 $this->handleManuellPhasenChange((int) $Value);
                 return;
 
+            case 'NetzlimitAktiv':
+                $this->handleNetzlimitAktivChange((bool) $Value);
+                return;
+
+            case 'MaxNetzbezugWatt':
+                $this->handleMaxNetzbezugChange((int) $Value);
+                return;
+
             default:
                 throw new Exception("Invalid Ident: $Ident");
         }
@@ -485,6 +529,54 @@ class PVWallboxManager extends IPSModule
 
         if ($this->getCurrentModeKey() === 'manuell') {
             $this->UpdateStatus('manuell');
+        }
+    }
+
+    private function handleNetzlimitAktivChange(bool $active): void
+    {
+        $this->SetValueAndLogChange(
+            'NetzlimitAktiv',
+            $active,
+            'Netzbegrenzung'
+        );
+
+        if ($active && (int)$this->GetValue('MaxNetzbezugWatt') <= 0) {
+            $this->LogTemplate(
+                'warn',
+                'Netzbegrenzung ohne Grenzwert',
+                'Maximale Netzbelastung ist 0 W – Begrenzung bleibt technisch deaktiviert'
+            );
+        }
+
+        if ($this->ReadPropertyBoolean('ModulAktiv')) {
+            $this->UpdateStatus('netzlimit');
+        }
+    }
+
+    private function handleMaxNetzbezugChange(int $watt): void
+    {
+        $watt = max(0, min(50000, $watt));
+
+        $this->SetValueAndLogChange(
+            'MaxNetzbezugWatt',
+            $watt,
+            'Maximale Netzbelastung',
+            'W'
+        );
+
+        if ($this->GetValue('NetzlimitAktiv') && $watt <= 0) {
+            $this->LogTemplate(
+                'warn',
+                'Netzbegrenzung ohne Grenzwert',
+                '0 W bedeutet: Begrenzung technisch deaktiviert'
+            );
+        }
+
+        if (
+            $this->ReadPropertyBoolean('ModulAktiv') &&
+            $this->GetValue('NetzlimitAktiv')
+        ) {
+            $this->UpdateStatus('netzlimit');
         }
     }
 
@@ -1703,9 +1795,15 @@ class PVWallboxManager extends IPSModule
 
     private function applyMaxGridLoadLimit(int $ampere, int &$anzPhasen): int
     {
-        $maxGridLoad = (int)$this->ReadPropertyInteger('MaxGridLoadWatt');
+        $netzlimitAktiv = (bool)$this->GetValue('NetzlimitAktiv');
 
-        // 0 W = deaktiviert
+        if (!$netzlimitAktiv) {
+            return $ampere;
+        }
+
+        $maxGridLoad = max(0, (int)$this->GetValue('MaxNetzbezugWatt'));
+
+        // 0 W bedeutet weiterhin: keine aktive Begrenzung
         if ($maxGridLoad <= 0) {
             return $ampere;
         }
