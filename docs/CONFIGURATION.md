@@ -40,7 +40,7 @@ NetzleistungID: Gesamt-Netzleistung inklusive Wallbox. Intern positiv=Bezug, neg
 
 GridMeasurementMaxAge: Standard 120 s, Bezug auf Symcons VariableUpdated. Der Zähler muss auch bei gleichem Wert regelmäßig aktualisieren. Fehlende, falsch typisierte, nicht numerische oder zu alte Werte sperren die Ladung bei aktivem Limit.
 
-Die Begrenzung ausschließlich über die bedienbaren Instanzvariablen „Netzbegrenzung aktiv“ (NetzlimitAktiv) und „Maximale Netzbelastung“ (MaxNetzbezugWatt) einstellen, in der Visualisierung oder im Objektbaum unter der PVWallboxManager-Instanz. Zuerst den gewünschten Grenzwert in Watt setzen, dann einschalten. **0 W bedeutet deaktivierte Begrenzung.**
+Die Begrenzung ausschließlich über die bedienbaren Instanzvariablen „Netzbegrenzung aktiv“ (NetzlimitAktiv) und „Maximale Netzbelastung“ (MaxNetzbezugWatt) einstellen, in der Visualisierung oder im Objektbaum unter der PVWallboxManager-Instanz. Der Schieberegler reicht von 0 bis 22.000 W in 100-W-Schritten. Zuerst den gewünschten Grenzwert in Watt setzen, dann einschalten. **0 W bedeutet deaktivierte Begrenzung.**
 
 Die früheren Formular-Startwerte NetzlimitStartAktiv und MaxGridLoadWatt bleiben als Legacy-Eigenschaften für die Kompatibilität registriert, sind aber nicht mehr im Formular sichtbar. Sie werden nur bei der erstmaligen Initialisierung übernommen; vorhandene Laufzeitwerte bleiben beim Update erhalten. Neue Instanzen starten standardmäßig mit ausgeschalteter Begrenzung und 0 W.
 

@@ -369,7 +369,7 @@ class PVWallboxManager extends IPSModule
         IPS_SetVariableProfileValues('PVWM.Percent', 0, 100, 1);
 
         $create('PVWM.GridLimitWatt', VARIABLETYPE_INTEGER, 0, ' W', 'Flash');
-        IPS_SetVariableProfileValues('PVWM.GridLimitWatt', 0, 50000, 100);
+        IPS_SetVariableProfileValues('PVWM.GridLimitWatt', 0, 22000, 100);
 
         $create('PVWM.Watt', VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
         $create('PVWM.W',    VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
