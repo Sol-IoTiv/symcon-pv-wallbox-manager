@@ -2,64 +2,6 @@
   "elements": [
     {
       "type": "ExpansionPanel",
-      "caption": "Kontrollierte Phasenumschaltung",
-      "items": [
-        {
-          "type": "Label",
-          "caption": "Phasenwechsel erfolgen nach bestätigtem Ladestop. Bei Fehlern bleibt die Wiederfreigabe gesperrt."
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "PhaseSwitchCooldown",
-          "caption": "Mindestabstand zwischen Phasenwechseln",
-          "suffix": "s",
-          "minimum": 30,
-          "maximum": 1800
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "PhaseSwitchTimeout",
-          "caption": "Timeout je Umschaltschritt",
-          "suffix": "s",
-          "minimum": 15,
-          "maximum": 300
-        },
-        {
-          "type": "Label",
-          "caption": "Standard: 180 s Mindestabstand, 60 s Timeout. Für das konkrete Fahrzeug und die Firmware im Praxistest prüfen."
-        },
-        {
-          "type": "Button",
-          "caption": "Phasenfehler nach Stillstand zurücksetzen",
-          "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
-        }
-      ]
-    },
-    {
-      "type": "ExpansionPanel",
-      "caption": "Netzmessung prüfen",
-      "items": [
-        {
-          "type": "CheckBox",
-          "name": "InvertNetzleistung",
-          "caption": "Vorzeichen umkehren (Zähler liefert Einspeisung positiv)"
-        },
-        {
-          "type": "NumberSpinner",
-          "name": "GridMeasurementMaxAge",
-          "caption": "Maximales Messwertalter",
-          "suffix": "s",
-          "minimum": 10,
-          "maximum": 3600
-        },
-        {
-          "type": "Label",
-          "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
-        }
-      ]
-    },
-    {
-      "type": "ExpansionPanel",
       "caption": "🛑 Modulsteuerung",
       "items": [
         { "type": "CheckBox", "name": "ModulAktiv", "caption": "Modul aktiv (Deaktivieren fordert Ladestop an)"},
@@ -154,7 +96,7 @@
         },
         {
           "type": "Label",
-          "label": "Die Netzleistung muss vom Smartmeter oder Hausanschluss-Zähler kommen. Positiv = Netzbezug, negativ = Einspeisung."
+          "label": "Die Netzleistung muss vom Zähler am Hausanschluss kommen. Standard: positiv = Netzbezug, negativ = Einspeisung. Bei umgekehrtem Vorzeichen die folgende Option aktivieren."
         },
         {
           "type": "RowLayout",
@@ -163,7 +105,9 @@
               "type": "SelectVariable",
               "name": "NetzleistungID",
               "caption": "Netzleistung Hausanschluss",
-              "validVariableTypes": [2]
+              "validVariableTypes": [
+                2
+              ]
             },
             {
               "type": "Label",
@@ -188,6 +132,23 @@
           ]
         },
         {
+          "type": "CheckBox",
+          "name": "InvertNetzleistung",
+          "caption": "Vorzeichen umkehren (Zähler liefert Einspeisung positiv)"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "GridMeasurementMaxAge",
+          "caption": "Maximales Messwertalter",
+          "suffix": "s",
+          "minimum": 10,
+          "maximum": 3600
+        },
+        {
+          "type": "Label",
+          "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
+        },
+        {
           "type": "RowLayout",
           "items": [
             {
@@ -207,7 +168,7 @@
         },
         {
           "type": "Label",
-          "label": "Diese Einstellungen dienen als Startwerte. Im laufenden Betrieb werden die Netzbegrenzung und der Grenzwert über die Instanzvariablen bedient."
+          "label": "Diese Einstellungen dienen als Startwerte. Im laufenden Betrieb werden die Netzbegrenzung und der Grenzwert über die Instanzvariablen bedient. Ein Grenzwert von 0 W deaktiviert die Begrenzung."
         },
         {
           "type": "Label",
@@ -219,19 +180,89 @@
       "type": "ExpansionPanel",
       "caption": "⚡ Phasenumschaltung",
       "items": [
-        { "type": "Label", "label": "⬇️ Schwelle in Watt zum Umschalten auf 1-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 1-phasig." },
-         { "type": "RowLayout", "items": [
-           { "type": "NumberSpinner", "name": "Phasen1Schwelle", "caption": "Schwelle auf 1-phasig (W)" },
-           { "type": "Label", "caption": "    " },
-            { "type": "NumberSpinner", "name": "Phasen1Limit", "caption": "Zählerlimit für Umschaltung zu 1-phasig" }
-        ]},
-        { "type": "Label", "caption": "    " },
-        { "type": "Label", "label": "⬆️ Schwelle in Watt zum Umschalten auf 3-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 3-phasig." },
-           { "type": "RowLayout", "items": [
-             { "type": "NumberSpinner", "name": "Phasen3Schwelle", "caption": "Schwelle auf 3-phasig (W)" },
-             { "type": "Label", "caption": "    " },
-             { "type": "NumberSpinner", "name": "Phasen3Limit", "caption": "Zählerlimit für Umschaltung zu 3-phasig" }
-        ]}
+        {
+          "type": "Label",
+          "label": "⬇️ Schwelle in Watt zum Umschalten auf 1-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 1-phasig."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen1Schwelle",
+              "caption": "Schwelle auf 1-phasig (W)"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen1Limit",
+              "caption": "Zählerlimit für Umschaltung zu 1-phasig"
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "caption": "    "
+        },
+        {
+          "type": "Label",
+          "label": "⬆️ Schwelle in Watt zum Umschalten auf 3-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 3-phasig."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen3Schwelle",
+              "caption": "Schwelle auf 3-phasig (W)"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen3Limit",
+              "caption": "Zählerlimit für Umschaltung zu 3-phasig"
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "caption": "Ablauf und Wartezeiten"
+        },
+        {
+          "type": "Label",
+          "caption": "Phasenwechsel: Ladung stoppen, Stillstand bestätigen, Phasenmodus wechseln und bestätigen. Erst danach wird die Ladefreigabe erneut geprüft."
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchCooldown",
+          "caption": "Mindestabstand zwischen Phasenwechseln (Cooldown)",
+          "suffix": "s",
+          "minimum": 30,
+          "maximum": 1800
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchTimeout",
+          "caption": "Maximale Wartezeit je Bestätigung",
+          "suffix": "s",
+          "minimum": 15,
+          "maximum": 300
+        },
+        {
+          "type": "Label",
+          "caption": "Cooldown (Standard 180 s): Verhindert häufige Wechsel. Laden mit der bisherigen Phasenanzahl bleibt bei ausreichender Leistung möglich. Bestätigungsfrist (Standard 60 s je Schritt): Sobald der Status bestätigt ist, geht es weiter; keine feste Ladepause. Ohne Bestätigung bleibt die Ladung gesperrt."
+        },
+        {
+          "type": "Button",
+          "caption": "Phasenfehler nach Stillstand zurücksetzen",
+          "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
+        }
       ]
     },
     {

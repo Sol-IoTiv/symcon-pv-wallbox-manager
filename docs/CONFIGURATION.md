@@ -28,9 +28,13 @@ MinAmpere/MaxAmpere gelten zusammen mit den aus var/ama erkannten Wallboxgrenzen
 
 MinLadeWatt/MinStopWatt: Start-/Stopschwellen. StartLadeHysterese/StopLadeHysterese zählen Regelaufrufe. Phasen3Schwelle/Phasen1Schwelle und Phasen3Limit/Phasen1Limit bilden den Phasenwunsch. Netzbudget und Cooldown können diesen zurückstellen.
 
-PhaseSwitchCooldown: Standard 180 s, 30–1800 s. PhaseSwitchTimeout: Standard 60 s, im Formular 15–300 s. Das sind Beta-Defaults für die Hardwareabnahme.
+Im Formular bündelt „Phasenumschaltung“ die Schaltschwellen, Zählerlimits, Wartezeiten und das Zurücksetzen eines Phasenfehlers.
+
+PhaseSwitchCooldown: Mindestabstand zwischen Phasenwechseln, Standard 180 s, 30–1800 s. Währenddessen kann mit der bisherigen Phasenanzahl weitergeladen werden, sofern genug Leistung verfügbar ist. PhaseSwitchTimeout: maximale Wartezeit je Bestätigung (Stillstand bzw. übernommener Phasenmodus), Standard 60 s, im Formular 15–300 s. Sobald die erforderlichen Rückmeldungen vorliegen, geht es weiter; dies ist keine feste Ladepause. Ohne Bestätigung bleibt die Wiederfreigabe gesperrt. Das sind Beta-Defaults für die Hardwareabnahme.
 
 ## Netzlimit
+
+Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter und die Startwerte der Begrenzung.
 
 NetzleistungID: Gesamt-Netzleistung inklusive Wallbox. Intern positiv=Bezug, negativ=Einspeisung; InvertNetzleistung kehrt das Vorzeichen um. NetzleistungEinheit: W/kW.
 
