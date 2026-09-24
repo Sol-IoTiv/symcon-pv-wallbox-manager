@@ -149,26 +149,8 @@
           "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
         },
         {
-          "type": "RowLayout",
-          "items": [
-            {
-              "type": "CheckBox",
-              "name": "NetzlimitStartAktiv",
-              "caption": "Netzbegrenzung initial aktiv"
-            },
-            {
-              "type": "NumberSpinner",
-              "name": "MaxGridLoadWatt",
-              "caption": "Startwert maximale Netzbelastung",
-              "suffix": "W",
-              "minimum": 0,
-              "default": 0
-            }
-          ]
-        },
-        {
           "type": "Label",
-          "label": "Diese Einstellungen dienen als Startwerte. Im laufenden Betrieb werden die Netzbegrenzung und der Grenzwert über die Instanzvariablen bedient. Ein Grenzwert von 0 W deaktiviert die Begrenzung."
+          "label": "Netzbegrenzung bedienen: In der Visualisierung oder im Objektbaum unter dieser PVWallboxManager-Instanz „Maximale Netzbelastung“ auf den gewünschten Grenzwert in Watt stellen und „Netzbegrenzung aktiv“ einschalten. Diese beiden Instanzvariablen bestimmen die laufende Begrenzung. Bei 0 W ist sie deaktiviert."
         },
         {
           "type": "Label",

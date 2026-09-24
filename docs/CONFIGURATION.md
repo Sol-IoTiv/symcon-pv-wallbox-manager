@@ -34,13 +34,15 @@ PhaseSwitchCooldown: Mindestabstand zwischen Phasenwechseln, Standard 180 s, 30�
 
 ## Netzlimit
 
-Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter und die Startwerte der Begrenzung.
+Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter sowie den Hinweis zur Bedienung der Begrenzung.
 
 NetzleistungID: Gesamt-Netzleistung inklusive Wallbox. Intern positiv=Bezug, negativ=Einspeisung; InvertNetzleistung kehrt das Vorzeichen um. NetzleistungEinheit: W/kW.
 
 GridMeasurementMaxAge: Standard 120 s, Bezug auf Symcons VariableUpdated. Der Zähler muss auch bei gleichem Wert regelmäßig aktualisieren. Fehlende, falsch typisierte, nicht numerische oder zu alte Werte sperren die Ladung bei aktivem Limit.
 
-NetzlimitStartAktiv und MaxGridLoadWatt werden nur einmalig in NetzlimitAktiv und MaxNetzbezugWatt übernommen. Danach die Instanzvariablen bedienen. **0 W bedeutet deaktivierte Begrenzung.**
+Die Begrenzung ausschließlich über die bedienbaren Instanzvariablen „Netzbegrenzung aktiv“ (NetzlimitAktiv) und „Maximale Netzbelastung“ (MaxNetzbezugWatt) einstellen, in der Visualisierung oder im Objektbaum unter der PVWallboxManager-Instanz. Zuerst den gewünschten Grenzwert in Watt setzen, dann einschalten. **0 W bedeutet deaktivierte Begrenzung.**
+
+Die früheren Formular-Startwerte NetzlimitStartAktiv und MaxGridLoadWatt bleiben als Legacy-Eigenschaften für die Kompatibilität registriert, sind aber nicht mehr im Formular sichtbar. Sie werden nur bei der erstmaligen Initialisierung übernommen; vorhandene Laufzeitwerte bleiben beim Update erhalten. Neue Instanzen starten standardmäßig mit ausgeschalteter Begrenzung und 0 W.
 
 Budget = aktuelle Wallboxleistung + Bezugslimit − Netzbezug. Gilt auch bei Einspeisung. Reicht das Budget nicht für 3P-Mindeststrom, wird 1P erwogen; reicht auch das nicht, wird Stop angefordert. Cooldown verzögert keinen nötigen Stop.
 

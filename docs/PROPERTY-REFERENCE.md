@@ -55,3 +55,5 @@ Stand: unveröffentlichter Entwurf 1.4.10b. Defaults gelten bei neuen Instanzen;
 | HybridEndDelaySeconds | integer | `600` |
 
 Die fachlichen Bedeutungen und Einschränkungen stehen in [CONFIGURATION.md](CONFIGURATION.md).
+
+NetzlimitStartAktiv und MaxGridLoadWatt sind ausgeblendete Legacy-Eigenschaften zur erstmaligen Initialisierung. Für die laufende Bedienung gelten ausschließlich die Instanzvariablen NetzlimitAktiv und MaxNetzbezugWatt.

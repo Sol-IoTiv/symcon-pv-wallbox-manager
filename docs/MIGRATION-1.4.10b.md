@@ -2,7 +2,7 @@
 
 Vor Betatest Symcon-Konfiguration und bisherigen Modulstand sichern. Bestehende Instanz aktualisieren, nicht neu anlegen. GUIDs, bestehende Properties und Variablen-IDs bleiben erhalten. Keine Archive werden gelöscht.
 
-Neue Defaults: PhaseSwitchCooldown=180, PhaseSwitchTimeout=60, InvertNetzleistung=false, GridMeasurementMaxAge=120. Bestehende Netzlimit-Laufzeitvariablen werden nicht durch Formular-Startwerte überschrieben.
+Neue Defaults: PhaseSwitchCooldown=180, PhaseSwitchTimeout=60, InvertNetzleistung=false, GridMeasurementMaxAge=120. Die irreführenden Netzlimit-Startwerte wurden aus dem Formular entfernt. Netzbegrenzung und Grenzwert werden über die Instanzvariablen bedient; bestehende Laufzeitwerte bleiben erhalten.
 
 ## Verhaltensänderungen
 

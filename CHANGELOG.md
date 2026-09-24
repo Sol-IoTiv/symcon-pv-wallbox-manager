@@ -18,6 +18,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Nicht vorhandenen LogDebug-Aufruf ersetzt; widersprüchliche Min-/Maximalströme sperren die Freigabe.
 
 ### Berechnung und Anzeige
+- Irreführende Netzlimit-Startwerte aus dem Formular entfernt; Bedienhinweis verweist auf die tatsächlich wirksamen Instanzvariablen. Vorhandene Grenzwerte bleiben erhalten.
 - Einstellungen für Phasenumschaltung sowie Netzanschluss jeweils zusammengeführt; Cooldown und maximale Bestätigungsfrist verständlicher erläutert.
 - Wallboxstatus innerhalb eines Zyklus wiederverwendet; Stromgrenzen zeit- und IP-gebunden zwischengespeichert.
 - Gemessene Fahrzeugphasen bei Stillstand: 0; Regelung verwendet separat den zurückgelesenen Wallboxmodus.
