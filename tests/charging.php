@@ -398,6 +398,29 @@ $tests['invalid infinite market values preserve prior price'] = function () {
     invoke($m,'AktualisiereMarktpreise');
     expect($m->GetValue('MarketPricesValid')===false && $m->GetValue('CurrentSpotPrice')===25,'Infinite numeric strings are not valid prices');
 };
+$tests['PV share continues unchanged across house battery target'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',70);
+    $m->properties['HausakkuSOCID']=46; $m->properties['HausakkuSOCVollSchwelle']=93;
+    $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true;
+    $m->status['amp']=6; $m->status['nrg'][11]=1380; $m->attributes['LastChargingCurrent']=16;
+    foreach([92,93,100] as $soc) {
+        SetValue(46,$soc); $m->commands=[]; $m->clock+=30; $m->UpdateStatus();
+        expect(!in_array(['frc',1],$m->commands,true),'House SoC crossing must not stop PV share');
+        expect(in_array(['amp',10],$m->commands,true),'70 percent stays 2100 W regardless of house SoC');
+    }
+};
+$tests['70 percent of 1500 W can stop while PV only can start'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',70);
+    $m->properties['PVErzeugungID']=43; SetValue(43,1500.0);
+    $m->properties['HausakkuSOCID']=46; SetValue(46,100);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
+    for($i=0;$i<max(1,$m->properties['StopLadeHysterese']);$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    expect(in_array(['frc',1],$m->commands,true),'1050 W share is below default stop threshold');
+    $m->SetValue('LademodusAuswahl',0); $m->status['car']=3; $m->status['frc']=1; $m->status['alw']=false; $m->status['nrg'][11]=0; $m->commands=[];
+    for($i=0;$i<max(3,$m->properties['StartLadeHysterese']);$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    expect(in_array(['frc',2],$m->commands,true),'1500 W full surplus meets default start threshold');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

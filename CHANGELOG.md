@@ -35,6 +35,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - InitialCheckInterval=0 deaktiviert die Abfrage ohne Fahrzeug; manuelle Phasenanzeige korrigiert.
 
 ### Migration und Qualität
+- Forenfall zu PV-Anteil durch Tests für Hausakku-SoC-Übergang und anteilige Stoppschwelle ergänzt; feste Anteilssemantik dokumentiert.
 - Bestehende Variablen und Historie bleiben erhalten; öffentliche Steuerfunktionen behalten ihre Namen, umgehen aber die gemeinsame Regelung nicht mehr. Siehe docs/MIGRATION-1.4.10b.md.
 - README und Konfigurations-/Betriebsdokumentation an den tatsächlichen Funktionsumfang angepasst.
 - Reproduzierbare PHP-Regressionstests mit simulierten Symcon-/Wallboxschnittstellen und CI-Workflow ergänzt.
