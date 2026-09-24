@@ -782,6 +782,9 @@ class PVWallboxManager extends IPSModule
 
             case 'pv2car':
                 $modusText = '🌞 PV-Anteil (' . $this->GetValue('PVAnteil') . '%)';
+                if ($this->effectivePvShare() > (int)$this->GetValue('PVAnteil')) {
+                    $modusText .= ' – wirksam 100 %: Hausakku-Ziel erreicht';
+                }
                 break;
 
             case 'hybrid':
@@ -1102,6 +1105,17 @@ class PVWallboxManager extends IPSModule
         );
     }
 
+    private function effectivePvShare(): int
+    {
+        $requested = max(0, min(100, (int)$this->GetValue('PVAnteil')));
+        // An explicit 0 % remains a stop request, even when the house battery is full.
+        if ($requested === 0) return 0;
+        $socID = $this->ReadPropertyInteger('HausakkuSOCID');
+        if ($this->validSocValue($socID)
+            && (float)GetValue($socID) >= $this->ReadPropertyInteger('HausakkuSOCVollSchwelle')) return 100;
+        return $requested;
+    }
+
     private function ModusPV2CarLaden(array $data)
     {
         if (!$this->isCarConnected($data)) {
@@ -1109,7 +1123,7 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        $anteil = max(0, min(100, intval($this->GetValue('PVAnteil'))));
+        $anteil = $this->effectivePvShare();
         if ($anteil === 0) {
             $this->resetModeControlHistory();
             $this->SetNoChargeReason('PV-Anteil ist 0 %');

@@ -18,7 +18,7 @@ PVErzeugungID: positive PV-Erzeugung. HausverbrauchID: positiver Gesamtverbrauch
 
 Die Wallboxleistung wird vom Hausverbrauch abgezogen. Nur PV/Hybrid berücksichtigen zusätzlich positive Batterieladung, solange der Hausakku nicht als voll erkannt wird. PV-Anteil verwendet keinen separaten Speicherleistungsabzug.
 
-HausakkuSOCID/HausakkuSOCVollSchwelle bilden eine optionale Startbedingung für PV/Hybrid. Ohne zugeordneten SoC keine SoC-Sperre; eine bereits laufende Ladung wird nicht allein wegen Unterschreiten dieser Startschwelle beendet.
+HausakkuSOCID/HausakkuSOCVollSchwelle bilden eine optionale Startbedingung für PV/Hybrid. Im Modus PV-Anteil wird ab dieser Schwelle automatisch der volle Überschuss zugeteilt; darunter und ohne gültigen Hausakku-SoC gilt der eingestellte Anteil. 0 % bleibt Stop. Ohne zugeordneten SoC keine SoC-Sperre; eine bereits laufende Ladung wird nicht allein wegen Unterschreiten dieser Startschwelle beendet.
 
 SmoothingAlpha steuert exponentielle Glättung (0–1). MaxRampDeltaAmp begrenzt Stromerhöhungen; Reduzierungen erfolgen sofort. Nach drei auffälligen Hauslastanstiegen übernimmt der Spikefilter den neuen Wert.
 

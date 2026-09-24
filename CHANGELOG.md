@@ -8,6 +8,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ### Steuerung und Fehlerbehandlung
+- PV-Anteil verwendet ab erreichtem Hausakku-Ziel automatisch 100 % des Überschusses; eingestellter Anteil bleibt gespeichert, Status erklärt die Anhebung. Ohne gültigen Hausakku-SoC bleibt der Anteil unverändert; 0 % bleibt Stop. Keine zusätzliche Einstellung.
 - Nachprüfung aller Lademodi: PV-Anteil verwendet das anteilige Leistungsbudget auch zur Phasenwahl; 0 % stoppt unmittelbar.
 - Nur PV respektiert die konfigurierte Stop-Hysterese auch bei null Überschuss; Netzlimit und SoC-Sperren bleiben vorrangig.
 - Moduswechsel verwerfen alte Glättung, Phasenzähler und Hybrid-Endladezeiten. Hybrid überschreibt keine Sperrgründe mehr.

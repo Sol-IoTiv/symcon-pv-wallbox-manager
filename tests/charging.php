@@ -398,28 +398,51 @@ $tests['invalid infinite market values preserve prior price'] = function () {
     invoke($m,'AktualisiereMarktpreise');
     expect($m->GetValue('MarketPricesValid')===false && $m->GetValue('CurrentSpotPrice')===25,'Infinite numeric strings are not valid prices');
 };
-$tests['PV share continues unchanged across house battery target'] = function () {
+$tests['PV share automatically increases at house battery target'] = function () {
     $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',70);
     $m->properties['HausakkuSOCID']=46; $m->properties['HausakkuSOCVollSchwelle']=93;
     $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
     $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true;
     $m->status['amp']=6; $m->status['nrg'][11]=1380; $m->attributes['LastChargingCurrent']=16;
-    foreach([92,93,100] as $soc) {
+    foreach([92,93,100,92] as $soc) {
         SetValue(46,$soc); $m->commands=[]; $m->clock+=30; $m->UpdateStatus();
         expect(!in_array(['frc',1],$m->commands,true),'House SoC crossing must not stop PV share');
-        expect(in_array(['amp',10],$m->commands,true),'70 percent stays 2100 W regardless of house SoC');
+        $expected = $soc >= 93 ? 14 : 10;
+        // Current increases are ramped; allow another cycle to reach the requested power.
+        $m->clock+=30; $m->UpdateStatus();
+        expect(in_array(['amp',$expected],$m->commands,true),'Effective share follows house SoC');
+        expect($m->GetValue('PVAnteil')===70,'User share must remain stored');
+        $text=invoke($m,'collectStatusData')['modusText'];
+        expect((strpos($text,'wirksam 100 %')!==false)===($soc>=93),'Status must explain effective share');
     }
 };
-$tests['70 percent of 1500 W can stop while PV only can start'] = function () {
+$tests['70 percent of 1500 W can stop below house target'] = function () {
     $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',70);
     $m->properties['PVErzeugungID']=43; SetValue(43,1500.0);
-    $m->properties['HausakkuSOCID']=46; SetValue(46,100);
+    $m->properties['HausakkuSOCID']=46; SetValue(46,20);
     $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
     for($i=0;$i<max(1,$m->properties['StopLadeHysterese']);$i++) { $m->clock+=30; $m->UpdateStatus(); }
     expect(in_array(['frc',1],$m->commands,true),'1050 W share is below default stop threshold');
-    $m->SetValue('LademodusAuswahl',0); $m->status['car']=3; $m->status['frc']=1; $m->status['alw']=false; $m->status['nrg'][11]=0; $m->commands=[];
+    SetValue(46,100); $m->SetValue('LademodusAuswahl',0); $m->status['car']=3; $m->status['frc']=1; $m->status['alw']=false; $m->status['nrg'][11]=0; $m->commands=[];
     for($i=0;$i<max(3,$m->properties['StartLadeHysterese']);$i++) { $m->clock+=30; $m->UpdateStatus(); }
     expect(in_array(['frc',2],$m->commands,true),'1500 W full surplus meets default start threshold');
+};
+$tests['automatic PV share preserves zero and falls back on unavailable house SoC'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('PVAnteil',70);
+    expect(invoke($m,'effectivePvShare')===70,'No assigned meter keeps requested share');
+    $m->properties['HausakkuSOCID']=46;
+    foreach (['offline',-1,101] as $value) {
+        SetValue(46,$value); expect(invoke($m,'effectivePvShare')===70,'Invalid SoC must not authorize full share');
+    }
+    SetValue(46,100); $m->SetValue('PVAnteil',0);
+    expect(invoke($m,'effectivePvShare')===0,'Full house battery cannot override explicit zero');
+};
+$tests['automatic full PV share still obeys grid limit'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',70);
+    $m->properties['HausakkuSOCID']=46; SetValue(46,100);
+    $m->properties['PVErzeugungID']=43; SetValue(43,9000.0); $m->grid(0,1000);
+    for($i=0;$i<5;$i++) $m->UpdateStatus();
+    expect(!in_array(['frc',2],$m->commands,true),'Full share must not bypass insufficient net budget');
 };
 $failures=0;
 foreach ($tests as $name=>$test) {

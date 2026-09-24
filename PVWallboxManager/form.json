@@ -261,7 +261,7 @@
         },
         {
           "type": "Label",
-          "label": "☀️ Im Lademodus „PV-Anteil“ werden Ladefreigabe und PV-Anteil direkt im WebFront gesteuert."
+          "label": "☀️ PV-Anteil: Unterhalb der Hausakku-SoC-Schwelle gilt der eingestellte Anteil, ab Erreichen automatisch 100 %. Ohne gültige Hausakku-SoC-Variable bleibt der eingestellte Anteil wirksam. 0 % bedeutet weiterhin Stop."
         },
         {
           "type": "RowLayout",

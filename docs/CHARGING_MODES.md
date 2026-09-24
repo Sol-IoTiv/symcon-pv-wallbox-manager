@@ -14,7 +14,9 @@ Optionale Hausakku-SoC-Bedingung und Start-Hysterese müssen erfüllt sein. Übe
 
 PVAnteil (0–100 %) wird auf PV minus Hausverbrauch ohne Wallbox angewendet. Keine separate Hausakku-SoC-Startsperre und kein zusätzlicher Speicherleistungsabzug. Phasenwahl und Stromberechnung richten sich nach dem gewählten Anteil des Überschusses. 0 % fordert sofort Stop an. Bei einem Anteil größer 0 gelten Start-/Stop-Hysterese und Netzlimit. Beispiel: 6.000 W Überschuss, 50 % → ungefähr 3.000 W Bedarf.
 
-Der eingestellte PV-Anteil bleibt bei erreichtem Hausakku-Ziel-SoC unverändert; es gibt keine automatische Anhebung auf 100 %. Bei 1500 W Überschuss ergeben 70 % nur 1050 W, unter der Standard-Stoppschwelle von 1100 W. Nur PV kann bei denselben 1500 W und erfüllter Hausakku-Bedingung starten (Standard-Startschwelle 1400 W).
+Ab der bestehenden HausakkuSOCVollSchwelle wird bei gültigem Hausakku-SoC automatisch mit 100 % gerechnet. Unterhalb der Schwelle gilt wieder der gespeicherte PVAnteil. Dieser Regler wird nicht überschrieben; die Statusanzeige erklärt die wirksamen 100 %. Ohne zugeordneten oder gültigen Hausakku-SoC bleibt der eingestellte Anteil wirksam. 0 % fordert weiterhin Stop an und wird nicht automatisch angehoben. Es gibt keine zusätzliche Einstellung oder separate SoC-Hysterese; bestehende Leistungs-Hysterese und Stromrampe gelten weiterhin.
+
+Beispiel: 1500 W Überschuss ergeben bei 70 % nur 1050 W, unter der Standard-Stoppschwelle von 1100 W. Mit erreichtem Hausakku-Ziel stehen 1500 W zur Verfügung und die Standard-Startschwelle von 1400 W kann erfüllt werden. Netzlimit, Phasenlogik und Fahrzeug-Ziel-SoC bleiben vorrangig.
 
 Das Modul steuert nur die Wallbox. Ob der übrige Überschuss gespeichert oder eingespeist wird, entscheidet das Speichersystem; eine feste 70/30-Aufteilung wird nicht garantiert.
 
