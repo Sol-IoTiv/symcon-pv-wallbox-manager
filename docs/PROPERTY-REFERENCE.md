@@ -18,6 +18,7 @@ Stand: unveröffentlichter Entwurf 1.4.10b. Defaults gelten bei neuen Instanzen;
 | HausakkuSOCVollSchwelle | integer | `95` |
 | CarSOCID | integer | `0` |
 | CarTargetSOCID | integer | `0` |
+| CarMaxPhases | integer | `3` |
 | CarBatteryCapacity | float | `0` |
 | Phasen1Limit | integer | `3` |
 | Phasen3Limit | integer | `3` |

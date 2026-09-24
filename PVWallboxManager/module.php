@@ -84,6 +84,7 @@ class PVWallboxManager extends IPSModule
             'HausakkuSOCVollSchwelle'=>['type'=>'integer',  'default'=>95],
             'CarSOCID'              => ['type'=>'integer', 'default'=>0],
             'CarTargetSOCID'        => ['type'=>'integer', 'default'=>0],
+            'CarMaxPhases'          => ['type'=>'integer', 'default'=>3],
             'CarBatteryCapacity'    => ['type'=>'float',   'default'=>0],
             'Phasen1Limit'          => ['type'=>'integer', 'default'=>3],
             'Phasen3Limit'          => ['type'=>'integer', 'default'=>3],
@@ -938,7 +939,7 @@ class PVWallboxManager extends IPSModule
 
         if ($anzPhasenNeu !== $anzPhasenAlt) {
             // Recalculate once for the target phase without applying smoothing/ramping twice.
-            $ampere = (int)floor($pvUeberschuss / (230 * $anzPhasenNeu));
+            $ampere = (int)floor($pvUeberschuss / (230 * $this->vehiclePhaseCount($anzPhasenNeu)));
             $ampere = max($this->ReadPropertyInteger('MinAmpere'), min($this->ReadPropertyInteger('MaxAmpere'), $ampere));
 
             $this->LogTemplate(
@@ -1126,7 +1127,7 @@ class PVWallboxManager extends IPSModule
         $minAmp   = $this->ReadPropertyInteger('MinAmpere');
         $maxAmp   = $this->ReadPropertyInteger('MaxAmpere');
 
-        $desiredA = (int)ceil($anteilWatt / (230 * $newPhasen));
+        $desiredA = (int)ceil($anteilWatt / (230 * $this->vehiclePhaseCount($newPhasen)));
         $desiredA = max($minAmp, min($maxAmp, $desiredA));
 
         $lastA    = $this->ReadAttributeInteger('LastChargingCurrent');
@@ -1534,8 +1535,8 @@ class PVWallboxManager extends IPSModule
         $budget = max(0,$power) + (int)$this->GetValue('MaxNetzbezugWatt') - $grid;
         $minimum = max(6,$this->ReadPropertyInteger('MinAmpere'));
         $anzPhasen = $anzPhasen === 3 ? 3 : 1;
-        if ($budget < 230 * $minimum * $anzPhasen && $budget >= 230 * $minimum) $anzPhasen = 1;
-        $limited = min($ampere, (int)floor(max(0,$budget) / (230 * $anzPhasen)));
+        if ($budget < 230 * $minimum * $this->vehiclePhaseCount($anzPhasen) && $budget >= 230 * $minimum) $anzPhasen = 1;
+        $limited = min($ampere, (int)floor(max(0,$budget) / (230 * $this->vehiclePhaseCount($anzPhasen))));
         if ($limited < $minimum) { $this->SetNoChargeReason('Netzlimit: kein freies Ladebudget'); return 0; }
         return $limited;
     }
@@ -1692,7 +1693,7 @@ class PVWallboxManager extends IPSModule
         $desiredAmp = 0;
 
         if ($useSurplus >= $cutoff) {
-            $desiredAmp = (int)ceil($useSurplus / (230 * $anzPhasen));
+            $desiredAmp = (int)ceil($useSurplus / (230 * $this->vehiclePhaseCount($anzPhasen)));
             $desiredAmp = max(
                 $this->ReadPropertyInteger('MinAmpere'),
                 min($this->ReadPropertyInteger('MaxAmpere'), $desiredAmp)
@@ -2639,6 +2640,14 @@ class PVWallboxManager extends IPSModule
     private function GetNoChargeReason(): string
     {
         return $this->ReadAttributeString('LastNoChargeReason');
+    }
+
+    // Keep wallbox modes (1P/3P) separate from vehicle power calculation (1/2/3 phases).
+    private function vehiclePhaseCount(int $wallboxPhases): int
+    {
+        $maximum = $this->ReadPropertyInteger('CarMaxPhases');
+        if (!in_array($maximum, [1, 2, 3], true)) $maximum = 3;
+        return $wallboxPhases === 3 ? $maximum : 1;
     }
 
     private function phaseModeToPhaseCount(int $phaseMode): int

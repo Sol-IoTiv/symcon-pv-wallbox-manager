@@ -177,7 +177,7 @@ trait ChargingControl
                 // Keep the observed phase, but never increase the requested power budget.
                 if (!in_array($data['psm'], [1,2], true)) return $this->stopCharging();
                 $actualPhases = $this->phaseModeToPhaseCount($data['psm']);
-                $actualAmpere = (int)floor($ampere * $phases / $actualPhases);
+                $actualAmpere = (int)floor($ampere * $this->vehiclePhaseCount($phases) / $this->vehiclePhaseCount($actualPhases));
                 $boundedPhases = $actualPhases;
                 $actualAmpere = $this->applyMaxGridLoadLimit($actualAmpere, $boundedPhases);
                 if ($boundedPhases !== $actualPhases || $actualAmpere < max(6,$this->ReadPropertyInteger('MinAmpere'))) return $this->stopCharging();

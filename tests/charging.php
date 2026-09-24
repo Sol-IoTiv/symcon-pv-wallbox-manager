@@ -247,6 +247,24 @@ $tests['sanitized user V4 firmware 60.6 snapshot is accepted without assuming st
     $m->plan(2,16);
     expect($m->commands===[['frc',1]],'Disconnected car must not receive phase or enable commands');
 };
+$tests['vehicle phase capability bounds grid current without changing wallbox mode'] = function () {
+    foreach ([1=>16, 2=>13, 3=>9] as $capability=>$expected) {
+        $m=new SimulatedManager(); $m->properties['CarMaxPhases']=$capability;
+        $m->status['psm']=2; $m->status['nrg'][11]=3330;
+        $m->grid(3040,6000); $m->plan(2,16);
+        expect($m->commands===[['amp',$expected],['frc',2]],'Vehicle capability must determine current while preserving 3P mode');
+    }
+};
+$tests['one phase mode stays one phase for two phase vehicle'] = function () {
+    $m=new SimulatedManager(); $m->properties['CarMaxPhases']=2;
+    $m->grid(0,2000); $m->plan(1,16);
+    expect($m->commands===[['amp',8],['frc',2]],'1P budget must use one phase');
+};
+$tests['two phase minimum avoids unnecessary downshift'] = function () {
+    $m=new SimulatedManager(); $m->properties['CarMaxPhases']=2; $m->status['psm']=2;
+    $m->grid(0,3000); $m->plan(2,16);
+    expect($m->commands===[['frc',2]],'3000 W supports two phases at unchanged 6 A');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
