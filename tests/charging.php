@@ -283,6 +283,121 @@ $tests['repeated samples and taper cannot establish fewer phases'] = function ()
     for($i=0;$i<4;$i++) { $m->clock+=2; invoke($m,'observeVehiclePhases',$s,'192.168.1.2'); }
     expect(invoke($m,'vehiclePhaseCount',3)===3,'Tapering is not capability evidence');
 };
+$tests['PV share phase selection uses allocated power'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',25);
+    $m->properties['PVErzeugungID']=43; SetValue(43,8000.0);
+    $m->properties['Phasen3Limit']=1; $m->properties['StartLadeHysterese']=1;
+    $m->attributes['LastChargingCurrent']=16;
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseTransitionState']==='idle','2000 W allocation must not request 3P for 8000 W total');
+};
+$tests['zero PV share stops even with long hysteresis'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->SetValue('PVAnteil',0);
+    $m->status['frc']=2; $m->status['car']=2; $m->status['alw']=true; $m->status['nrg'][11]=2000;
+    $m->properties['StopLadeHysterese']=10; $m->attributes['LastChargingCurrent']=10;
+    $m->UpdateStatus();
+    expect(in_array(['frc',1],$m->commands,true),'Explicit zero share must stop immediately');
+};
+$tests['Hybrid preserves missing grid reason'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',5);
+    $m->properties['PVErzeugungID']=43; SetValue(43,3000.0); $m->properties['StartLadeHysterese']=1;
+    $m->attributes['LastChargingCurrent']=16;
+    $m->SetValue('NetzlimitAktiv',true); $m->SetValue('MaxNetzbezugWatt',4000);
+    $m->UpdateStatus();
+    expect(strpos($m->attributes['LastNoChargeReason'],'Messvariable fehlt')!==false,'Hybrid must preserve grid failure reason');
+};
+$tests['mode change resets prior surplus and phase counters'] = function () {
+    $m=new SimulatedManager(); $m->attributes['SmoothedSurplus']=10000;
+    $m->attributes['Phasen3Zaehler']=20; $m->attributes['HybridLowPvSince']=1;
+    $m->RequestAction('LademodusAuswahl',1);
+    expect($m->attributes['SmoothedSurplus']==0,'Old surplus must not authorize new mode');
+    expect($m->attributes['HybridLowPvSince']===0,'Old Hybrid delay must not survive mode changes');
+    expect(!in_array(['psm',2],$m->commands,true),'No stale 3P request');
+};
+$tests['invalid configured house SoC cannot authorize PV start'] = function () {
+    foreach([0,5] as $mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode); $m->properties['HausakkuSOCID']=999;
+        $m->properties['PVErzeugungID']=43; SetValue(43,3000.0); $m->properties['StartLadeHysterese']=1;
+        $m->attributes['LastChargingCurrent']=16; $m->UpdateStatus();
+        expect(!in_array(['frc',2],$m->commands,true),'Missing configured house SoC must block PV/Hybrid');
+    }
+};
+$tests['numeric string energy source is rejected before float read'] = function () {
+    $m=new SimulatedManager(); $m->properties['PVErzeugungID']=43; SetValue(43,'3000');
+    $GLOBALS['metadata'][43]=['VariableType'=>3,'VariableUpdated'=>1000];
+    $m->UpdateStatus();
+    expect(!in_array(['frc',2],$m->commands,true),'String source must not reach numeric Symcon getter');
+    unset($GLOBALS['metadata'][43]);
+};
+foreach ([0=>'PV',1=>'PV share',2=>'manual',5=>'Hybrid'] as $mode=>$label) {
+    $tests[$label.' obeys stop conditions'] = function () use ($mode) {
+        foreach (['grid','soc','disabled','offline'] as $condition) {
+            $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode);
+            $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
+            $m->properties['PVErzeugungID']=43; SetValue(43,9000.0);
+            if ($condition==='grid') $m->grid(9000,1000);
+            if ($condition==='soc') { $m->properties['CarSOCID']=44; $m->properties['CarTargetSOCID']=45; SetValue(44,80); SetValue(45,80); }
+            if ($condition==='disabled') $m->properties['ModulAktiv']=false;
+            if ($condition==='offline') $m->offline=true;
+            $m->UpdateStatus();
+            expect(in_array(['frc',1],$m->commands,true),$condition.' must request stop');
+            foreach($m->commands as $c) expect($c[0]==='frc' && $c[1]===1,'Stop condition must not change phase or current');
+        }
+    };
+    $tests[$label.' uses automatically detected two phase budget'] = function () use ($mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode); $m->SetValue('ManuellPhasen',2);
+        $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['psm']=2;
+        $m->status['amp']=6; $m->status['nrg'][4]=6; $m->status['nrg'][5]=6; $m->status['nrg'][11]=2760;
+        $m->properties['PVErzeugungID']=43; SetValue(43,9000.0); $m->grid(3000,5000);
+        $m->attributes['LastChargingCurrent']=16;
+        for($i=0;$i<5;$i++) { $m->clock+=2; $m->commands=[]; $m->UpdateStatus(); }
+        expect(in_array(['amp',10],$m->commands,true),'4760 W budget supports two phases at 10 A');
+        expect($m->attributes['PhaseTransitionState']==='idle','No unnecessary switching');
+    };
+}
+$tests['PV start is blocked by low house battery but PV share ignores that gate'] = function () {
+    foreach([0,1,5] as $mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode); $m->properties['HausakkuSOCID']=46; SetValue(46,20);
+        $m->properties['PVErzeugungID']=43; SetValue(43,3000.0); $m->properties['StartLadeHysterese']=1;
+        $m->attributes['LastChargingCurrent']=16; $m->UpdateStatus();
+        expect(in_array(['frc',2],$m->commands,true)===($mode===1),'House SoC gate must match mode semantics');
+    }
+};
+$tests['PV stops after configured hysteresis while Hybrid holds minimum'] = function () {
+    foreach([0,5] as $mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode);
+        $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
+        $m->properties['StopLadeHysterese']=1; $m->UpdateStatus();
+        expect(in_array(['frc',1],$m->commands,true)===($mode===0),'PV stops, Hybrid maintains minimum');
+    }
+};
+$tests['invalid vehicle SoC cannot crash or release charging'] = function () {
+    $m=new SimulatedManager(); $m->properties['CarSOCID']=44; $m->properties['CarTargetSOCID']=45;
+    SetValue(44,'offline'); SetValue(45,80); $m->UpdateStatus();
+    expect(!in_array(['frc',2],$m->commands,true),'Invalid configured vehicle SoC must block');
+    expect(invoke($m,'BerechneVerbleibendeLadezeit')==='n/a','Invalid SoC has no time estimate');
+};
+$tests['PV stop hysteresis survives zero surplus'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',0);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
+    $m->properties['StopLadeHysterese']=3;
+    $m->UpdateStatus(); $m->UpdateStatus();
+    expect(!in_array(['frc',1],$m->commands,true),'Stop hysteresis must not be bypassed by zero current calculation');
+    $m->UpdateStatus(); expect(in_array(['frc',1],$m->commands,true),'Third low cycle stops');
+};
+$tests['Hybrid end delay uses minimum then configured current'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',5);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1380;
+    $m->properties['HybridEndMode']=1; $m->properties['HybridEndAmpere']=10; $m->properties['HybridEndDelaySeconds']=60;
+    $m->UpdateStatus(); expect(!in_array(['amp',10],$m->commands,true),'End current must wait');
+    $m->clock+=60; $m->UpdateStatus(); expect(in_array(['amp',10],$m->commands,true),'End current starts after delay');
+};
+$tests['invalid infinite market values preserve prior price'] = function () {
+    $m=new SimulatedManager(); $m->properties['UseMarketPrices']=true; $m->SetValue('CurrentSpotPrice',25);
+    $m->prices=['data'=>[['start_timestamp'=>0,'end_timestamp'=>2000000,'marketprice'=>'1e999']]];
+    invoke($m,'AktualisiereMarktpreise');
+    expect($m->GetValue('MarketPricesValid')===false && $m->GetValue('CurrentSpotPrice')===25,'Infinite numeric strings are not valid prices');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

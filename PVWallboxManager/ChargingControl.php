@@ -133,6 +133,7 @@ trait ChargingControl
             return false;
         }
         if ($data['err'] !== 0) return $this->phaseFault('Wallbox meldet Fehler ' . $data['err']);
+        if ($this->vehicleSocInvalid()) { $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig'); return $this->stopCharging(); }
         if ($this->targetSocReached()) { $this->SetNoChargeReason('Ziel-SoC erreicht'); return $this->stopCharging(); }
         $phases = $this->phaseModeToPhaseCount($phaseMode);
         $ampere = $this->clampAmpere($ampere);
@@ -208,15 +209,28 @@ trait ChargingControl
         }
         $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
         $this->WriteAttributeInteger('LastSentChargingCurrent', $ampere);
-        if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->targetSocReached()) return $this->stopCharging();
+        if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->vehicleSocInvalid() || $this->targetSocReached()) return $this->stopCharging();
         if ($data['frc'] !== 2) {
             // Check again immediately before release (deactivation may have changed the property).
-            if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->targetSocReached()) return $this->stopCharging();
+            if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->vehicleSocInvalid() || $this->targetSocReached()) return $this->stopCharging();
             if (!$this->sendChargerCommand('frc', 2)) return $this->phaseFault('Ladefreigabe abgelehnt');
             $this->WriteAttributeInteger('LastManualStartTimestamp', $this->now());
         }
         $this->WriteAttributeBoolean('PhaseResumePending', false);
         return true;
+    }
+
+    private function validSocValue(int $id): bool
+    {
+        return $id > 0 && IPS_VariableExists($id) && in_array(IPS_GetVariable($id)['VariableType'], [1,2], true)
+            && is_numeric(GetValue($id)) && is_finite((float)GetValue($id)) && GetValue($id) >= 0 && GetValue($id) <= 100;
+    }
+
+    private function vehicleSocInvalid(): bool
+    {
+        $soc = $this->ReadPropertyInteger('CarSOCID');
+        $target = $this->ReadPropertyInteger('CarTargetSOCID');
+        return ($soc > 0 && !$this->validSocValue($soc)) || ($target > 0 && !$this->validSocValue($target));
     }
 
     private function targetSocReached(): bool

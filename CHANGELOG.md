@@ -8,6 +8,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ### Steuerung und Fehlerbehandlung
+- Nachprüfung aller Lademodi: PV-Anteil verwendet das anteilige Leistungsbudget auch zur Phasenwahl; 0 % stoppt unmittelbar.
+- Nur PV respektiert die konfigurierte Stop-Hysterese auch bei null Überschuss; Netzlimit und SoC-Sperren bleiben vorrangig.
+- Moduswechsel verwerfen alte Glättung, Phasenzähler und Hybrid-Endladezeiten. Hybrid überschreibt keine Sperrgründe mehr.
+- Ungültige konfigurierte SoC-/Energievariablen abgefangen; Ladezeitberechnung und Strompreisprüfung gegen ungültige Werte abgesichert.
 - Gemeinsame instanzbezogene Semaphore für Regelung und steuernde Bedienaktionen.
 - Zentraler Phasenablauf: Stop anfordern, zwei zeitlich getrennte Stillstandsmessungen, Phasenbefehl, zwei Rücklesebestätigungen, erneute Regelentscheidung.
 - Standardmäßig 180 s Mindestabstand; konfigurierbarer Timeout je Umschaltschritt. Hybrid und Manuell verwenden denselben Ablauf.

@@ -23,3 +23,9 @@ Nachtrag 24.09.2026: Als Testaufbau wurden go-eCharger V4 mit 11 kW und VW ID.3 
 Weitere Präzisierung am 24.09.2026: Nutzer bestätigt go-e-Firmware Beta 60.6, IP-Symcon 9.0 und 55 kWh Akkukapazität. Ob 55 kWh Brutto- oder Nutzkapazität sind, ist noch nicht bestätigt. Die Hardwareabnahme ist weiterhin offen; aus den Versionsangaben folgt keine geprüfte Kompatibilität.
 
 Statusprüfung am 24.09.2026: Zehn nicht identifizierende Steuer-/Messfelder aus der Nutzerantwort als Fixture übernommen. Der Gesamttext enthielt einen JSON-Syntaxfehler beim ausgeschlossenen Feld eto. Die übernommenen Feldtypen werden vom Modul akzeptiert; var=11/ama=16 ergeben 16 A. car=1, Leistung/Ströme=0, psm=2 und frc=0 beschreiben einen Zustand ohne Fahrzeug mit neutraler Freigabe, keinen bestätigten Stop. Zusätzlicher Regressionstest bestanden; tests/charging.php enthält nun 37 Szenarien. Keine Hardwarebefehle wurden gesendet.
+
+## Nachprüfung am 24.09.2026 nach den Nutzertests
+
+60 Szenarien in tests/charging.php und 3 in tests/regression.php bestanden (63 insgesamt); einzelne Szenarien prüfen mehrere Modi und Fehlerbedingungen. PHP-Syntax aller sieben PHP-Dateien sowie Metadaten/Formularprüfung bestanden. Neue Fehler wurden vor der Korrektur mit fehlschlagenden Regressionstests reproduziert.
+
+Prüfumfang und verbleibende Grenzen: [REVIEW-1.4.10b.md](REVIEW-1.4.10b.md). Nutzer meldet verbessertes Verhalten der automatischen Phasenerkennung; das ersetzt keine protokollierte Hardwareabnahme aller Modi. Historische Ergebnisse oben bleiben unverändert. GitHub-CI wurde in dieser Nachprüfung nicht verifiziert.

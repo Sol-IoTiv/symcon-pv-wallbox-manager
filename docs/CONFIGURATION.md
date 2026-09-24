@@ -52,7 +52,7 @@ Die Fahrzeugphasen werden automatisch aus drei zeitlich getrennten Strommessunge
 
 HybridEndMode: 0 deaktiviert, 1 feste 1P-Endladung, 2 feste 3P-Endladung. HybridEndDelaySeconds: Wartezeit bei dauerhaft geringer PV; 0 deaktiviert die Endladung. HybridEndAmpere: Stromwunsch innerhalb der gemeinsamen Grenzen.
 
-CarSOCID/CarTargetSOCID: Ziel-SoC beendet die Ladung in allen Modi. CarBatteryCapacity (kWh) dient der Restzeitschätzung, nicht der Ladeplanung.
+CarSOCID/CarTargetSOCID: Ziel-SoC beendet die Ladung in allen Modi. Zugeordnete Variablen müssen numerische Symcon-Variablen mit endlichen Werten von 0 bis 100 sein; fehlende oder ungültige konfigurierte Werte sperren die Ladung. Ohne gültige SoC-Werte wird keine Restzeit berechnet. CarBatteryCapacity (kWh) dient der Restzeitschätzung, nicht der Ladeplanung.
 
 ## Strompreise
 

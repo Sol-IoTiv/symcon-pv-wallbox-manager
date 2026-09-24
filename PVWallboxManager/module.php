@@ -184,6 +184,7 @@ class PVWallboxManager extends IPSModule
     {
         parent::ApplyChanges();
         $this->WriteAttributeString('WallboxLimits', '{}');
+        $this->WriteAttributeString('VehiclePhaseObservation', '{}');
         if (in_array($this->phaseState(), ['stopping','confirming'], true)) $this->phaseFault('Konfiguration während Phasenwechsel geändert');
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
@@ -621,6 +622,7 @@ class PVWallboxManager extends IPSModule
 
         $this->stopCharging();
         $this->SetValue('LademodusAuswahl', $newSelection);
+        $this->resetModeControlHistory();
 
         switch ($mode) {
             case 'pvonly':
@@ -643,6 +645,14 @@ class PVWallboxManager extends IPSModule
 
         $this->SetTimerNachModusUndAuto();
         $this->UpdateStatus($mode);
+    }
+
+    private function resetModeControlHistory(): void
+    {
+        foreach (['LadeStartZaehler','LadeStopZaehler','Phasen1Zaehler','Phasen3Zaehler','HybridLowPvSince','NoPowerCounter','LastChargingCurrent'] as $name) {
+            $this->WriteAttributeInteger($name, 0);
+        }
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
     }
 
     private function resetToPvOnlyBaseState(bool $fromManual = false): void
@@ -855,9 +865,7 @@ class PVWallboxManager extends IPSModule
 
         $key = $this->getCurrentModeKey();
 
-        if ($key !== 'hybrid') {
-            $this->SetNoChargeReason('');
-        }
+        $this->ClearNoChargeReason();
 
         if (!isset($handlers[$key])) {
             $this->LogTemplate('warn', 'Unbekannter Lademodus', $key);
@@ -934,6 +942,10 @@ class PVWallboxManager extends IPSModule
         $this->PruefeUndSetzePhasenmodus($pvUeberschuss);
 
         $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
+        if ($desiredFRC === 2 && $this->hasChargingIntent()) {
+            // Keep minimum charging during the configured stop hysteresis; grid/SoC checks still take priority.
+            $ampere = max($ampere, max(6, $this->ReadPropertyInteger('MinAmpere')));
+        }
 
         $phaseModeSoll = $this->desiredPhaseMode;
         $anzPhasenNeu  = $this->phaseModeToPhaseCount($phaseModeSoll);
@@ -1011,7 +1023,6 @@ class PVWallboxManager extends IPSModule
             $this->ResetStateLog('hybrid_end_charge_active');
 
             $this->ModusPVonlyLaden($data, $anzPhasenAlt, [$energy, $surplus]);
-            $this->SetNoChargeReason('Hybrid-Laden aktiv');
             return;
         }
 
@@ -1099,6 +1110,13 @@ class PVWallboxManager extends IPSModule
         }
 
         $anteil = max(0, min(100, intval($this->GetValue('PVAnteil'))));
+        if ($anteil === 0) {
+            $this->resetModeControlHistory();
+            $this->SetNoChargeReason('PV-Anteil ist 0 %');
+            $this->SetValue('PV_Ueberschuss_A', 0);
+            $this->stopCharging();
+            return;
+        }
 
         $oldPhaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
         $oldPhasen    = $this->phaseModeToPhaseCount($oldPhaseMode);
@@ -1120,7 +1138,7 @@ class PVWallboxManager extends IPSModule
 
         $anteilWatt = intval(round($smooth * $anteil / 100));
 
-        $this->PruefeUndSetzePhasenmodus($smooth);
+        $this->PruefeUndSetzePhasenmodus($anteilWatt);
 
         $newPhaseMode = $this->desiredPhaseMode;
         $newPhasen    = $this->phaseModeToPhaseCount($newPhaseMode);
@@ -1273,6 +1291,11 @@ class PVWallboxManager extends IPSModule
 
     private function PruefeLadeendeAutomatisch()
     {
+        if ($this->vehicleSocInvalid()) {
+            $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig');
+            $this->stopCharging();
+            return true;
+        }
         $currentFRC = $this->GetValue('AccessStateV2');
         $modeKey    = $this->getCurrentModeKey();
 
@@ -1424,6 +1447,7 @@ class PVWallboxManager extends IPSModule
         $wasConnected = (bool) $this->ReadAttributeBoolean('LastCarConnected');
 
         if ($wasConnected && !$carConnected) {
+            $this->resetModeControlHistory();
             $this->ApplyModeAfterDisconnectOrChargeEnd('🚗 Fahrzeug abgesteckt');
         }
 
@@ -1453,6 +1477,7 @@ class PVWallboxManager extends IPSModule
         }
 
         $this->SetValue('LademodusAuswahl', $modeAfterUnplug);
+        $this->resetModeControlHistory();
         $this->LogTemplate(
             'info',
             'Lademodus gewechselt',
@@ -1548,11 +1573,11 @@ class PVWallboxManager extends IPSModule
         $pvID  = $this->ReadPropertyInteger('PVErzeugungID');
         foreach (['PVErzeugungID','HausverbrauchID','BatterieladungID'] as $property) {
             $id = $this->ReadPropertyInteger($property);
-            if ($id > 0 && (!IPS_VariableExists($id) || !is_numeric(GetValue($id)) || !is_finite((float)GetValue($id)))) {
+            if ($id > 0 && (!IPS_VariableExists($id) || !in_array(IPS_GetVariable($id)['VariableType'], [1,2], true) || !is_numeric(GetValue($id)) || !is_finite((float)GetValue($id)))) {
                 throw new RuntimeException('Energiedaten ungültig: ' . $property);
             }
         }
-        $pv    = $pvID > 0 ? GetValueFloat($pvID) : 0;
+        $pv    = $pvID > 0 ? (float)GetValue($pvID) : 0;
         if ($this->ReadPropertyString('PVErzeugungEinheit') === 'kW') {
             $pv *= 1000;
         }
@@ -1560,7 +1585,7 @@ class PVWallboxManager extends IPSModule
         $wb = round($this->GetValue('Leistung'));
 
         $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $hv   = $hvID > 0 ? GetValueFloat($hvID) : 0;
+        $hv   = $hvID > 0 ? (float)GetValue($hvID) : 0;
         if ($this->ReadPropertyString('HausverbrauchEinheit') === 'kW') {
             $hv *= 1000;
         }
@@ -1569,7 +1594,7 @@ class PVWallboxManager extends IPSModule
         }
 
         $batID = $this->ReadPropertyInteger('BatterieladungID');
-        $bat   = $batID > 0 ? GetValueFloat($batID) : 0;
+        $bat   = $batID > 0 ? (float)GetValue($batID) : 0;
         if ($this->ReadPropertyString('BatterieladungEinheit') === 'kW') {
             $bat *= 1000;
         }
@@ -1634,10 +1659,13 @@ class PVWallboxManager extends IPSModule
         $socID         = $this->ReadPropertyInteger('HausakkuSOCID');
         $vollSchwelle = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
 
-        if ($socID <= 0 || !@IPS_VariableExists($socID)) {
-            return true;
+        if ($socID <= 0) return true;
+        if (!IPS_VariableExists($socID) || !in_array(IPS_GetVariable($socID)['VariableType'], [1,2], true)
+            || !is_numeric(GetValue($socID)) || !is_finite((float)GetValue($socID))
+            || GetValue($socID) < 0 || GetValue($socID) > 100) {
+            $this->SetNoChargeReason('Hausakku-SoC: konfigurierte Messvariable fehlt oder ist ungültig');
+            return false;
         }
-
         $soc = (float)GetValue($socID);
 
         if ($this->hasChargingIntent()) {
@@ -2096,7 +2124,7 @@ class PVWallboxManager extends IPSModule
     {
         $socID       = $this->ReadPropertyInteger('CarSOCID');
         $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
-        if ($socID <= 0 || $socTargetID <= 0 || !IPS_VariableExists($socID) || !IPS_VariableExists($socTargetID)) {
+        if (!$this->validSocValue($socID) || !$this->validSocValue($socTargetID)) {
             return 'n/a';
         }
 
@@ -2217,6 +2245,7 @@ class PVWallboxManager extends IPSModule
         foreach ($data['data'] as $item) {
             if (!is_array($item) || !isset($item['start_timestamp'], $item['end_timestamp'], $item['marketprice'])
                 || !is_numeric($item['start_timestamp']) || !is_numeric($item['end_timestamp']) || !is_numeric($item['marketprice'])
+                || !is_finite((float)$item['start_timestamp']) || !is_finite((float)$item['end_timestamp']) || !is_finite((float)$item['marketprice'])
                 || $item['end_timestamp'] <= $item['start_timestamp']) {
                 $this->LogTemplate('error', 'Ungültiger Strompreiseintrag');
                 return;
@@ -2439,7 +2468,7 @@ class PVWallboxManager extends IPSModule
         $hvID = $this->ReadPropertyInteger('HausverbrauchID');
         $hvEinheit = $this->ReadPropertyString('HausverbrauchEinheit');
         $invertHV = $this->ReadPropertyBoolean('InvertHausverbrauch');
-        $hausverbrauch = ($hvID > 0) ? @GetValueFloat($hvID) : 0;
+        $hausverbrauch = ($hvID > 0 && IPS_VariableExists($hvID)) ? (float)GetValue($hvID) : 0;
         if ($hvEinheit == "kW") $hausverbrauch *= 1000;
         if ($invertHV) $hausverbrauch *= -1;
         $hausverbrauch = round($hausverbrauch);

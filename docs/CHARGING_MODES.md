@@ -4,15 +4,15 @@ LademodusAuswahl: 0 Nur PV, 1 PV-Anteil, 2 Manuell, 5 Hybrid. 3/4 sind keine imp
 
 ## Gemeinsame Regeln
 
-Aktivzustand, Fahrzeug, gültige Statusdaten und Ziel-SoC prüfen; Modusbedarf berechnen; Stromgrenzen und Netzbudget anwenden; nötigen Phasenwechsel bestätigen; Strom setzen; erst danach freigeben. Ein Moduswunsch ist kein direkter HTTP-Befehl.
+Aktivzustand, Fahrzeug, gültige Statusdaten und Ziel-SoC prüfen; Modusbedarf berechnen; Stromgrenzen und Netzbudget anwenden; nötigen Phasenwechsel bestätigen; Strom setzen; erst danach freigeben. Ein Moduswunsch ist kein direkter HTTP-Befehl. Moduswechsel verwerfen alte Überschussglättung, Hysterese-/Phasenzähler und Hybrid-Endladungszeit. Ungültige konfigurierte Fahrzeug-/Ziel-SoC-Werte sperren die Ladung in allen Modi. Ein ungültiger konfigurierter Hausakku-SoC sperrt PV und Hybrid; ohne zugeordnete Hausakkuvariable besteht diese Bedingung nicht.
 
 ## Nur PV
 
-Optionale Hausakku-SoC-Bedingung und Start-Hysterese müssen erfüllt sein. Überschuss: PV minus gefilterter Hausverbrauch ohne Wallbox minus gegebenenfalls positive Speicherladung. Gegenüber 1.4.9b entfällt der unbedingte Schnellstart. Mindeststrom, Rundung, Glättung und Messverzögerungen können kleinere Netzanteile verursachen.
+Optionale Hausakku-SoC-Bedingung und Start-Hysterese müssen erfüllt sein. Überschuss: PV minus gefilterter Hausverbrauch ohne Wallbox minus gegebenenfalls positive Speicherladung. Gegenüber 1.4.9b entfällt der unbedingte Schnellstart. Die Stop-Hysterese hält eine bestehende Ladung bis zum Ablauf der konfigurierten Zyklen mindestens auf Mindeststrom, auch bei null Überschuss. Netzlimit, Deaktivierung und Ziel-SoC haben weiterhin Vorrang. Mindeststrom, Rundung, Glättung und Messverzögerungen können Netzanteile verursachen.
 
 ## PV-Anteil
 
-PVAnteil (0–100 %) wird auf PV minus Hausverbrauch ohne Wallbox angewendet. Keine separate Hausakku-SoC-Startsperre und kein zusätzlicher Speicherleistungsabzug. Start-/Stop-Hysterese und Netzlimit gelten. Beispiel: 6.000 W Überschuss, 50 % → ungefähr 3.000 W Bedarf.
+PVAnteil (0–100 %) wird auf PV minus Hausverbrauch ohne Wallbox angewendet. Keine separate Hausakku-SoC-Startsperre und kein zusätzlicher Speicherleistungsabzug. Phasenwahl und Stromberechnung richten sich nach dem gewählten Anteil des Überschusses. 0 % fordert sofort Stop an. Bei einem Anteil größer 0 gelten Start-/Stop-Hysterese und Netzlimit. Beispiel: 6.000 W Überschuss, 50 % → ungefähr 3.000 W Bedarf.
 
 ## Manuell
 
