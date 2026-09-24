@@ -33,6 +33,7 @@ class PVWallboxManager extends IPSModule
 
         $this->RegisterCustomProfiles();
         $this->registerAttributes([
+            'VehiclePhaseObservation'       => '{}',
             'MarketPricesTimerInterval'      => 0,
             'MarketPricesActive'             => false,
             'Phasen1Zaehler'                 => 0,
@@ -1829,9 +1830,11 @@ class PVWallboxManager extends IPSModule
         $response = $this->simpleCurlGet('http://' . $ip . '/api/status');
         $data = is_string($response['result']) ? json_decode($response['result'], true) : null;
         if ((int)$response['httpcode'] !== 200 || !is_array($data) || !$this->validChargerStatus($data)) {
+            $this->WriteAttributeString('VehiclePhaseObservation', '{}');
             $this->LogTemplate('error', 'Wallboxstatus ungültig', 'HTTP, Pflichtfelder oder Messwerte fehlerhaft');
             return false;
         }
+        $this->observeVehiclePhases($data, $ip);
         $this->chargerSnapshot = $data;
         $this->WriteAttributeString('WallboxLimits', json_encode(['ip'=>$ip, 'time'=>$this->now(),
             'max'=>min($this->getHardwareMaxAmpereFromStatus($data),$this->getConfiguredWallboxMaxAmpereFromStatus($data))]));
@@ -2642,12 +2645,40 @@ class PVWallboxManager extends IPSModule
         return $this->ReadAttributeString('LastNoChargeReason');
     }
 
-    // Keep wallbox modes (1P/3P) separate from vehicle power calculation (1/2/3 phases).
+    // Learn only from sustained charging in 3P mode; never carry a fixed vehicle limit.
+    private function observeVehiclePhases(array $data, string $ip): void
+    {
+        $count = $this->determinePhases($data);
+        if ($data['car'] !== 2 || !$data['alw'] || $data['psm'] !== 2 || $data['err'] !== 0 || $count === 0) {
+            $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+            return;
+        }
+        // Low-current ramp-up and tapering are not reliable evidence of vehicle capability.
+        foreach ([4,5,6] as $index) {
+            $current = abs((float)$data['nrg'][$index]);
+            if ($current > 0.2 && $current < max(1.5, $data['amp'] * 0.7)) {
+                $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+                return;
+            }
+        }
+        $previous = json_decode($this->ReadAttributeString('VehiclePhaseObservation'), true) ?: [];
+        $now = $this->now();
+        $maxGap = max(15, $this->ReadPropertyInteger('RefreshInterval')) * 2 + 5;
+        if (($previous['ip'] ?? '') !== $ip || ($previous['count'] ?? 0) !== $count
+            || $now - ($previous['time'] ?? 0) > $maxGap || $now < ($previous['time'] ?? 0)) {
+            $previous = ['ip'=>$ip, 'count'=>$count, 'samples'=>1, 'time'=>$now];
+        } elseif ($now - $previous['time'] >= 2) {
+            $previous['samples'] = min(3, $previous['samples'] + 1);
+            $previous['time'] = $now;
+        }
+        $this->WriteAttributeString('VehiclePhaseObservation', json_encode($previous));
+    }
+
     private function vehiclePhaseCount(int $wallboxPhases): int
     {
-        $maximum = $this->ReadPropertyInteger('CarMaxPhases');
-        if (!in_array($maximum, [1, 2, 3], true)) $maximum = 3;
-        return $wallboxPhases === 3 ? $maximum : 1;
+        if ($wallboxPhases !== 3) return 1;
+        $observed = json_decode($this->ReadAttributeString('VehiclePhaseObservation'), true) ?: [];
+        return ($observed['samples'] ?? 0) >= 3 ? (int)$observed['count'] : 3;
     }
 
     private function phaseModeToPhaseCount(int $phaseMode): int

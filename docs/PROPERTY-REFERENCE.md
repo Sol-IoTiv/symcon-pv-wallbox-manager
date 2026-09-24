@@ -58,3 +58,5 @@ Stand: unveröffentlichter Entwurf 1.4.10b. Defaults gelten bei neuen Instanzen;
 Die fachlichen Bedeutungen und Einschränkungen stehen in [CONFIGURATION.md](CONFIGURATION.md).
 
 NetzlimitStartAktiv und MaxGridLoadWatt sind ausgeblendete Legacy-Eigenschaften zur erstmaligen Initialisierung. Für die laufende Bedienung gelten ausschließlich die Instanzvariablen NetzlimitAktiv und MaxNetzbezugWatt.
+
+CarMaxPhases ist eine ausgeblendete, nicht mehr ausgewertete Legacy-Eigenschaft. Fahrzeugphasen werden automatisch erkannt.

@@ -83,6 +83,7 @@ trait ChargingControl
 
     private function stopCharging(bool $cancel = true): bool
     {
+        $this->WriteAttributeString('VehiclePhaseObservation', '{}');
         if ($cancel && $this->phaseState() === 'confirming') return $this->phaseFault('Umschaltung vor Bestätigung abgebrochen');
         if ($cancel && $this->phaseState() !== 'fault') $this->clearTransition();
         $this->WriteAttributeInteger('LastSentChargingCurrent', 0);

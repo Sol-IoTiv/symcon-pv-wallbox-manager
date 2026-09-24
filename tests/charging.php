@@ -247,23 +247,41 @@ $tests['sanitized user V4 firmware 60.6 snapshot is accepted without assuming st
     $m->plan(2,16);
     expect($m->commands===[['frc',1]],'Disconnected car must not receive phase or enable commands');
 };
-$tests['vehicle phase capability bounds grid current without changing wallbox mode'] = function () {
-    foreach ([1=>16, 2=>13, 3=>9] as $capability=>$expected) {
-        $m=new SimulatedManager(); $m->properties['CarMaxPhases']=$capability;
-        $m->status['psm']=2; $m->status['nrg'][11]=3330;
-        $m->grid(3040,6000); $m->plan(2,16);
-        expect($m->commands===[['amp',$expected],['frc',2]],'Vehicle capability must determine current while preserving 3P mode');
+$tests['automatic phase learning and vehicle change'] = function () {
+    foreach ([1=>16,2=>13,3=>9] as $count=>$expected) {
+        $m=new SimulatedManager(); $m->properties['CarMaxPhases']=1; // Legacy value must not decide.
+        $m->status['psm']=2; $m->status['car']=2; $m->status['alw']=true;
+        $m->status['amp']=6; $m->status['nrg'][11]=3330;
+        for($i=0;$i<$count;$i++) $m->status['nrg'][4+$i]=6;
+        $m->grid(3040,6000);
+        $m->plan(2,16);
+        expect(in_array(['amp',9],$m->commands,true),'First sample must assume 3 phases');
+        $m->plan(2,16); $m->commands=[]; $m->plan(2,16);
+        expect(in_array(['amp',$expected],$m->commands,true),'Stable actual phases determine budget');
+        $m->status['car']=1; $m->plan(2,16);
+        expect(invoke($m,'vehiclePhaseCount',3)===3,'Unplug resets learned vehicle');
+        $m->status['car']=2; $m->status['nrg'][6]=6; $m->commands=[]; $m->plan(2,16);
+        expect(in_array(['amp',9],$m->commands,true),'Next vehicle starts conservatively');
     }
 };
-$tests['one phase mode stays one phase for two phase vehicle'] = function () {
-    $m=new SimulatedManager(); $m->properties['CarMaxPhases']=2;
-    $m->grid(0,2000); $m->plan(1,16);
-    expect($m->commands===[['amp',8],['frc',2]],'1P budget must use one phase');
+$tests['phase learning discards pauses and phase increases immediately'] = function () {
+    $m=new SimulatedManager();
+    $s=$m->status; $s['car']=2; $s['alw']=true; $s['psm']=2; $s['nrg'][4]=6; $s['nrg'][5]=6;
+    for($i=0;$i<3;$i++) { invoke($m,'observeVehiclePhases',$s,'192.168.1.2'); $m->clock+=2; }
+    expect(invoke($m,'vehiclePhaseCount',3)===2,'Two phases learned');
+    expect(invoke($m,'vehiclePhaseCount',1)===1,'1P mode stays single phase');
+    $s['nrg'][6]=6; invoke($m,'observeVehiclePhases',$s,'192.168.1.2');
+    expect(invoke($m,'vehiclePhaseCount',3)===3,'Third phase immediately restores conservative budget');
+    $s['car']=3; invoke($m,'observeVehiclePhases',$s,'192.168.1.2');
+    expect(invoke($m,'vehiclePhaseCount',3)===3,'Pause resets detection');
 };
-$tests['two phase minimum avoids unnecessary downshift'] = function () {
-    $m=new SimulatedManager(); $m->properties['CarMaxPhases']=2; $m->status['psm']=2;
-    $m->grid(0,3000); $m->plan(2,16);
-    expect($m->commands===[['frc',2]],'3000 W supports two phases at unchanged 6 A');
+$tests['repeated samples and taper cannot establish fewer phases'] = function () {
+    $m=new SimulatedManager(); $s=$m->status; $s['car']=2; $s['alw']=true; $s['psm']=2; $s['nrg'][4]=6;
+    for($i=0;$i<4;$i++) invoke($m,'observeVehiclePhases',$s,'192.168.1.2');
+    expect(invoke($m,'vehiclePhaseCount',3)===3,'Same time samples do not qualify');
+    $s['amp']=16;
+    for($i=0;$i<4;$i++) { $m->clock+=2; invoke($m,'observeVehiclePhases',$s,'192.168.1.2'); }
+    expect(invoke($m,'vehiclePhaseCount',3)===3,'Tapering is not capability evidence');
 };
 $failures=0;
 foreach ($tests as $name=>$test) {

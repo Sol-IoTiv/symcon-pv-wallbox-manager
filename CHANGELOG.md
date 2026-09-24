@@ -18,7 +18,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Nicht vorhandenen LogDebug-Aufruf ersetzt; widersprüchliche Min-/Maximalströme sperren die Freigabe.
 
 ### Berechnung und Anzeige
-- Konfigurierbare maximale Fahrzeugphasen (1/2/3) für Leistungsberechnungen; zweiphasige Fahrzeuge werden im 3P-Wallboxmodus mit zwei Phasen berechnet. Standard bleibt drei.
+- Automatische Erkennung der genutzten Fahrzeugphasen aus drei getrennten Messungen. Keine manuelle Fahrzeugauswahl; nach Unterbrechungen erneute Erkennung, bis dahin konservative Berechnung mit drei Phasen.
 - Schieberegler „Maximale Netzbelastung“ auf 0–22.000 W in 100-W-Schritten begrenzt.
 - Irreführende Netzlimit-Startwerte aus dem Formular entfernt; Bedienhinweis verweist auf die tatsächlich wirksamen Instanzvariablen. Vorhandene Grenzwerte bleiben erhalten.
 - Einstellungen für Phasenumschaltung sowie Netzanschluss jeweils zusammengeführt; Cooldown und maximale Bestätigungsfrist verständlicher erläutert.

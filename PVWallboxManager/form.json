@@ -345,12 +345,7 @@
       "type": "ExpansionPanel",
       "caption": "🚗 Fahrzeugdaten & Ziel-SOC",
       "items": [
-        { "type": "Select", "name": "CarMaxPhases", "caption": "Maximale AC-Ladephasen des Fahrzeugs", "options": [
-          { "caption": "1 Phase", "value": 1 },
-          { "caption": "2 Phasen", "value": 2 },
-          { "caption": "3 Phasen", "value": 3 }
-        ]},
-        { "type": "Label", "caption": "Für das angeschlossene Fahrzeug einstellen, bei Fahrzeugwechsel prüfen. Bestimmt die Leistungsberechnung in allen Lademodi und beim Netzlimit. Die Wallbox schaltet weiterhin zwischen 1P und 3P; im 1P-Modus wird immer mit einer Phase gerechnet." },
+        { "type": "Label", "caption": "Die genutzten Fahrzeugphasen werden automatisch aus drei zeitlich getrennten Strommessungen im 3P-Wallboxmodus erkannt. Bis dahin wird mit drei Phasen gerechnet. Nach Ladepause, Phasenwechsel oder Abstecken wird neu erkannt. Im 1P-Modus gilt immer eine Phase." },
         { "type": "Label", "label": "🔋 Aktueller SoC des Fahrzeugs & 🎯 Ziel-SoC für das Fahrzeug" },
         { "type": "RowLayout", "items": [
           { "type": "SelectVariable", "name": "CarSOCID", "caption": "Aktueller SoC des Fahrzeugs", "suffix": "%", "minimum": 0, "maximum": 100 },

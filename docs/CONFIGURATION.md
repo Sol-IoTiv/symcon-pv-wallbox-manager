@@ -48,7 +48,7 @@ Budget = aktuelle Wallboxleistung + Bezugslimit − Netzbezug. Gilt auch bei Ein
 
 ## Hybrid und Fahrzeug
 
-CarMaxPhases: Maximale AC-Ladephasen des angeschlossenen Fahrzeugs (1, 2 oder 3; Standard 3). Im 3P-Wallboxmodus wird mit dieser Anzahl gerechnet, im 1P-Modus mit einer Phase. Gilt für PV, PV-Anteil, Hybrid, Netzlimit und Leistungsumrechnung während des Cooldowns. Bei Fahrzeugwechsel passend einstellen. Die gemessene Phasenanzeige bleibt unabhängig davon; der Wallboxmodus bleibt 1P/3P.
+Die Fahrzeugphasen werden automatisch aus drei zeitlich getrennten Strommessungen während aktiver Ladung im 3P-Wallboxmodus erkannt. Bis zur Bestätigung wird konservativ mit drei Phasen gerechnet. Eine geänderte Anzahl, Ladepause, Abstecken, Phasenwechsel, Kommunikationsfehler oder längere Messlücke verwirft die Erkennung. Im 1P-Modus wird immer mit einer Phase gerechnet. Die frühere Einstellung CarMaxPhases ist ausgeblendet und wird nicht mehr ausgewertet. Die Erkennung gilt für alle Leistungsberechnungen; die Wallbox schaltet weiterhin ausschließlich 1P/3P. Eine spontane Änderung der tatsächlich genutzten Phasen kann erst beim nächsten Statusabruf berücksichtigt werden.
 
 HybridEndMode: 0 deaktiviert, 1 feste 1P-Endladung, 2 feste 3P-Endladung. HybridEndDelaySeconds: Wartezeit bei dauerhaft geringer PV; 0 deaktiviert die Endladung. HybridEndAmpere: Stromwunsch innerhalb der gemeinsamen Grenzen.
 
