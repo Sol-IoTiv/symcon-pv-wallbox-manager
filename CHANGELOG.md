@@ -3,6 +3,35 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [Unreleased] – vorgesehen für 1.4.10b
+
+Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
+
+### Steuerung und Fehlerbehandlung
+- Gemeinsame instanzbezogene Semaphore für Regelung und steuernde Bedienaktionen.
+- Zentraler Phasenablauf: Stop anfordern, zwei zeitlich getrennte Stillstandsmessungen, Phasenbefehl, zwei Rücklesebestätigungen, erneute Regelentscheidung.
+- Standardmäßig 180 s Mindestabstand; konfigurierbarer Timeout je Umschaltschritt. Hybrid und Manuell verwenden denselben Ablauf.
+- API-Antworten pro Parameter werden ausgewertet. Fehler/Timeouts sperren die Wiederfreigabe bis zum bestätigten Stillstand und explizitem Reset.
+- Netzbudget wird vor Phasenwechsel/Stromvorgabe/Freigabe berücksichtigt, auch bei Einspeisung und Nullbezug.
+- Ungültige und veraltete Netzwerte sperren die Ladung bei aktivem Limit; Vorzeichen konfigurierbar.
+- Deaktiviertes Modul kann über Bedienaktionen keine Ladung wieder starten.
+- Nicht vorhandenen LogDebug-Aufruf ersetzt; widersprüchliche Min-/Maximalströme sperren die Freigabe.
+
+### Berechnung und Anzeige
+- Wallboxstatus innerhalb eines Zyklus wiederverwendet; Stromgrenzen zeit- und IP-gebunden zwischengespeichert.
+- Gemessene Fahrzeugphasen bei Stillstand: 0; Regelung verwendet separat den zurückgelesenen Wallboxmodus.
+- Dauerhafte Hauslastanstiege lösen den Spikefilter nach drei auffälligen Messungen.
+- Start-Hysterese gilt für jeden Start; Stromreduzierungen werden nicht durch die Aufwärtsrampe verzögert.
+- Hausverbrauchsereignisse berücksichtigen Invertierung und begrenzen die Anzeige auf mindestens 0 W.
+- Leere/fehlerhafte Strompreisantworten abgesichert, aktuelles Preisintervall ausgewählt und Gültigkeitsanzeige ergänzt.
+- InitialCheckInterval=0 deaktiviert die Abfrage ohne Fahrzeug; manuelle Phasenanzeige korrigiert.
+
+### Migration und Qualität
+- Bestehende Variablen und Historie bleiben erhalten; öffentliche Steuerfunktionen behalten ihre Namen, umgehen aber die gemeinsame Regelung nicht mehr. Siehe docs/MIGRATION-1.4.10b.md.
+- README und Konfigurations-/Betriebsdokumentation an den tatsächlichen Funktionsumfang angepasst.
+- Reproduzierbare PHP-Regressionstests mit simulierten Symcon-/Wallboxschnittstellen und CI-Workflow ergänzt.
+- Historische Changelog-Einträge unverändert erhalten.
+
 ## [1.4.9b] - 2026-06-26
 ### 🛠️ Verbesserungen
 - Hybrid-Laden nutzt nun die normale Phasenumschaltung mit Hysterese und Cooldown.

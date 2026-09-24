@@ -2,9 +2,67 @@
   "elements": [
     {
       "type": "ExpansionPanel",
+      "caption": "Kontrollierte Phasenumschaltung",
+      "items": [
+        {
+          "type": "Label",
+          "caption": "Phasenwechsel erfolgen nach bestätigtem Ladestop. Bei Fehlern bleibt die Wiederfreigabe gesperrt."
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchCooldown",
+          "caption": "Mindestabstand zwischen Phasenwechseln",
+          "suffix": "s",
+          "minimum": 30,
+          "maximum": 1800
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchTimeout",
+          "caption": "Timeout je Umschaltschritt",
+          "suffix": "s",
+          "minimum": 15,
+          "maximum": 300
+        },
+        {
+          "type": "Label",
+          "caption": "Standard: 180 s Mindestabstand, 60 s Timeout. Für das konkrete Fahrzeug und die Firmware im Praxistest prüfen."
+        },
+        {
+          "type": "Button",
+          "caption": "Phasenfehler nach Stillstand zurücksetzen",
+          "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
+      "caption": "Netzmessung prüfen",
+      "items": [
+        {
+          "type": "CheckBox",
+          "name": "InvertNetzleistung",
+          "caption": "Vorzeichen umkehren (Zähler liefert Einspeisung positiv)"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "GridMeasurementMaxAge",
+          "caption": "Maximales Messwertalter",
+          "suffix": "s",
+          "minimum": 10,
+          "maximum": 3600
+        },
+        {
+          "type": "Label",
+          "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
+        }
+      ]
+    },
+    {
+      "type": "ExpansionPanel",
       "caption": "🛑 Modulsteuerung",
       "items": [
-        { "type": "CheckBox", "name": "ModulAktiv", "caption": "⚡ Modul aktiv (bei Deaktivierung werden keine Aktionen ausgeführt)"},
+        { "type": "CheckBox", "name": "ModulAktiv", "caption": "Modul aktiv (Deaktivieren fordert Ladestop an)"},
         { "type": "CheckBox", "name": "DebugLogging", "caption": "🐞 Debug-Logging aktivieren (Details zu allen Variablen und Werten ins IPS-Log)", "default": false },
         { "type": "Select", "name": "ModeAfterUnplug", "caption": "Lademodus nach Fahrzeug-Abstecken", "options": [
           { "caption": "Aktuellen Lademodus beibehalten", "value": -1 },
@@ -29,7 +87,7 @@
           { "type": "NumberSpinner", "name": "InitialCheckInterval", "caption": "Initial-Check Intervall (0 = deaktivert)", "suffix": "Sek.", "minimum": 0, "maximum": 60 }
         ]},
         { "type": "RowLayout", "items": [
-          { "type": "PasswordTextBox", "name": "WallboxAPIKey", "caption": "API-Key (optional)"}
+          { "type": "PasswordTextBox", "name": "WallboxAPIKey", "caption": "API-Key (Legacy; lokale API v2 verwendet diesen Wert nicht)"}
         ]},
         { "type": "RowLayout", "items": [
           { "type": "NumberSpinner", "name": "MinAmpere", "caption": "Minimaler Ladestrom (A)", "icon": "Minus", "suffix": "A", "minimum": 6, "maximum": 32, "default": 6 },
@@ -325,7 +383,7 @@
         { "type": "Label", "caption": "Aufschlag zum Marktpreis für Versorger-Marge, Bilanzierungs- und Beschaffungskosten" },
         { "type": "NumberSpinner", "name": "MarketPriceSurcharge", "caption": "Aufschlag", "default": 0.00, "suffix": " %", "minimum": 0, "maximum": 100 },
         { "type": "Label", "caption": "Steuersatz" },
-        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 20, "suffix": " %", "minimum": 0, "maximum": 100 },
+        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 0, "suffix": " %", "minimum": 0, "maximum": 100 },
         {
           "type": "Label",
           "label": "Börsenpreise und Vorschau erscheinen im WebFront und werden in die Variable 'CurrentSpotPrice' geschrieben."

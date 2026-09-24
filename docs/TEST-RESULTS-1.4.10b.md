@@ -1,0 +1,25 @@
+# Lokales Prüfergebnis – Entwurf 1.4.10b
+
+Datum: 23.09.2026. Ausgangscommit: e9337aa71d691a199bf68acf6a82634b0dfb0fae (beta-staging).
+Arbeitsbranch: codex/1.4.10b-stabilization. Laufzeit: PHP 8.3.31 CLI, Windows.
+
+| Prüfung | Ergebnis |
+|---|---|
+| PHP-Lint module.php | bestanden |
+| PHP-Lint ChargingControl.php | bestanden |
+| tests/regression.php | 3 Szenarien bestanden |
+| tests/charging.php | 36 Szenarien bestanden |
+| tests/metadata.php | Versionen, Formular-Properties und Property-Referenz bestanden |
+| Git-Diff-Whitespaceprüfung mit Berücksichtigung bestehender CRLF-Dateien | bestanden |
+
+Die drei anfänglichen Regressionen (Phasenanzeige im Stillstand, fehlender Netzzähler, festhängender Hauslastfilter) wurden zuerst am alten Stand ausgeführt und schlugen dort wie erwartet fehl. Nach Änderung bestehen sie.
+
+Die simulierten Tests decken unter anderem alle vier Lademodi, Netzbezug/Einspeisung, API-Ablehnungen, Stop-/Phasenbestätigung, Timeout, persistente Übergänge, Semaphorfreigabe und Deaktivierung während eines Befehls ab. Details und reproduzierbare Befehle stehen in TESTING.md.
+
+Nicht ausgeführt: tatsächlicher Symcon-Kernel, echte parallele Prozesse, Installation/Upgrade einer realen Instanz, GitHub-CI sowie Hardwaretests. Die Ergebnisse sind keine Stable-Freigabe. Modell, Firmware, Fahrzeug und Hardwareprotokoll fehlen noch.
+
+Nachtrag 24.09.2026: Als Testaufbau wurden go-eCharger V4 mit 11 kW und VW ID.3 Pure genannt. Firmware und Hardwareprotokoll stehen weiterhin aus; die zusätzliche Angabe „55 kW“ ist hinsichtlich der Akkukapazität noch zu klären. Die obigen Testergebnisse bleiben reine Simulationsergebnisse.
+
+Weitere Präzisierung am 24.09.2026: Nutzer bestätigt go-e-Firmware Beta 60.6, IP-Symcon 9.0 und 55 kWh Akkukapazität. Ob 55 kWh Brutto- oder Nutzkapazität sind, ist noch nicht bestätigt. Die Hardwareabnahme ist weiterhin offen; aus den Versionsangaben folgt keine geprüfte Kompatibilität.
+
+Statusprüfung am 24.09.2026: Zehn nicht identifizierende Steuer-/Messfelder aus der Nutzerantwort als Fixture übernommen. Der Gesamttext enthielt einen JSON-Syntaxfehler beim ausgeschlossenen Feld eto. Die übernommenen Feldtypen werden vom Modul akzeptiert; var=11/ama=16 ergeben 16 A. car=1, Leistung/Ströme=0, psm=2 und frc=0 beschreiben einen Zustand ohne Fahrzeug mit neutraler Freigabe, keinen bestätigten Stop. Zusätzlicher Regressionstest bestanden; tests/charging.php enthält nun 37 Szenarien. Keine Hardwarebefehle wurden gesendet.
