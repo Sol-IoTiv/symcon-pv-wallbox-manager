@@ -32,3 +32,7 @@ In Symcon tragen diese Funktionen wie bisher das Präfix PVWM_. Skripte mit bish
 Vor Downgrade Ladung stoppen und ausstehenden Phasenwechsel klären. 1.4.9b besitzt die neuen Absicherungen nicht. Neu hinzugefügte Diagnosevariablen müssen nicht gelöscht werden.
 
 Vorhandene Archive bleiben erhalten. Zusätzliche Betriebsanalyse (Leistung, Netzbezug, Modus, gemessene Phasen) kann über Symcons Archiv eingerichtet werden. Dieser Entwurf aktiviert keine automatische Archivierung und ändert keine Aufbewahrungsregeln.
+
+## Zentrale Hausverbrauchsberechnung
+
+Die moduleigenen Ereignisse mit Ident UpdateHausverbrauchW und UpdateHausverbrauchAbzWallbox werden bei ApplyChanges deaktiviert und nicht mehr angelegt. Ergebnisvariablen bleiben erhalten. Eigene oder ältere Ereignisse mit anderen Idents werden nicht automatisch verändert; doppelte Schreiber müssen deaktiviert bleiben. Das betrifft beim besprochenen Aufbau auch die bereits identifizierten alten Ereignisse 19516 und 55421. Die Zeitprüfung verwendet die konfigurierte externe Hausverbrauchsquelle, nicht die Ergebnisvariable des Moduls.

@@ -33,6 +33,7 @@ class PVWallboxManager extends IPSModule
 
         $this->RegisterCustomProfiles();
         $this->registerAttributes([
+            'EnergyMeasurementState'        => '{}',
             'VehiclePhaseObservation'       => '{}',
             'MarketPricesTimerInterval'      => 0,
             'MarketPricesActive'             => false,
@@ -185,6 +186,7 @@ class PVWallboxManager extends IPSModule
     {
         parent::ApplyChanges();
         $this->WriteAttributeString('WallboxLimits', '{}');
+        $this->WriteAttributeString('EnergyMeasurementState', '{}');
         $this->WriteAttributeString('VehiclePhaseObservation', '{}');
         if (in_array($this->phaseState(), ['stopping','confirming'], true)) $this->phaseFault('Konfiguration während Phasenwechsel geändert');
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
@@ -734,7 +736,7 @@ class PVWallboxManager extends IPSModule
 
         $this->updateHousePower($energyRaw);
 
-        if (!$this->isCarConnected($data)) {
+        if (!$this->isCarConnected($data) && $energyRaw['coherent']) {
             $this->updateSurplusDisplayWithoutCar($energyRaw);
         }
 
@@ -748,6 +750,8 @@ class PVWallboxManager extends IPSModule
         if ($this->phaseState() === 'fault') {
             $this->SetNoChargeReason('Phasensteuerung gesperrt: ' . $this->ReadAttributeString('PhaseTransitionError'));
             $this->stopCharging(false);
+        } elseif (!$energyRaw['coherent'] && $activeMode !== 'manuell' && $this->isCarConnected($data)) {
+            $this->holdForHouseMeasurement($data);
         } else {
             $this->routeChargingMode($data, max(1, $this->phaseModeToPhaseCount($data['psm'])));
         }
@@ -1655,7 +1659,9 @@ class PVWallboxManager extends IPSModule
         } else {
             $this->ResetStateLog('house_wallbox_inconsistent');
         }
+        $coherent = $this->checkEnergyMeasurement($hvID, $houseUpdated, (float)$hv, (float)$wb);
         return $this->energySnapshot = [
+            'coherent' => $coherent,
             'pv'      => round($pv),
             'wallbox' => $wb,
             'haus'    => round($hv),
@@ -1822,6 +1828,7 @@ class PVWallboxManager extends IPSModule
 
     private function updateHousePower(array $energyRaw): void
     {
+        if (!$energyRaw['coherent']) return;
         $this->SetValueAndLogChange('Hausverbrauch_W', $energyRaw['haus'], 'Hausverbrauch (W)');
         $this->SetValueAndLogChange(
             'Hausverbrauch_abz_Wallbox',
@@ -1832,62 +1839,10 @@ class PVWallboxManager extends IPSModule
 
     private function UpdateHausverbrauchEvent()
     {
-        $eventIdent = "UpdateHausverbrauchW";
-        $eventID = @$this->GetIDForIdent($eventIdent);
-        $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $myVarID = $this->GetIDForIdent('Hausverbrauch_W');
-        $einheit = $this->ReadPropertyString('HausverbrauchEinheit');
-
-        if ($eventID && ($hvID <= 0 || @IPS_GetEvent($eventID)['TriggerVariableID'] != $hvID)) {
-            IPS_DeleteEvent($eventID);
-            $eventID = 0;
-        }
-        if ($hvID > 0 && IPS_VariableExists($hvID)) {
-            if (!$eventID) {
-                $eventID = IPS_CreateEvent(0);
-                IPS_SetIdent($eventID, $eventIdent);
-                IPS_SetParent($eventID, $this->InstanceID);
-                IPS_SetEventTrigger($eventID, 0, $hvID);
-                IPS_SetEventActive($eventID, true);
-                IPS_SetName($eventID, "Aktualisiere Hausverbrauch_W");
-            }
-            $script = <<<'EOD'
-    $wert = GetValue($_IPS['VARIABLE']);
-    $einheit = IPS_GetProperty($_IPS['INSTANCE'], 'HausverbrauchEinheit');
-    if ($einheit == 'kW') $wert *= 1000;
-    if (IPS_GetProperty($_IPS['INSTANCE'], 'InvertHausverbrauch')) $wert *= -1;
-    SetValue($_IPS['TARGET'], round($wert));
-    EOD;
-            $script = str_replace(['$_IPS[\'INSTANCE\']', '$_IPS[\'TARGET\']'], [$this->InstanceID, $myVarID], $script);
-
-            IPS_SetEventScript($eventID, $script);
-        }
-
-        $eventIdent2 = "UpdateHausverbrauchAbzWallbox";
-        $eventID2 = @$this->GetIDForIdent($eventIdent2);
-        $myVarID2 = $this->GetIDForIdent('Hausverbrauch_abz_Wallbox');
-        $srcVarID = $this->GetIDForIdent('Hausverbrauch_W');
-
-        if ($eventID2 && (@IPS_GetEvent($eventID2)['TriggerVariableID'] != $srcVarID)) {
-            IPS_DeleteEvent($eventID2);
-            $eventID2 = 0;
-        }
-        if ($srcVarID > 0 && IPS_VariableExists($srcVarID)) {
-            if (!$eventID2) {
-                $eventID2 = IPS_CreateEvent(0);
-                IPS_SetIdent($eventID2, $eventIdent2);
-                IPS_SetParent($eventID2, $this->InstanceID);
-                IPS_SetEventTrigger($eventID2, 0, $srcVarID);
-                IPS_SetEventActive($eventID2, true);
-                IPS_SetName($eventID2, "Aktualisiere Hausverbrauch_abz_Wallbox");
-            }
-            $script2 = <<<'EOD'
-    $hv = GetValue($_IPS['VARIABLE']);
-    $wb = GetValue(IPS_GetObjectIDByIdent('Leistung', $_IPS['INSTANCE']));
-    SetValue(IPS_GetObjectIDByIdent('Hausverbrauch_abz_Wallbox', $_IPS['INSTANCE']), max(0, round($hv - $wb)));
-    EOD;
-            $script2 = str_replace(['$_IPS[\'INSTANCE\']'], [$this->InstanceID], $script2);
-            IPS_SetEventScript($eventID2, $script2);
+        // Retire only our two known event identities. Preserve objects for rollback/history.
+        foreach (['UpdateHausverbrauchW','UpdateHausverbrauchAbzWallbox'] as $ident) {
+            $id = @$this->GetIDForIdent($ident);
+            if ($id && IPS_EventExists($id)) IPS_SetEventActive($id, false);
         }
     }
 
@@ -2518,14 +2473,6 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
         $this->SetValue('Leistung', 0);
-        $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $hvEinheit = $this->ReadPropertyString('HausverbrauchEinheit');
-        $invertHV = $this->ReadPropertyBoolean('InvertHausverbrauch');
-        $hausverbrauch = ($hvID > 0 && IPS_VariableExists($hvID)) ? (float)GetValue($hvID) : 0;
-        if ($hvEinheit == "kW") $hausverbrauch *= 1000;
-        if ($invertHV) $hausverbrauch *= -1;
-        $hausverbrauch = round($hausverbrauch);
-
         $this->SetValue('Freigabe', false);
         $this->SetValue('AccessStateV2', 1);
         $this->SetValue('Status', 1);

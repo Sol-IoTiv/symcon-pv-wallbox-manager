@@ -515,6 +515,69 @@ $tests['running PV charge keeps phase hysteresis without immediate stop'] = func
     $m->UpdateStatus();
     expect(!in_array(['frc',1],$m->commands,true),'Running charge retains hysteresis while threshold settles');
 };
+$tests['delayed house source cannot cause PV increase or corrupt displayed net consumption'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1);
+    $m->properties['PVErzeugungID']=43; SetValue(43,6000.0);
+    $m->properties['HausverbrauchID']=47; SetValue(47,3430.0);
+    $GLOBALS['metadata'][47]=['VariableType'=>2,'VariableUpdated'=>$m->clock];
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1000;
+    $m->UpdateStatus(); $net=$m->GetValue('Hausverbrauch_abz_Wallbox'); $smooth=$m->attributes['SmoothedSurplus'];
+    $m->clock+=16; $m->status['nrg'][11]=2599; $m->commands=[]; $m->UpdateStatus();
+    expect($m->GetValue('Hausverbrauch_abz_Wallbox')===$net,'Last coherent display must stay intact');
+    expect($m->attributes['SmoothedSurplus']===$smooth,'Delayed snapshot must not enter smoothing');
+    expect($m->commands===[],'No higher current or PV phase switch on mismatched measurements');
+    SetValue(47,5029.0); $m->clock+=16; $GLOBALS['metadata'][47]['VariableUpdated']=$m->clock; $m->UpdateStatus();
+    expect($m->commands===[],'One fresh update is not sufficient');
+    $m->clock+=16; $GLOBALS['metadata'][47]['VariableUpdated']=$m->clock; $m->UpdateStatus();
+    $state=json_decode($m->attributes['EnergyMeasurementState'],true);
+    expect(!isset($state['waitingSince']),'Two fresh plausible updates resume regulation');
+    expect($m->GetValue('Hausverbrauch_abz_Wallbox')===2430.0,'Resumed calculation uses matching house and wallbox values');
+};
+$tests['house guard counts updates not polls and times out safely'] = function () {
+    $m=new SimulatedManager();
+    expect(invoke($m,'checkEnergyMeasurement',47,1000,2430.0,0.0),'Initial plausible snapshot');
+    $m->clock=1016;
+    expect(!invoke($m,'checkEnergyMeasurement',47,1000,2430.0,2599.0),'Delayed impossible net power rejected');
+    $m->clock=1032;
+    expect(!invoke($m,'checkEnergyMeasurement',47,1032,5029.0,2599.0),'First new update');
+    for($i=0;$i<5;$i++) { $m->clock+=2; expect(!invoke($m,'checkEnergyMeasurement',47,1032,5029.0,2599.0),'Repeated polls cannot confirm freshness'); }
+    $m->clock=1140; $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true;
+    invoke($m,'holdForHouseMeasurement',$m->status);
+    expect(in_array(['frc',1],$m->commands,true),'Unresolved mismatch stops after bounded wait');
+};
+$tests['house guard still enforces grid stop'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1);
+    $m->properties['PVErzeugungID']=43; SetValue(43,6000.0);
+    $m->properties['HausverbrauchID']=47; SetValue(47,3430.0); $GLOBALS['metadata'][47]=['VariableType'=>2,'VariableUpdated'=>1000];
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=1000;
+    $m->UpdateStatus(); $m->clock+=16; $m->status['nrg'][11]=2599; $m->grid(9000,1000); $m->commands=[];
+    $m->UpdateStatus(); expect(in_array(['frc',1],$m->commands,true),'Grid safety must not wait for house synchronization');
+};
+$tests['managed house events are retired without deleting unrelated events'] = function () {
+    $m=new SimulatedManager(); $GLOBALS['events']=['UpdateHausverbrauchW'=>true,'UpdateHausverbrauchAbzWallbox'=>true,'CustomEvent'=>true];
+    invoke($m,'UpdateHausverbrauchEvent');
+    expect($GLOBALS['events']===['UpdateHausverbrauchW'=>false,'UpdateHausverbrauchAbzWallbox'=>false,'CustomEvent'=>true],'Disable exactly the managed legacy events');
+};
+$tests['house guard respects explicit zero share and target SoC'] = function () {
+    foreach(['zero','target'] as $condition) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1);
+        $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true;
+        if ($condition==='zero') $m->SetValue('PVAnteil',0);
+        else { $m->properties['CarSOCID']=44; $m->properties['CarTargetSOCID']=45; SetValue(44,80); SetValue(45,80); }
+        invoke($m,'holdForHouseMeasurement',$m->status);
+        expect(in_array(['frc',1],$m->commands,true),'Explicit stop condition wins while waiting');
+    }
+};
+$tests['house wait allows phase confirmation but never releases before fresh measurements'] = function () {
+    $m=new SimulatedManager(); $m->plan(2,6);
+    $m->attributes['EnergyMeasurementState']=json_encode(['waitingSince'=>$m->clock]);
+    for($i=0;$i<2;$i++) { $m->clock+=2; invoke($m,'controlled',function()use($m){invoke($m,'holdForHouseMeasurement',$m->status);}); }
+    expect(in_array(['psm',2],$m->commands,true),'Authorized transition can finish while stopped');
+    $m->status['psm']=2;
+    for($i=0;$i<3;$i++) { $m->clock+=2; invoke($m,'controlled',function()use($m){invoke($m,'holdForHouseMeasurement',$m->status);}); }
+    expect($m->attributes['PhaseTransitionState']==='idle','Readback completes transition');
+    expect(!in_array(['frc',2],$m->commands,true),'House wait still prevents resume');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

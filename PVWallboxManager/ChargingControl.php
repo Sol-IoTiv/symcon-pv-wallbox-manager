@@ -250,6 +250,74 @@ trait ChargingControl
             && is_numeric(GetValue($soc)) && is_numeric(GetValue($target)) && GetValue($soc) >= GetValue($target);
     }
 
+    private function checkEnergyMeasurement(int $source, int $updated, float $house, float $wallbox): bool
+    {
+        if ($source <= 0) return true;
+        $now = $this->now();
+        $state = json_decode($this->ReadAttributeString('EnergyMeasurementState'), true) ?: [];
+        if (($state['source'] ?? 0) !== $source) $state = ['source'=>$source, 'wallbox'=>$wallbox];
+        $maxAge = max(120, 3 * $this->ReadPropertyInteger('RefreshInterval'));
+        $plausible = $updated > 0 && $updated <= $now && $now - $updated <= $maxAge && $house + 100 >= $wallbox;
+        $changed = abs($wallbox - $state['wallbox']) > 150;
+        if ($changed || !$plausible) {
+            if (!isset($state['waitingSince'])) $state['waitingSince'] = $now;
+            // Require two later source updates, not two reads of the same cached value.
+            $state['after'] = $now;
+            $state['lastUpdate'] = $updated;
+            $state['samples'] = 0;
+            $state['wallbox'] = $wallbox;
+        }
+        if (isset($state['waitingSince']) && $plausible && !$changed
+            && $updated > $state['after'] && $updated > $state['lastUpdate']) {
+            $state['lastUpdate'] = $updated;
+            $state['samples']++;
+            if ($state['samples'] >= 2) {
+                unset($state['waitingSince'], $state['after'], $state['samples'], $state['lastUpdate']);
+                $state['wallbox'] = $wallbox;
+            }
+        }
+        $this->WriteAttributeString('EnergyMeasurementState', json_encode($state));
+        return !isset($state['waitingSince']);
+    }
+
+    private function holdForHouseMeasurement(array $data): void
+    {
+        $mode = $this->getCurrentModeKey();
+        $houseSoc = $this->ReadPropertyInteger('HausakkuSOCID');
+        if (($mode === 'pv2car' && (int)$this->GetValue('PVAnteil') === 0)
+            || (in_array($mode, ['pvonly','hybrid'], true) && $houseSoc > 0 && !$this->validSocValue($houseSoc))) {
+            $this->SetNoChargeReason($mode === 'pv2car' ? 'PV-Anteil ist 0 %' : 'Hausakku-SoC ungültig');
+            $this->stopCharging();
+            return;
+        }
+        $state = json_decode($this->ReadAttributeString('EnergyMeasurementState'), true) ?: [];
+        $maxWait = max(120, 3 * $this->ReadPropertyInteger('RefreshInterval'));
+        $expired = $this->now() - ($state['waitingSince'] ?? $this->now()) >= $maxWait;
+        $reason = $expired ? 'Hausverbrauch nicht zeitlich plausibel – Ladestop angefordert'
+            : 'Warte auf aktualisierten Hausverbrauch nach Änderung der Wallboxleistung';
+        $this->SetNoChargeReason($reason);
+        if ($expired || $this->vehicleSocInvalid() || $this->targetSocReached() || $data['err'] !== 0) {
+            $this->stopCharging();
+            return;
+        }
+        if (in_array($this->phaseState(), ['stopping','confirming'], true)) {
+            // Finish an already authorized transition while stopped; never release here.
+            $this->executeChargingPlan($this->ReadAttributeInteger('PhaseTransitionTarget'), $data['amp'], true);
+            return;
+        }
+        if ($data['car'] !== 2 || !$data['alw'] || $data['frc'] !== 2) {
+            $this->stopCharging(false);
+            return;
+        }
+        // Keep at most the current setting. Grid reductions/stops still have priority.
+        if ($data['amp'] < max(6, $this->ReadPropertyInteger('MinAmpere')) || !in_array($data['psm'], [1,2], true)) {
+            $this->stopCharging();
+            return;
+        }
+        $this->executeChargingPlan($data['psm'], $data['amp'], true);
+        if ($this->phaseState() === 'idle' && $this->GetNoChargeReason() === '') $this->SetNoChargeReason($reason);
+    }
+
     private function readGridPower(): ?float
     {
         $id = $this->ReadPropertyInteger('NetzleistungID');

@@ -14,6 +14,8 @@ function GetValue($id) { return $GLOBALS['values'][$id]; }
 function GetValueFloat($id) { return (float)GetValue($id); }
 function SetValue($id, $value) { $GLOBALS['values'][$id] = $value; }
 function IPS_GetVariable($id) { return $GLOBALS['metadata'][$id] ?? ['VariableType'=>2, 'VariableUpdated'=>1000, 'VariableProfile'=>'', 'VariableCustomProfile'=>'']; }
+function IPS_EventExists($id) { return isset($GLOBALS['events'][$id]); }
+function IPS_SetEventActive($id,$active) { $GLOBALS['events'][$id]=$active; }
 function IPS_LogMessage($sender, $message) {}
 function IPS_Sleep($ms) {}
 function IPS_GetVariableProfile($name) { return ['Associations'=>[]]; }
