@@ -1,0 +1,15 @@
+name: PHP regression
+on: [push, pull_request]
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    container: php:${{ matrix.php }}-cli
+    steps:
+      - uses: actions/checkout@v4
+      - run: php -l PVWallboxManager/module.php && php -l PVWallboxManager/ChargingControl.php
+      - run: php tests/regression.php
+      - run: php tests/charging.php
+      - run: php tests/metadata.php

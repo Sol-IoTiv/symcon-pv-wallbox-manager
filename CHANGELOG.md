@@ -3,6 +3,48 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [Unreleased] – vorgesehen für 1.4.10b
+
+Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
+
+### Steuerung und Fehlerbehandlung
+- Hausverbrauchsberechnung zentralisiert; bekannte alte Modulereignisse deaktiviert, Variablen und Historie erhalten. Verzögerte Hauswerte nach Wallbox-Leistungsänderungen sperren PV-Erhöhungen und überschussbedingte Phasenwechsel bis zu zwei neuen plausiblen Quellaktualisierungen; bei ausbleibender Bestätigung begrenzte Wartezeit mit Stop. Netz-/SoC-Schutz bleibt aktiv.
+- PV-Ladestart wartet bei ausstehender Phasenwahl auf deren Hysterese und bestätigten Zielmodus; kein kurzes Anladen im bisherigen Modus während der Planung oder eines Cooldowns. Diagnose für Phasenentscheidung und zeitversetzte Haus-/Wallboxmesswerte ergänzt.
+- Fehlenden Ladestart nicht mehr nach drei 0-W-Abfragen als Ladeende behandeln: Rückwechsel auf Standardmodus erst nach zuvor beobachteter Ladung und wiederholtem Wallbox-Endstatus. Wartezustand anzeigen und technische Debug-Rückmeldung ergänzen.
+- PV-Anteil verwendet ab erreichtem Hausakku-Ziel automatisch 100 % des Überschusses; eingestellter Anteil bleibt gespeichert, Status erklärt die Anhebung. Ohne gültigen Hausakku-SoC bleibt der Anteil unverändert; 0 % bleibt Stop. Keine zusätzliche Einstellung.
+- Nachprüfung aller Lademodi: PV-Anteil verwendet das anteilige Leistungsbudget auch zur Phasenwahl; 0 % stoppt unmittelbar.
+- Nur PV respektiert die konfigurierte Stop-Hysterese auch bei null Überschuss; Netzlimit und SoC-Sperren bleiben vorrangig.
+- Moduswechsel verwerfen alte Glättung, Phasenzähler und Hybrid-Endladezeiten. Hybrid überschreibt keine Sperrgründe mehr.
+- Ungültige konfigurierte SoC-/Energievariablen abgefangen; Ladezeitberechnung und Strompreisprüfung gegen ungültige Werte abgesichert.
+- Gemeinsame instanzbezogene Semaphore für Regelung und steuernde Bedienaktionen.
+- Zentraler Phasenablauf: Stop anfordern, zwei zeitlich getrennte Stillstandsmessungen, Phasenbefehl, zwei Rücklesebestätigungen, erneute Regelentscheidung.
+- Standardmäßig 180 s Mindestabstand; konfigurierbarer Timeout je Umschaltschritt. Hybrid und Manuell verwenden denselben Ablauf.
+- API-Antworten pro Parameter werden ausgewertet. Fehler/Timeouts sperren die Wiederfreigabe bis zum bestätigten Stillstand und explizitem Reset.
+- Netzbudget wird vor Phasenwechsel/Stromvorgabe/Freigabe berücksichtigt, auch bei Einspeisung und Nullbezug.
+- Ungültige und veraltete Netzwerte sperren die Ladung bei aktivem Limit; Vorzeichen konfigurierbar.
+- Deaktiviertes Modul kann über Bedienaktionen keine Ladung wieder starten.
+- Nicht vorhandenen LogDebug-Aufruf ersetzt; widersprüchliche Min-/Maximalströme sperren die Freigabe.
+
+### Berechnung und Anzeige
+- Automatische Erkennung der genutzten Fahrzeugphasen aus drei getrennten Messungen. Keine manuelle Fahrzeugauswahl; nach Unterbrechungen erneute Erkennung, bis dahin konservative Berechnung mit drei Phasen.
+- Schieberegler „Maximale Netzbelastung“ auf 0–22.000 W in 100-W-Schritten begrenzt.
+- Irreführende Netzlimit-Startwerte aus dem Formular entfernt; Bedienhinweis verweist auf die tatsächlich wirksamen Instanzvariablen. Vorhandene Grenzwerte bleiben erhalten.
+- Einstellungen für Phasenumschaltung sowie Netzanschluss jeweils zusammengeführt; Cooldown und maximale Bestätigungsfrist verständlicher erläutert.
+- Wallboxstatus innerhalb eines Zyklus wiederverwendet; Stromgrenzen zeit- und IP-gebunden zwischengespeichert.
+- Gemessene Fahrzeugphasen bei Stillstand: 0; Regelung verwendet separat den zurückgelesenen Wallboxmodus.
+- Dauerhafte Hauslastanstiege lösen den Spikefilter nach drei auffälligen Messungen.
+- Start-Hysterese gilt für jeden Start; Stromreduzierungen werden nicht durch die Aufwärtsrampe verzögert.
+- Hausverbrauchsereignisse berücksichtigen Invertierung und begrenzen die Anzeige auf mindestens 0 W.
+- Leere/fehlerhafte Strompreisantworten abgesichert, aktuelles Preisintervall ausgewählt und Gültigkeitsanzeige ergänzt.
+- InitialCheckInterval=0 deaktiviert die Abfrage ohne Fahrzeug; manuelle Phasenanzeige korrigiert.
+
+### Migration und Qualität
+- Forenfall zu PV-Anteil durch Tests für Hausakku-SoC-Übergang und anteilige Stoppschwelle ergänzt; feste Anteilssemantik dokumentiert.
+- Bestehende Variablen und Historie bleiben erhalten; öffentliche Steuerfunktionen behalten ihre Namen, umgehen aber die gemeinsame Regelung nicht mehr. Siehe docs/MIGRATION-1.4.10b.md.
+- README und Konfigurations-/Betriebsdokumentation an den tatsächlichen Funktionsumfang angepasst.
+- Reproduzierbare PHP-Regressionstests mit simulierten Symcon-/Wallboxschnittstellen und CI-Workflow ergänzt.
+- Historische Changelog-Einträge unverändert erhalten.
+
 ## [1.4.9b] - 2026-06-26
 ### 🛠️ Verbesserungen
 - Hybrid-Laden nutzt nun die normale Phasenumschaltung mit Hysterese und Cooldown.

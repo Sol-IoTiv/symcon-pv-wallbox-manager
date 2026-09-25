@@ -1,6 +1,8 @@
 <?php
+require_once __DIR__ . "/ChargingControl.php";
 class PVWallboxManager extends IPSModule
 {
+    use ChargingControl;
     // =========================================================================
     // 1. KONSTANTEN
     // =========================================================================
@@ -9,8 +11,6 @@ class PVWallboxManager extends IPSModule
     private const MODE_PVONLY = 0;
     private const MODE_PV2CAR = 1;
     private const MODE_MANUELL = 2;
-    private const MODE_TARGET_TIME = 3;
-    private const MODE_TARGET_TIME_PV = 4;
     private const MODE_HYBRID = 5;
 
     private const PHASE_MODE_1P = 1;
@@ -18,13 +18,10 @@ class PVWallboxManager extends IPSModule
 
     private const NO_POWER_THRESHOLD_W = 300;
     private const NO_POWER_COUNTER_LIMIT = 3;
-    private const PHASE_SWITCH_COOLDOWN_S = 15;
+    private const STOP_SETTLE_SECONDS = 15;
     private const CURRENT_CHANGE_COOLDOWN_S = 10;
     private const MANUAL_START_GRACE_S = 90;
 
-    private const HYBRID_STOP_PV_POWER_W      = 0;      // W: darunter wird Hybrid-Laden beendet
-//    private const HYBRID_HOLD_3PHASE_SECONDS  = 300;    // Sekunden: 3P bei Unterdeckung halten, danach 1P
-//    private const HYBRID_ALLOW_FALLBACK_TO_1P = true;   // true = nach Zeit auf 1P wechseln, false = Phasenmodus immer halten
 
     // =========================================================================
     // 2. CREATE / APPLYCHANGES / FORM
@@ -36,16 +33,18 @@ class PVWallboxManager extends IPSModule
 
         $this->RegisterCustomProfiles();
         $this->registerAttributes([
+            'EnergyMeasurementState'        => '{}',
+            'VehiclePhaseObservation'       => '{}',
             'MarketPricesTimerInterval'      => 0,
             'MarketPricesActive'             => false,
             'Phasen1Zaehler'                 => 0,
             'Phasen3Zaehler'                 => 0,
-            'PhasenRueckfallZaehler'         => 0,
             'LadeStartZaehler'               => 0,
             'LadeStopZaehler'                => 0,
             'HausverbrauchAbzWallboxBuffer'  => '[]',
             'HausverbrauchAbzWallboxLast'    => 0.0,
             'NoPowerCounter'                 => 0,
+            'ChargingPowerObserved'          => false,
             'LastTimerStatus'                => -1,
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
@@ -61,6 +60,16 @@ class PVWallboxManager extends IPSModule
             'StartupTimestamp'               => 0,
             'HybridLowPvSince'               => 0,
             'NetzlimitInitialisiert'         => false,
+            'PhaseTransitionState'          => 'idle',
+            'PhaseTransitionTarget'         => 1,
+            'PhaseTransitionDeadline'       => 0,
+            'PhaseTransitionSamples'        => 0,
+            'PhaseTransitionSampleTime'     => 0,
+            'PhaseTransitionError'          => '',
+            'PhaseResumePending'            => false,
+            'ControlStopRequested'          => false,
+            'WallboxLimits'                 => '{}',
+            'HouseSpikeCount'               => 0,
         ]);
 
         $this->registerProperties([
@@ -78,6 +87,7 @@ class PVWallboxManager extends IPSModule
             'HausakkuSOCVollSchwelle'=>['type'=>'integer',  'default'=>95],
             'CarSOCID'              => ['type'=>'integer', 'default'=>0],
             'CarTargetSOCID'        => ['type'=>'integer', 'default'=>0],
+            'CarMaxPhases'          => ['type'=>'integer', 'default'=>3],
             'CarBatteryCapacity'    => ['type'=>'float',   'default'=>0],
             'Phasen1Limit'          => ['type'=>'integer', 'default'=>3],
             'Phasen3Limit'          => ['type'=>'integer', 'default'=>3],
@@ -96,6 +106,10 @@ class PVWallboxManager extends IPSModule
             'BatterieladungEinheit' => ['type'=>'string',  'default'=>'W'],
             'InvertBatterieladung'  => ['type'=>'boolean', 'default'=>false],
 
+            'PhaseSwitchCooldown'    => ['type'=>'integer', 'default'=>180],
+            'PhaseSwitchTimeout'     => ['type'=>'integer', 'default'=>60],
+            'InvertNetzleistung'     => ['type'=>'boolean', 'default'=>false],
+            'GridMeasurementMaxAge'  => ['type'=>'integer', 'default'=>120],
             'NetzleistungID'         => ['type'=>'integer', 'default'=>0],
             'NetzleistungEinheit'    => ['type'=>'string',  'default'=>'W'],
             'NetzlimitStartAktiv'    => ['type'=>'boolean', 'default'=>false],
@@ -131,6 +145,7 @@ class PVWallboxManager extends IPSModule
             ['float',   'Hausverbrauch_W',              '🏠 Hausverbrauch (W)',                     'PVWM.Watt',                13, 'home'],
             ['float',   'Hausverbrauch_abz_Wallbox',    '🏠 Hausverbrauch abzügl. Wallbox (W)',     'PVWM.Watt',                15, 'home'],
             ['float',   'CurrentSpotPrice',             'Aktueller Börsenpreis (ct/kWh)',           'PVWM.CentPerKWh',          30, 'Euro'],
+            ['boolean', 'MarketPricesValid',            'Strompreise aktuell gültig',              '~Switch',                 33, null],
             ['string',  'MarketPrices',                 'Börsenpreis-Vorschau',                     '',                         31, null],
             ['string',  'MarketPricesPreview',          '📊 Börsenpreis-Vorschau (HTML)',           '~HTMLBox',                 32, null],
             ['integer', 'TargetTime',                   'Zielzeit',                                 '~UnixTimestampTime',       20, 'clock'],
@@ -154,6 +169,7 @@ class PVWallboxManager extends IPSModule
         $this->EnableAction('NetzlimitAktiv');
         $this->EnableAction('MaxNetzbezugWatt');
 
+        $this->RegisterTimer('PVWM_PhaseTransition', 0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","phase");');
         $this->RegisterTimer('PVWM_UpdateStatus',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
         $this->RegisterTimer('PVWM_UpdateMarketPrices', 0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateMarketPrices","");');
         $this->RegisterTimer('PVWM_InitialCheck',       0, 'IPS_RequestAction('.$this->InstanceID.',"UpdateStatus","pvonly");');
@@ -163,10 +179,20 @@ class PVWallboxManager extends IPSModule
 
     public function ApplyChanges()
     {
+        return $this->controlled(function () { $this->applyChangesControlled(); });
+    }
+
+    private function applyChangesControlled(): void
+    {
         parent::ApplyChanges();
+        $this->WriteAttributeString('WallboxLimits', '{}');
+        $this->WriteAttributeString('EnergyMeasurementState', '{}');
+        $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+        if (in_array($this->phaseState(), ['stopping','confirming'], true)) $this->phaseFault('Konfiguration während Phasenwechsel geändert');
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
         $aktiv = $this->ReadPropertyBoolean('ModulAktiv');
+        $this->WriteAttributeBoolean('ControlStopRequested', !$aktiv);
         $this->SetValue('ModulAktiv_Switch', $aktiv);
 
         /*
@@ -211,8 +237,13 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeBoolean('LastCarConnected', false);
 
         if ($aktiv) {
-            $this->WriteAttributeInteger('StartupTimestamp', time());
+            $this->WriteAttributeInteger('StartupTimestamp', $this->now());
             $this->UpdateStatus('startup');
+        } else {
+            $this->stopCharging();
+            $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
+            $this->SetNoChargeReason('Modul deaktiviert – Ladestop angefordert');
+            $this->UpdateStatusAnzeige();
         }
     }
 
@@ -257,10 +288,7 @@ class PVWallboxManager extends IPSModule
     private function RegisterCustomProfiles()
     {
         $create = function($name, $type, $digits, $suffix, $icon = '', $associations = null) {
-            if (IPS_VariableProfileExists($name)) {
-                IPS_DeleteVariableProfile($name);
-            }
-            IPS_CreateVariableProfile($name, $type);
+            if (!IPS_VariableProfileExists($name)) IPS_CreateVariableProfile($name, $type);
             IPS_SetVariableProfileDigits($name, $digits);
             IPS_SetVariableProfileText($name, '', $suffix);
             if (!empty($icon)) {
@@ -347,7 +375,7 @@ class PVWallboxManager extends IPSModule
         IPS_SetVariableProfileValues('PVWM.Percent', 0, 100, 1);
 
         $create('PVWM.GridLimitWatt', VARIABLETYPE_INTEGER, 0, ' W', 'Flash');
-        IPS_SetVariableProfileValues('PVWM.GridLimitWatt', 0, 50000, 100);
+        IPS_SetVariableProfileValues('PVWM.GridLimitWatt', 0, 22000, 100);
 
         $create('PVWM.Watt', VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
         $create('PVWM.W',    VARIABLETYPE_FLOAT, 0, ' W', 'Flash');
@@ -419,7 +447,23 @@ class PVWallboxManager extends IPSModule
 
     public function RequestAction($Ident, $Value)
     {
+        // IPS_ApplyChanges may enter the module in another execution context.
+        if ($Ident === 'ModulAktiv_Switch') {
+            $this->handleModulAktivSwitch((bool)$Value);
+            return;
+        }
+        if ($Ident === 'UpdateStatus') { $this->UpdateStatus((string)$Value); return; }
+        return $this->controlled(function () use ($Ident, $Value) {
+            $this->requestActionControlled($Ident, $Value);
+        });
+    }
+
+    private function requestActionControlled($Ident, $Value)
+    {
         switch ($Ident) {
+            case 'ResetPhaseFault':
+                $this->ResetPhaseFault();
+                return;
             case 'ModulAktiv_Switch':
                 $this->handleModulAktivSwitch((bool) $Value);
                 return;
@@ -464,28 +508,10 @@ class PVWallboxManager extends IPSModule
 
     private function handleModulAktivSwitch(bool $active): void
     {
-        $this->SetValue('ModulAktiv_Switch', $active);
-
+        // Publish deactivation before waiting for an in-flight control cycle.
+        if (!$active) $this->WriteAttributeBoolean('ControlStopRequested', true);
         IPS_SetProperty($this->InstanceID, 'ModulAktiv', $active);
         IPS_ApplyChanges($this->InstanceID);
-
-        if (!$active) {
-            $this->SetForceState(1);
-            $this->ResetModiNachLadeende();
-
-            $this->SetValue('PV_Ueberschuss', 0);
-            $this->SetValue('PV_Ueberschuss_A', 0);
-            $this->SetValue('Hausverbrauch_W', 0);
-            $this->SetValue('Hausverbrauch_abz_Wallbox', 0);
-
-            $this->SetTimerInterval('PVWM_UpdateStatus', 0);
-            $this->SetTimerInterval('PVWM_InitialCheck', 0);
-            $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
-
-            $this->LogTemplate('info', 'Modul deaktiviert – Wallbox gesperrt, Modi zurückgesetzt, Timer gestoppt.');
-        }
-
-        $this->UpdateStatusAnzeige();
     }
 
     private function handleLademodusAuswahl(int $mode): void
@@ -597,7 +623,9 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
+        $this->stopCharging();
         $this->SetValue('LademodusAuswahl', $newSelection);
+        $this->resetModeControlHistory();
 
         switch ($mode) {
             case 'pvonly':
@@ -622,34 +650,39 @@ class PVWallboxManager extends IPSModule
         $this->UpdateStatus($mode);
     }
 
-    private function resetToPvOnlyBaseState(bool $fromManual = false): void
+    private function resetModeControlHistory(): void
     {
-        $this->SetPhaseMode(self::PHASE_MODE_1P);
-        $this->SetChargingCurrent(6);
-        $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'debug');
-
-        $this->LogTemplate('ok', 'PVonly-Basis gesetzt', '1-phasig / 6A');
-
-        if ($fromManual) {
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-            $this->LogTemplate('debug', 'Hysterese-Zähler zurückgesetzt', 'nach Verlassen von Manuell');
-
-            $neutralUntil = time() + 30;
-            $this->WriteAttributeInteger('NeutralModeUntil', $neutralUntil);
-            $this->LogTemplate('debug', 'Neutralmodus aktiv', 'bis ' . date('H:i:s', $neutralUntil));
-
-            IPS_Sleep(1000);
-            $this->UpdateStatus();
+        foreach (['LadeStartZaehler','LadeStopZaehler','Phasen1Zaehler','Phasen3Zaehler','HybridLowPvSince','NoPowerCounter','LastChargingCurrent'] as $name) {
+            $this->WriteAttributeInteger($name, 0);
         }
+        $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
     }
 
-    // =========================================================================
-    // 5. HAUPTZYKLUS / UPDATESTATUS / ROUTING
-    // =========================================================================
+    private function resetToPvOnlyBaseState(bool $fromManual = false): void
+    {
+        $this->WriteAttributeInteger('LadeStartZaehler', 0);
+        $this->WriteAttributeInteger('LadeStopZaehler', 0);
+        $this->WriteAttributeInteger('Phasen1Zaehler', 0);
+        $this->WriteAttributeInteger('Phasen3Zaehler', 0);
+        $this->SetValue('PV_Ueberschuss_A', 0);
+    }
 
     public function UpdateStatus(string $triggerMode = '')
     {
+        return $this->controlled(function () use ($triggerMode) {
+            $this->updateStatusControlled($triggerMode);
+        }, false);
+    }
+
+    private function updateStatusControlled(string $triggerMode): void
+    {
+        if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested')) {
+            $this->stopCharging();
+            $this->SetTimerNachModusUndAuto();
+            $this->SetNoChargeReason('Modul deaktiviert – Ladestop angefordert');
+            $this->UpdateStatusAnzeige();
+            return;
+        }
         $activeMode = $this->getCurrentModeKey();
         $this->LogTemplate('debug', 'UpdateStatus', "Modus={$activeMode}, Zeit=" . date('H:i:s'));
 
@@ -666,13 +699,27 @@ class PVWallboxManager extends IPSModule
         }
 
         $phasen = $this->determinePhases($data);
-
-        $energyRaw = $this->gatherEnergyData();
+        $this->desiredPhaseMode = $data['psm'] === 2 ? 2 : 1;
+        $vars = $this->extractChargerVariables($data);
+        $this->syncChargerVariables($vars, $phasen);
+        if ($data['car'] === 1 || $data['frc'] !== 2) $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        $this->LogTemplate('debug', 'Laderegelung Rückmeldung', sprintf(
+            'car=%d, frc=%d, alw=%s, psm=%d, amp=%d A, Leistung=%.0f W, Ströme=%.2f/%.2f/%.2f A',
+            $data['car'], $data['frc'], $data['alw'] ? 'true' : 'false', $data['psm'], $data['amp'],
+            $data['nrg'][11], $data['nrg'][4], $data['nrg'][5], $data['nrg'][6]));
+        try {
+            $energyRaw = $this->gatherEnergyData();
+        } catch (RuntimeException $e) {
+            $this->SetNoChargeReason($e->getMessage());
+            $this->stopCharging();
+            $this->UpdateStatusAnzeige();
+            return;
+        }
 
         if ($triggerMode === 'startup') {
             $startupTs = $this->ReadAttributeInteger('StartupTimestamp');
 
-            if ($startupTs > 0 && (time() - $startupTs) < 5) {
+            if ($startupTs > 0 && ($this->now() - $startupTs) < 5) {
 
                 if ($energyRaw['pv'] === 0 || $energyRaw['haus'] === 0) {
                     $this->LogTemplate(
@@ -689,13 +736,10 @@ class PVWallboxManager extends IPSModule
 
         $this->updateHousePower($energyRaw);
 
-        if (!$this->isCarConnected($data)) {
+        if (!$this->isCarConnected($data) && $energyRaw['coherent']) {
             $this->updateSurplusDisplayWithoutCar($energyRaw);
         }
 
-        $vars = $this->extractChargerVariables($data);
-        $this->syncChargerVariables($vars, $phasen);
-        
         if ($this->PruefeLadeendeAutomatisch()) {
             $this->UpdateStatusAnzeige();
             $this->HandleLadezeitLogging();
@@ -703,7 +747,14 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        $this->routeChargingMode($data, $phasen);
+        if ($this->phaseState() === 'fault') {
+            $this->SetNoChargeReason('Phasensteuerung gesperrt: ' . $this->ReadAttributeString('PhaseTransitionError'));
+            $this->stopCharging(false);
+        } elseif (!$energyRaw['coherent'] && $activeMode !== 'manuell' && $this->isCarConnected($data)) {
+            $this->holdForHouseMeasurement($data);
+        } else {
+            $this->routeChargingMode($data, max(1, $this->phaseModeToPhaseCount($data['psm'])));
+        }
         $this->SetTimerNachModusUndAuto();
         $this->UpdateStatusAnzeige();
         $this->HandleLadezeitLogging();
@@ -726,7 +777,7 @@ class PVWallboxManager extends IPSModule
         $initialInt = $this->ReadPropertyInteger('InitialCheckInterval');
 
         $until         = intval($this->ReadAttributeInteger('NeutralModeUntil'));
-        $neutralActive = ($until > time());
+        $neutralActive = ($until > $this->now());
 
         $modeKey = $this->getCurrentModeKey();
 
@@ -734,13 +785,16 @@ class PVWallboxManager extends IPSModule
             case 'manuell':
                 $modusText = sprintf(
                     '🔌 Manuell: Vollladen (%d-phasig, %d A)',
-                    $this->GetValue('ManuellPhasen'),
+                    $this->phaseModeToPhaseCount((int)$this->GetValue('ManuellPhasen')),
                     $this->GetValue('ManuellAmpere')
                 );
                 break;
 
             case 'pv2car':
                 $modusText = '🌞 PV-Anteil (' . $this->GetValue('PVAnteil') . '%)';
+                if ($this->effectivePvShare() > (int)$this->GetValue('PVAnteil')) {
+                    $modusText .= ' – wirksam 100 %: Hausakku-Ziel erreicht';
+                }
                 break;
 
             case 'hybrid':
@@ -769,7 +823,7 @@ class PVWallboxManager extends IPSModule
         $phaseCooldownRest = 0;
 
         if ($letzteUmschaltung > 0) {
-            $phaseCooldownRest = self::PHASE_SWITCH_COOLDOWN_S - (time() - $letzteUmschaltung);
+            $phaseCooldownRest = $this->configuredPhaseCooldown() - ($this->now() - $letzteUmschaltung);
         }
 
         $phaseCooldownRest = max(0, $phaseCooldownRest);
@@ -824,9 +878,7 @@ class PVWallboxManager extends IPSModule
 
         $key = $this->getCurrentModeKey();
 
-        if ($key !== 'hybrid') {
-            $this->SetNoChargeReason('');
-        }
+        $this->ClearNoChargeReason();
 
         if (!isset($handlers[$key])) {
             $this->LogTemplate('warn', 'Unbekannter Lademodus', $key);
@@ -846,7 +898,7 @@ class PVWallboxManager extends IPSModule
     private function handleNeutralMode(): bool
     {
         $until = $this->ReadAttributeInteger('NeutralModeUntil');
-        if ($until > time()) {
+        if ($until > $this->now()) {
             $this->LogTemplate('debug', 'Neutralmodus aktiv', 'Ladefreigabe gesperrt bis ' . date('H:i:s', $until));
             $this->SetForceState(1);
             return true;
@@ -868,7 +920,7 @@ class PVWallboxManager extends IPSModule
     // 6. LADEMODI
     // =========================================================================
 
-    private function ModusPVonlyLaden(array $data, int $anzPhasenAlt)
+    private function ModusPVonlyLaden(array $data, int $anzPhasenAlt, ?array $prepared = null)
     {
         if (!$this->isCarConnected($data)) {
             $this->handleNoCarConnected();
@@ -888,7 +940,6 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
             $this->SetForceState(1);
-            $this->SetChargingCurrent(6);
             $this->SetValue('PV_Ueberschuss_A', 0);
 
             return;
@@ -896,40 +947,26 @@ class PVWallboxManager extends IPSModule
 
         $this->ResetStateLog('pvonly_battery_not_full');
 
-        $energy = $this->gatherEnergyData();
-
-        $energy = $this->applyFilters($energy);
-
-        $surplus       = $this->calculateSurplus($energy, $anzPhasenAlt, true);
+        $energy = $prepared[0] ?? $this->applyFilters($this->gatherEnergyData());
+        $surplus = $prepared[1] ?? $this->calculateSurplus($energy, $anzPhasenAlt, true);
         $pvUeberschuss = $surplus['ueberschuss_w'];
         $ampere        = $surplus['ueberschuss_a'];
 
         $this->PruefeUndSetzePhasenmodus($pvUeberschuss);
 
-        $minLadeWatt = $this->ReadPropertyInteger('MinLadeWatt');
-        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-
-        if ($aktFRC === 1 && $pvUeberschuss >= $minLadeWatt) {
-            $desiredFRC = 2;
-
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-
-            $this->LogTemplate(
-                'start',
-                'PVonly Schnellstart',
-                'Überschuss=' . round($pvUeberschuss) . ' W, Mindestleistung=' . $minLadeWatt . ' W'
-            );
-        } else {
-            $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
+        $desiredFRC = $this->BerechneLadefreigabeMitHysterese($pvUeberschuss);
+        if ($desiredFRC === 2 && $this->hasChargingIntent()) {
+            // Keep minimum charging during the configured stop hysteresis; grid/SoC checks still take priority.
+            $ampere = max($ampere, max(6, $this->ReadPropertyInteger('MinAmpere')));
         }
 
-        $phaseModeSoll = (int)$this->GetValue('PhasenmodusEinstellung');
+        $phaseModeSoll = $this->desiredPhaseMode;
         $anzPhasenNeu  = $this->phaseModeToPhaseCount($phaseModeSoll);
 
         if ($anzPhasenNeu !== $anzPhasenAlt) {
-            $surplus = $this->calculateSurplus($energy, $anzPhasenNeu, true);
-            $ampere  = $surplus['ueberschuss_a'];
+            // Recalculate once for the target phase without applying smoothing/ramping twice.
+            $ampere = (int)floor($pvUeberschuss / (230 * $this->vehiclePhaseCount($anzPhasenNeu)));
+            $ampere = max($this->ReadPropertyInteger('MinAmpere'), min($this->ReadPropertyInteger('MaxAmpere'), $ampere));
 
             $this->LogTemplate(
                 'debug',
@@ -968,7 +1005,6 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('HybridLowPvSince', 0);
 
             $this->SetForceState(1);
-            $this->SetChargingCurrent(6);
             $this->SetValue('PV_Ueberschuss_A', 0);
             return;
         }
@@ -981,7 +1017,7 @@ class PVWallboxManager extends IPSModule
         $energy = $this->gatherEnergyData();
         $energy = $this->applyFilters($energy);
 
-        $aktFRC                 = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $aktFRC                 = $this->hasChargingIntent() ? 2 : 1;
         $minStopWatt            = (int)$this->ReadPropertyInteger('MinStopWatt');
         $minAmpere              = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
         $hybridEndMode          = (int)$this->ReadPropertyInteger('HybridEndMode');
@@ -999,8 +1035,7 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('HybridLowPvSince', 0);
             $this->ResetStateLog('hybrid_end_charge_active');
 
-            $this->ModusPVonlyLaden($data, $anzPhasenAlt);
-            $this->SetNoChargeReason('Hybrid-Laden aktiv');
+            $this->ModusPVonlyLaden($data, $anzPhasenAlt, [$energy, $surplus]);
             return;
         }
 
@@ -1008,14 +1043,14 @@ class PVWallboxManager extends IPSModule
             $this->WriteAttributeInteger('HybridLowPvSince', 0);
             $this->ResetStateLog('hybrid_end_charge_active');
 
-            $this->ModusPVonlyLaden($data, $anzPhasenAlt);
+            $this->ModusPVonlyLaden($data, $anzPhasenAlt, [$energy, $surplus]);
             return;
         }
 
         $this->WriteAttributeInteger('LadeStartZaehler', 0);
         $this->WriteAttributeInteger('LadeStopZaehler', 0);
 
-        $now = time();
+        $now = $this->now();
         $hybridLowPvSince = (int)$this->ReadAttributeInteger('HybridLowPvSince');
 
         if ($hybridLowPvSince <= 0) {
@@ -1033,7 +1068,7 @@ class PVWallboxManager extends IPSModule
         if (!$hybridEndAllowed) {
             $this->PruefeUndSetzePhasenmodus($pvUeberschuss, false);
 
-            $phaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+            $phaseMode = $this->desiredPhaseMode;
             $anzPhasen = $this->phaseModeToPhaseCount($phaseMode);
 
             $restSeconds = max(0, $hybridEndDelaySeconds - $hybridLowPvDuration);
@@ -1080,6 +1115,17 @@ class PVWallboxManager extends IPSModule
         );
     }
 
+    private function effectivePvShare(): int
+    {
+        $requested = max(0, min(100, (int)$this->GetValue('PVAnteil')));
+        // An explicit 0 % remains a stop request, even when the house battery is full.
+        if ($requested === 0) return 0;
+        $socID = $this->ReadPropertyInteger('HausakkuSOCID');
+        if ($this->validSocValue($socID)
+            && (float)GetValue($socID) >= $this->ReadPropertyInteger('HausakkuSOCVollSchwelle')) return 100;
+        return $requested;
+    }
+
     private function ModusPV2CarLaden(array $data)
     {
         if (!$this->isCarConnected($data)) {
@@ -1087,7 +1133,14 @@ class PVWallboxManager extends IPSModule
             return;
         }
 
-        $anteil = max(0, min(100, intval($this->GetValue('PVAnteil'))));
+        $anteil = $this->effectivePvShare();
+        if ($anteil === 0) {
+            $this->resetModeControlHistory();
+            $this->SetNoChargeReason('PV-Anteil ist 0 %');
+            $this->SetValue('PV_Ueberschuss_A', 0);
+            $this->stopCharging();
+            return;
+        }
 
         $oldPhaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
         $oldPhasen    = $this->phaseModeToPhaseCount($oldPhaseMode);
@@ -1109,61 +1162,28 @@ class PVWallboxManager extends IPSModule
 
         $anteilWatt = intval(round($smooth * $anteil / 100));
 
-        $this->PruefeUndSetzePhasenmodus($smooth);
+        $this->PruefeUndSetzePhasenmodus($anteilWatt);
 
-        $newPhaseMode = (int)$this->GetValue('PhasenmodusEinstellung');
+        $newPhaseMode = $this->desiredPhaseMode;
         $newPhasen    = $this->phaseModeToPhaseCount($newPhaseMode);
-
-        if ($newPhasen !== $oldPhasen) {
-            $energy     = $this->gatherEnergyData();
-            $filtered   = $this->applyFilters($energy);
-            $rawSurplus = max(0, $energy['pv'] - $filtered['hausFiltered']);
-            $smooth     = $alpha * $rawSurplus + (1 - $alpha) * $smooth;
-
-            $this->WriteAttributeFloat('SmoothedSurplus', $smooth);
-
-            $anteilWatt = intval(round($smooth * $anteil / 100));
-        }
 
         $minAmp   = $this->ReadPropertyInteger('MinAmpere');
         $maxAmp   = $this->ReadPropertyInteger('MaxAmpere');
 
-        $desiredA = (int)ceil($anteilWatt / (230 * $newPhasen));
+        $desiredA = (int)ceil($anteilWatt / (230 * $this->vehiclePhaseCount($newPhasen)));
         $desiredA = max($minAmp, min($maxAmp, $desiredA));
-
-        $minLadeWatt = $this->ReadPropertyInteger('MinLadeWatt');
-        $aktFRC      = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
-        $isFastStart = ($aktFRC === 1 && $anteilWatt >= $minLadeWatt);
 
         $lastA    = $this->ReadAttributeInteger('LastChargingCurrent');
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-
-        if ($isFastStart) {
-            $ampere = $desiredA;
-        } else {
-            $diff   = max(-$maxDelta, min($maxDelta, $desiredA - $lastA));
-            $ampere = $lastA + $diff;
-        }
+        // Increases ramp up; reductions respect the new power budget immediately.
+        $ampere = min($desiredA, $lastA + max(1,$maxDelta));
 
         $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
 
         $this->SetValueAndLogChange('PV_Ueberschuss',   round($smooth), 'PV-Überschuss',     'W', 'debug');
         $this->SetValueAndLogChange('PV_Ueberschuss_A', $ampere,         'PV-Überschuss (A)', 'A', 'debug');
 
-        if ($isFastStart) {
-            $desiredFRC = 2;
-
-            $this->WriteAttributeInteger('LadeStartZaehler', 0);
-            $this->WriteAttributeInteger('LadeStopZaehler', 0);
-
-            $this->LogTemplate(
-                'start',
-                'PV2Car Schnellstart',
-                'Anteil=' . round($anteilWatt) . ' W, Strom=' . $ampere . ' A, Phasen=' . $newPhasen
-            );
-        } else {
-            $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
-        }
+        $desiredFRC = $this->BerechneLadefreigabeMitHysterese($anteilWatt);
 
         $this->SteuerungLadefreigabe(
             $smooth,
@@ -1176,83 +1196,9 @@ class PVWallboxManager extends IPSModule
 
     private function ModusManuellVollladen(array $data)
     {
-        if (!$this->isCarConnected($data)) {
-            $this->handleNoCarConnected();
-            return;
-        }
-
-        $phaseMode = ($this->GetValue('ManuellPhasen') == self::PHASE_MODE_3P)
-            ? self::PHASE_MODE_3P
-            : self::PHASE_MODE_1P;
-
-        $phaseCount = ($phaseMode === self::PHASE_MODE_3P) ? 3 : 1;
-
-        $ampere = (int)$this->GetValue('ManuellAmpere');
-        $ampere = $this->clampAmpere($ampere);
-        $ampere = $this->applyMaxGridLoadLimit($ampere, $phaseCount);
-
-        if ($phaseCount === 1) {
-            $phaseMode = self::PHASE_MODE_1P;
-        } else {
-            $phaseMode = self::PHASE_MODE_3P;
-        }
-
-        if ($ampere <= 0) {
-            $this->LogTemplate('warn', 'Manuelles Laden blockiert', 'Netzbegrenzung erlaubt keinen Ladestrom');
-            $this->SetForceState(1);
-            return;
-        }
-
-        $changed = false;
-
-        $currentPsm = (int)$this->GetValue('PhasenmodusEinstellung');
-        if ($currentPsm !== $phaseMode) {
-            if ($this->SetPhaseMode($phaseMode)) {
-                $this->SetValueAndLogChange('PhasenmodusEinstellung', $phaseMode, 'Wallbox-Phasen Soll', '', 'debug');
-                $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
-                $this->resetNoPowerCounter();
-                $changed = true;
-                IPS_Sleep(500);
-            }
-        }
-
-        $lastSentAmpere = $this->ReadAttributeInteger('LastSentChargingCurrent');
-        if ($lastSentAmpere !== $ampere) {
-            if ($this->SetChargingCurrent($ampere)) {
-                $this->WriteAttributeInteger('LastSentChargingCurrent', $ampere);
-                $changed = true;
-                IPS_Sleep(300);
-            }
-        }
-
-        if ((int)$this->GetValue('AccessStateV2') !== 2) {
-            if ($this->SetForceState(2)) {
-                $changed = true;
-            }
-        }
-
-        if ($changed) {
-            $this->WriteAttributeInteger('LastManualStartTimestamp', time());
-            $this->resetNoPowerCounter();
-        }
-
-        $this->WriteAttributeInteger('LadeStartZaehler', 0);
-        $this->WriteAttributeInteger('LadeStopZaehler', 0);
-
-        $this->LogTemplate(
-            'ok',
-            'Manuelles Vollladen aktiv',
-            sprintf(
-                '%d-phasig / %d A | FRC=2',
-                $phaseCount,
-                $ampere
-            )
-        );
+        $this->executeChargingPlan((int)$this->GetValue('ManuellPhasen') === 2 ? 2 : 1,
+            (int)$this->GetValue('ManuellAmpere'), true);
     }
-
-    // =========================================================================
-    // 7. LADELOGIK / HYSTERESEN / LADEENDE / VERBINDUNGSSTATUS
-    // =========================================================================
 
     private function BerechneLadefreigabeMitHysterese(int $pvUeberschuss): int
     {
@@ -1263,11 +1209,11 @@ class PVWallboxManager extends IPSModule
         $startZ       = $this->ReadAttributeInteger('LadeStartZaehler');
         $stopZ        = $this->ReadAttributeInteger('LadeStopZaehler');
 
-        $aktFRC     = $this->GetValue('AccessStateV2') === 2 ? 2 : 1;
+        $aktFRC     = $this->hasChargingIntent() ? 2 : 1;
         $desiredFRC = $aktFRC;
 
         // 🛑 Sperre nach Moduswechsel – kein Start erlaubt
-        if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(self::PHASE_SWITCH_COOLDOWN_S)) {
+        if ($aktFRC === 2 && $this->VerhindereStopHystereseKurzNachModuswechsel(self::STOP_SETTLE_SECONDS)) {
             return $aktFRC;
         }
 
@@ -1315,7 +1261,7 @@ class PVWallboxManager extends IPSModule
         if ($letzte <= 0) {
             return false;
         }
-        $vergangen = time() - $letzte;
+        $vergangen = $this->now() - $letzte;
         if ($vergangen < $cooldownSekunden) {
             $this->LogTemplate(
                 'debug',
@@ -1334,27 +1280,25 @@ class PVWallboxManager extends IPSModule
 
     private function applySafeIdleState(): void
     {
-        $this->SetForceState(1);
-        $this->SetPhaseMode(self::PHASE_MODE_1P);
-        $this->SetChargingCurrent(6);
+        $this->stopCharging();
     }
 
     private function isChargeEndFallbackBlocked(): bool
     {
-        $cooldownSeconds = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+        $cooldownSeconds = $this->now() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
 
-        if ($cooldownSeconds < self::PHASE_SWITCH_COOLDOWN_S) {
+        if ($cooldownSeconds < self::STOP_SETTLE_SECONDS) {
             $this->resetNoPowerCounter();
             $this->LogTemplate(
                 'debug',
                 'Fallback gesperrt',
-                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::PHASE_SWITCH_COOLDOWN_S . 's'
+                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::STOP_SETTLE_SECONDS . 's'
             );
             return true;
         }
 
         $lastCurrentChange  = $this->ReadAttributeInteger('LastChargingCurrentChange');
-        $sinceCurrentChange = time() - $lastCurrentChange;
+        $sinceCurrentChange = $this->now() - $lastCurrentChange;
 
         if ($sinceCurrentChange < self::CURRENT_CHANGE_COOLDOWN_S) {
             $this->resetNoPowerCounter();
@@ -1371,6 +1315,11 @@ class PVWallboxManager extends IPSModule
 
     private function PruefeLadeendeAutomatisch()
     {
+        if ($this->vehicleSocInvalid()) {
+            $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig');
+            $this->stopCharging();
+            return true;
+        }
         $currentFRC = $this->GetValue('AccessStateV2');
         $modeKey    = $this->getCurrentModeKey();
 
@@ -1419,11 +1368,12 @@ class PVWallboxManager extends IPSModule
                 "{$socAktuell}% < {$socZiel}%"
             );
         }
+        if ($this->phaseState() !== 'idle' || $this->ReadAttributeBoolean('PhaseResumePending')) return false;
         if ($modeKey === 'manuell') {
             $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
 
             if ($lastManualStart > 0) {
-                $sinceManualStart = time() - $lastManualStart;
+                $sinceManualStart = $this->now() - $lastManualStart;
 
                 if ($sinceManualStart < self::MANUAL_START_GRACE_S) {
                     $this->resetNoPowerCounter();
@@ -1448,6 +1398,14 @@ class PVWallboxManager extends IPSModule
         }
 
         if ($loadActive && $currentFRC === 2) {
+            if ((int)$this->GetValue('Status') === 2 && (float)$this->GetValue('Leistung') >= self::NO_POWER_THRESHOLD_W) {
+                $this->WriteAttributeBoolean('ChargingPowerObserved', true);
+            }
+            // Release alone is not evidence of a started session. car=4 can persist during restart.
+            if (!$this->ReadAttributeBoolean('ChargingPowerObserved') || (int)$this->GetValue('Status') !== 4) {
+                $this->resetNoPowerCounter();
+                return false;
+            }
             if ($this->isChargeEndFallbackBlocked()) {
                 return false;
             }
@@ -1462,7 +1420,7 @@ class PVWallboxManager extends IPSModule
             );
 
             if ($leistung < self::NO_POWER_THRESHOLD_W) {
-                $sincePhaseSwitch = time() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+                $sincePhaseSwitch = $this->now() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
 
                 if ($sincePhaseSwitch >= 0 && $sincePhaseSwitch < 90) {
                     $this->resetNoPowerCounter();
@@ -1511,20 +1469,8 @@ class PVWallboxManager extends IPSModule
 
     private function ResetModiNachLadeende()
     {
-        $oldMode = $this->getCurrentModeKey();
-
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
-        $this->ApplyModeAfterDisconnectOrChargeEnd('🏁 Ladeende');
-
-        if ($oldMode === 'manuell') {
-            $this->SetPhaseMode(self::PHASE_MODE_1P);
-            $this->SetChargingCurrent(6);
-
-            $this->SetValueAndLogChange('PV_Ueberschuss_A', 0, 'PV-Überschuss (A)', 'A', 'debug');
-
-            $this->LogTemplate('stop', 'Ladevorgang beendet');
-            $this->LogTemplate('ok', 'Basiszustand gesetzt', '1-phasig / 6A / 0A');
-        }
+        $this->ApplyModeAfterDisconnectOrChargeEnd('Ladeende');
     }
 
     private function handleCarConnectionState(array $data): bool
@@ -1533,6 +1479,7 @@ class PVWallboxManager extends IPSModule
         $wasConnected = (bool) $this->ReadAttributeBoolean('LastCarConnected');
 
         if ($wasConnected && !$carConnected) {
+            $this->resetModeControlHistory();
             $this->ApplyModeAfterDisconnectOrChargeEnd('🚗 Fahrzeug abgesteckt');
         }
 
@@ -1562,6 +1509,7 @@ class PVWallboxManager extends IPSModule
         }
 
         $this->SetValue('LademodusAuswahl', $modeAfterUnplug);
+        $this->resetModeControlHistory();
         $this->LogTemplate(
             'info',
             'Lademodus gewechselt',
@@ -1603,312 +1551,80 @@ class PVWallboxManager extends IPSModule
                 $cnt++;
             }
         }
-        return max(1, $cnt);
+        return $cnt;
     }
 
     private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false, $forceOnePhase = false)
     {
-        $umschaltCooldown = self::PHASE_SWITCH_COOLDOWN_S;
-
-        $letzteUmschaltung = @$this->ReadAttributeInteger('LetztePhasenUmschaltung');
-        if (!is_int($letzteUmschaltung) || $letzteUmschaltung <= 0) {
-            $letzteUmschaltung = 0;
-        }
-
-        $now = time();
-
-        $aktModus = (int)$this->GetValue('PhasenmodusEinstellung');
-
-        if ($aktModus !== self::PHASE_MODE_3P) {
-            $aktModus = self::PHASE_MODE_1P;
-        }
-
-        if ($forceOnePhase) {
-            if ($aktModus !== self::PHASE_MODE_1P) {
-                $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
-
-                if ($ok) {
-                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
-                    $this->LogTemplate('warn', 'Hybrid-Endladung', '1-phasig erzwungen');
-
-                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
-                } else {
-                    $this->LogTemplate('error', 'Hybrid-Endladung', 'Umschalten auf 1-phasig fehlgeschlagen');
-                }
-            }
-
+        $this->phaseDecisionPending = false;
+        $current = (int)$this->GetValue('PhasenmodusEinstellung') === 2 ? 2 : 1;
+        if ($forceOnePhase || $forceThreePhase) {
+            $this->desiredPhaseMode = $forceThreePhase ? 2 : 1;
             return;
         }
-
-        if ($forceThreePhase) {
-            if ($aktModus !== self::PHASE_MODE_3P) {
-                $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
-
-                if ($ok) {
-                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
-                    $this->LogTemplate('ok', 'Hybrid-Endladung', '3-phasig erzwungen');
-
-                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
-                } else {
-                    $this->LogTemplate('error', 'Hybrid-Endladung', 'Umschalten auf 3-phasig fehlgeschlagen');
-                }
-            }
-
+        if (in_array($this->phaseState(), ['stopping','confirming'], true)) {
+            $this->desiredPhaseMode = $this->ReadAttributeInteger('PhaseTransitionTarget');
             return;
         }
-
-        if (($now - $letzteUmschaltung) < $umschaltCooldown) {
-            $rest = $umschaltCooldown - ($now - $letzteUmschaltung);
-            $this->LogTemplate('debug', 'Phasenumschaltung Cooldown', "noch {$rest} Sekunden");
-            return;
-        }
-
-        $schwelle1 = $this->ReadPropertyInteger('Phasen1Schwelle');
-        $schwelle3 = $this->ReadPropertyInteger('Phasen3Schwelle');
-        $limit1    = $this->ReadPropertyInteger('Phasen1Limit');
-        $limit3    = $this->ReadPropertyInteger('Phasen3Limit');
-
-        if ($aktModus === self::PHASE_MODE_1P && $pvUeberschuss >= $schwelle3) {
-            $zaehler = $this->ReadAttributeInteger('Phasen3Zaehler') + 1;
-
-            $this->WriteAttributeInteger('Phasen3Zaehler', $zaehler);
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-
-            $this->LogTemplate('debug', 'Phasen-Hysterese 1→3', "{$zaehler}/{$limit3} > {$schwelle3} W");
-
-            if ($zaehler >= $limit3) {
-                $ok = $this->SetPhaseMode(self::PHASE_MODE_3P);
-
-                if ($ok) {
-                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_3P, 'Wallbox-Phasen Soll', '', 'ok');
-                    $this->LogTemplate('ok', 'Phasenumschaltung erfolgreich', '1→3');
-
-                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
-                } else {
-                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '1→3');
-                }
-            }
-
-            return;
-        }
-
-        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss <= $schwelle1) {
-            $zaehler = $this->ReadAttributeInteger('Phasen1Zaehler') + 1;
-
-            $this->WriteAttributeInteger('Phasen1Zaehler', $zaehler);
-            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-
-            $this->LogTemplate('debug', 'Phasen-Hysterese 3→1', "{$zaehler}/{$limit1} < {$schwelle1} W");
-
-            if ($zaehler >= $limit1) {
-                $ok = $this->SetPhaseMode(self::PHASE_MODE_1P);
-
-                if ($ok) {
-                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
-                    $this->LogTemplate('warn', 'Phasenumschaltung erfolgreich', '3→1');
-
-                    $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-                    $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', $now);
-                } else {
-                    $this->LogTemplate('error', 'Phasenumschaltung fehlgeschlagen', '3→1');
-                }
-            }
-
-            return;
-        }
-
-        if ($aktModus === self::PHASE_MODE_3P && $pvUeberschuss > $schwelle1) {
-            $this->WriteAttributeInteger('Phasen1Zaehler', 0);
-        }
-
-        if ($aktModus === self::PHASE_MODE_1P && $pvUeberschuss < $schwelle3) {
-            $this->WriteAttributeInteger('Phasen3Zaehler', 0);
-        }
+        $this->desiredPhaseMode = $current;
+        $up = $current === 1 && $pvUeberschuss >= $this->ReadPropertyInteger('Phasen3Schwelle');
+        $down = $current === 2 && $pvUeberschuss <= $this->ReadPropertyInteger('Phasen1Schwelle');
+        $this->WriteAttributeInteger('Phasen3Zaehler', $up ? $this->ReadAttributeInteger('Phasen3Zaehler') + 1 : 0);
+        $this->WriteAttributeInteger('Phasen1Zaehler', $down ? $this->ReadAttributeInteger('Phasen1Zaehler') + 1 : 0);
+        if ($up && $this->ReadAttributeInteger('Phasen3Zaehler') >= max(1,$this->ReadPropertyInteger('Phasen3Limit'))) $this->desiredPhaseMode = 2;
+        if ($down && $this->ReadAttributeInteger('Phasen1Zaehler') >= max(1,$this->ReadPropertyInteger('Phasen1Limit'))) $this->desiredPhaseMode = 1;
+        $this->phaseDecisionPending = ($up || $down) && $this->desiredPhaseMode === $current;
+        $this->LogTemplate('debug', 'Phasenplanung', sprintf(
+            'Budget=%.0f W, aktuell=%dP, Ziel=%dP, Entscheidung=%s, Zähler 1P=%d/%d, 3P=%d/%d',
+            $pvUeberschuss, $this->phaseModeToPhaseCount($current), $this->phaseModeToPhaseCount($this->desiredPhaseMode),
+            $this->phaseDecisionPending ? 'ausstehend' : 'stabil', $this->ReadAttributeInteger('Phasen1Zaehler'),
+            max(1,$this->ReadPropertyInteger('Phasen1Limit')), $this->ReadAttributeInteger('Phasen3Zaehler'),
+            max(1,$this->ReadPropertyInteger('Phasen3Limit'))));
     }
 
     private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null)
     {
-        $minUeberschuss = $this->ReadPropertyInteger('MinLadeWatt');
-
-        if ($overrideFRC !== null) {
-            $sollFRC = $overrideFRC;
-        } else {
-            $sollFRC = ($modus === 'manuell' || ($modus === 'pvonly' && $pvUeberschuss >= $minUeberschuss))
-                ? 2
-                : 1;
+        $enabled = $overrideFRC !== null ? $overrideFRC === 2 : $pvUeberschuss >= $this->ReadPropertyInteger('MinLadeWatt');
+        $status = $this->chargerSnapshot;
+        if ($enabled && $this->phaseDecisionPending && $status !== null
+            && ($status['car'] !== 2 || !$status['alw'] || (float)$status['nrg'][11] <= 30)) {
+            $this->SetNoChargeReason('Ladestart wartet auf stabile Phasenentscheidung');
+            $this->stopCharging();
+            return;
         }
-
-        $aktFRC = $this->GetValue('AccessStateV2');
-
-        if ($aktFRC !== $sollFRC) {
-            $this->LogTemplate('debug', 'SetForceState', "FRC={$sollFRC}, Modus={$modus}");
-
-            if ($this->SetForceState($sollFRC)) {
-                if ($sollFRC === 1 || $sollFRC === 2) {
-                    $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
-                }
-            }
-
-            IPS_Sleep(1000);
-        }
-
-        if ($sollFRC === 2 && $ampere > 0) {
-            $ampere = $this->applyMaxGridLoadLimit($ampere, $anzPhasen);
-
-            if ($anzPhasen === 1 && (int)$this->GetValue('PhasenmodusEinstellung') !== self::PHASE_MODE_1P) {
-                if ($this->SetPhaseMode(self::PHASE_MODE_1P)) {
-                    $this->SetValueAndLogChange('PhasenmodusEinstellung', self::PHASE_MODE_1P, 'Wallbox-Phasen Soll', '', 'warn');
-                    $this->WriteAttributeInteger('LetztePhasenUmschaltung', time());
-                    IPS_Sleep(500);
-                }
-            }
-
-            if ($ampere <= 0) {
-                $this->LogTemplate('warn', 'Netzbegrenzung aktiv', 'Kein freier Netzspielraum → Laden gesperrt');
-                $this->SetForceState(1);
-                $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
-                return;
-            }
-
-            $lastSentAmpere = $this->ReadAttributeInteger('LastSentChargingCurrent');
-
-            if ($lastSentAmpere !== $ampere) {
-                $this->LogTemplate('debug', 'SetChargingCurrent', "{$lastSentAmpere} A → {$ampere} A");
-
-                if ($this->SetChargingCurrent($ampere)) {
-                    $this->WriteAttributeInteger('LastSentChargingCurrent', $ampere);
-                }
-            }
-        }
+        $this->executeChargingPlan($anzPhasen === 3 ? 2 : 1, (int)$ampere, $enabled && $ampere > 0);
     }
-
-    // =========================================================================
-    // 9. ENERGIEDATEN / BERECHNUNG / FILTER
-    // =========================================================================
 
     private function applyMaxGridLoadLimit(int $ampere, int &$anzPhasen): int
     {
-        $netzlimitAktiv = (bool)$this->GetValue('NetzlimitAktiv');
-
-        if (!$netzlimitAktiv) {
-            return $ampere;
-        }
-
-        $maxGridLoad = max(0, (int)$this->GetValue('MaxNetzbezugWatt'));
-
-        // 0 W bedeutet weiterhin: keine aktive Begrenzung
-        if ($maxGridLoad <= 0) {
-            return $ampere;
-        }
-
-        $netzID = (int)$this->ReadPropertyInteger('NetzleistungID');
-        if ($netzID <= 0 || !@IPS_VariableExists($netzID)) {
-            return $ampere;
-        }
-
-        $gridPower = (float)GetValue($netzID);
-
-        if ($this->ReadPropertyString('NetzleistungEinheit') === 'kW') {
-            $gridPower *= 1000;
-        }
-
-        // Nur Netzbezug begrenzen. Einspeisung ist negativ.
-        if ($gridPower <= 0) {
-            return $ampere;
-        }
-
-        $anzPhasen = max(1, min(3, $anzPhasen));
-        $currentWallboxPower = max(0, (float)$this->GetValue('Leistung'));
-
-        // Netzbezug enthält die aktuelle Wallboxleistung bereits.
-        // Daher wird der freie Spielraum aus aktueller Ladeleistung + Restspielraum berechnet.
-        $allowedWallboxPower = $currentWallboxPower + ($maxGridLoad - $gridPower);
-
-        if ($allowedWallboxPower <= 0) {
-            $this->LogTemplate(
-                'warn',
-                'Netzbegrenzung aktiv',
-                sprintf(
-                    'Netzbezug=%.0f W > Limit=%d W → Laden sperren',
-                    $gridPower,
-                    $maxGridLoad
-                )
-            );
-
+        if (!$this->GetValue('NetzlimitAktiv') || (int)$this->GetValue('MaxNetzbezugWatt') <= 0) return $ampere;
+        $grid = $this->readGridPower();
+        if ($grid === null) {
+            $this->LogStateOnce('invalid_grid', 'error', 'Netzbegrenzung sperrt Ladung', $this->GetNoChargeReason());
             return 0;
         }
-
-$minAmpere = max(6, (int)$this->ReadPropertyInteger('MinAmpere'));
-
-$minPowerCurrentPhases = 230 * $minAmpere * $anzPhasen;
-$minPower1P = 230 * $minAmpere;
-
-// Wenn aktueller Phasenmodus nicht möglich ist,
-// aber 1-phasig noch möglich wäre, nicht sperren.
-if ($allowedWallboxPower < $minPowerCurrentPhases && $anzPhasen > 1 && $allowedWallboxPower >= $minPower1P) {
-    $this->LogTemplate(
-        'warn',
-        'Netzbegrenzung aktiv',
-        sprintf(
-            'Netzbezug=%.0f W, Limit=%d W, verfügbar=%.0f W → 3-phasig unter Mindeststrom, 1-phasig möglich',
-            $gridPower,
-            $maxGridLoad,
-            $allowedWallboxPower
-        )
-    );
-
-    $anzPhasen = 1;
-}
-
-$limitedAmpere = (int)floor($allowedWallboxPower / (230 * $anzPhasen));
-
-if ($limitedAmpere < $minAmpere) {
-            $this->LogTemplate(
-                'warn',
-                'Netzbegrenzung aktiv',
-                sprintf(
-                    'Netzbezug=%.0f W, Limit=%d W, freier Spielraum=%.0f W → unter Mindeststrom, Laden sperren',
-                    $gridPower,
-                    $maxGridLoad,
-                    $allowedWallboxPower
-                )
-            );
-
-            return 0;
-        }
-
-        $limitedAmpere = $this->clampAmpere($limitedAmpere);
-        $limitedAmpere = min($ampere, $this->clampAmpere($limitedAmpere));
-
-        if ($limitedAmpere < $ampere) {
-            $this->LogTemplate(
-                'warn',
-                'Netzbegrenzung aktiv',
-                sprintf(
-                    '%d A → %d A | Netzbezug=%.0f W, Limit=%d W, Phasen=%d',
-                    $ampere,
-                    $limitedAmpere,
-                    $gridPower,
-                    $maxGridLoad,
-                    $anzPhasen
-                )
-            );
-        }
-
-        return $limitedAmpere;
+        $this->ResetStateLog('invalid_grid');
+        $power = $this->chargerSnapshot !== null ? (float)$this->chargerSnapshot['nrg'][11] : (float)$this->GetValue('Leistung');
+        $budget = max(0,$power) + (int)$this->GetValue('MaxNetzbezugWatt') - $grid;
+        $minimum = max(6,$this->ReadPropertyInteger('MinAmpere'));
+        $anzPhasen = $anzPhasen === 3 ? 3 : 1;
+        if ($budget < 230 * $minimum * $this->vehiclePhaseCount($anzPhasen) && $budget >= 230 * $minimum) $anzPhasen = 1;
+        $limited = min($ampere, (int)floor(max(0,$budget) / (230 * $this->vehiclePhaseCount($anzPhasen))));
+        if ($limited < $minimum) { $this->SetNoChargeReason('Netzlimit: kein freies Ladebudget'); return 0; }
+        return $limited;
     }
 
     private function gatherEnergyData(): array
     {
+        if ($this->energySnapshot !== null) return $this->energySnapshot;
         $pvID  = $this->ReadPropertyInteger('PVErzeugungID');
-        $pv    = $pvID > 0 ? GetValueFloat($pvID) : 0;
+        foreach (['PVErzeugungID','HausverbrauchID','BatterieladungID'] as $property) {
+            $id = $this->ReadPropertyInteger($property);
+            if ($id > 0 && (!IPS_VariableExists($id) || !in_array(IPS_GetVariable($id)['VariableType'], [1,2], true) || !is_numeric(GetValue($id)) || !is_finite((float)GetValue($id)))) {
+                throw new RuntimeException('Energiedaten ungültig: ' . $property);
+            }
+        }
+        $pv    = $pvID > 0 ? (float)GetValue($pvID) : 0;
         if ($this->ReadPropertyString('PVErzeugungEinheit') === 'kW') {
             $pv *= 1000;
         }
@@ -1916,7 +1632,7 @@ if ($limitedAmpere < $minAmpere) {
         $wb = round($this->GetValue('Leistung'));
 
         $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $hv   = $hvID > 0 ? GetValueFloat($hvID) : 0;
+        $hv   = $hvID > 0 ? (float)GetValue($hvID) : 0;
         if ($this->ReadPropertyString('HausverbrauchEinheit') === 'kW') {
             $hv *= 1000;
         }
@@ -1925,7 +1641,7 @@ if ($limitedAmpere < $minAmpere) {
         }
 
         $batID = $this->ReadPropertyInteger('BatterieladungID');
-        $bat   = $batID > 0 ? GetValueFloat($batID) : 0;
+        $bat   = $batID > 0 ? (float)GetValue($batID) : 0;
         if ($this->ReadPropertyString('BatterieladungEinheit') === 'kW') {
             $bat *= 1000;
         }
@@ -1933,7 +1649,19 @@ if ($limitedAmpere < $minAmpere) {
             $bat = -$bat;
         }
 
-        return [
+        $houseUpdated = $hvID > 0 ? (int)IPS_GetVariable($hvID)['VariableUpdated'] : 0;
+        $this->LogTemplate('debug', 'Energiebilanz Messwerte', sprintf(
+            'PV=%.0f W, Haus inkl. Wallbox=%.0f W, Wallbox=%.0f W, Haus netto roh=%.0f W, Haus-Messalter=%d s',
+            $pv, $hv, $wb, $hv - $wb, $houseUpdated > 0 ? $this->now() - $houseUpdated : -1));
+        if ($hvID > 0 && $hv + 100 < $wb) {
+            $this->LogStateOnce('house_wallbox_inconsistent', 'warn', 'Hausverbrauch kleiner als Wallboxleistung',
+                'Zeitversatz oder Messquelle prüfen: Hausverbrauch muss die Wallbox enthalten.');
+        } else {
+            $this->ResetStateLog('house_wallbox_inconsistent');
+        }
+        $coherent = $this->checkEnergyMeasurement($hvID, $houseUpdated, (float)$hv, (float)$wb);
+        return $this->energySnapshot = [
+            'coherent' => $coherent,
             'pv'      => round($pv),
             'wallbox' => $wb,
             'haus'    => round($hv),
@@ -1956,9 +1684,17 @@ if ($limitedAmpere < $minAmpere) {
         * nach dem Abschalten nicht künstlich im Filter hängen bleiben.
         */
         if ($last > 0 && ($raw - $last) > $threshold) {
-            $filtered = $last;
+            $count = $this->ReadAttributeInteger('HouseSpikeCount') + 1;
+            $this->WriteAttributeInteger('HouseSpikeCount', $count);
+            $filtered = $count >= 3 ? $raw : $last;
+            if ($count >= 3) {
+                $this->WriteAttributeFloat('HausverbrauchAbzWallboxLast', (float)$raw);
+                $this->WriteAttributeString('HausverbrauchAbzWallboxBuffer', json_encode([$raw]));
+                $this->WriteAttributeInteger('HouseSpikeCount', 0);
+            }
             $this->LogTemplate('warn', 'Spike erkannt', "{$raw} W → {$last} W beibehalten");
         } else {
+            $this->WriteAttributeInteger('HouseSpikeCount', 0);
             $buf[] = $raw;
 
             if (count($buf) > 3) {
@@ -1982,13 +1718,16 @@ if ($limitedAmpere < $minAmpere) {
         $socID         = $this->ReadPropertyInteger('HausakkuSOCID');
         $vollSchwelle = $this->ReadPropertyInteger('HausakkuSOCVollSchwelle');
 
-        if ($socID <= 0 || !@IPS_VariableExists($socID)) {
-            return true;
+        if ($socID <= 0) return true;
+        if (!IPS_VariableExists($socID) || !in_array(IPS_GetVariable($socID)['VariableType'], [1,2], true)
+            || !is_numeric(GetValue($socID)) || !is_finite((float)GetValue($socID))
+            || GetValue($socID) < 0 || GetValue($socID) > 100) {
+            $this->SetNoChargeReason('Hausakku-SoC: konfigurierte Messvariable fehlt oder ist ungültig');
+            return false;
         }
-
         $soc = (float)GetValue($socID);
 
-        if ($this->GetValue('AccessStateV2') === 2) {
+        if ($this->hasChargingIntent()) {
             return true;
         }
 
@@ -2042,7 +1781,7 @@ if ($limitedAmpere < $minAmpere) {
         $desiredAmp = 0;
 
         if ($useSurplus >= $cutoff) {
-            $desiredAmp = (int)ceil($useSurplus / (230 * $anzPhasen));
+            $desiredAmp = (int)ceil($useSurplus / (230 * $this->vehiclePhaseCount($anzPhasen)));
             $desiredAmp = max(
                 $this->ReadPropertyInteger('MinAmpere'),
                 min($this->ReadPropertyInteger('MaxAmpere'), $desiredAmp)
@@ -2053,8 +1792,8 @@ if ($limitedAmpere < $minAmpere) {
 
         $lastAmp  = $this->ReadAttributeInteger('LastChargingCurrent');
         $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
-        $delta    = max(-$maxDelta, min($maxDelta, $desiredAmp - $lastAmp));
-        $amp      = $lastAmp + $delta;
+        $amp      = min($desiredAmp, $lastAmp + max(1,$maxDelta));
+        $delta    = $amp - $lastAmp;
 
         $this->WriteAttributeInteger('LastChargingCurrent', $amp);
 
@@ -2089,6 +1828,7 @@ if ($limitedAmpere < $minAmpere) {
 
     private function updateHousePower(array $energyRaw): void
     {
+        if (!$energyRaw['coherent']) return;
         $this->SetValueAndLogChange('Hausverbrauch_W', $energyRaw['haus'], 'Hausverbrauch (W)');
         $this->SetValueAndLogChange(
             'Hausverbrauch_abz_Wallbox',
@@ -2099,61 +1839,10 @@ if ($limitedAmpere < $minAmpere) {
 
     private function UpdateHausverbrauchEvent()
     {
-        $eventIdent = "UpdateHausverbrauchW";
-        $eventID = @$this->GetIDForIdent($eventIdent);
-        $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $myVarID = $this->GetIDForIdent('Hausverbrauch_W');
-        $einheit = $this->ReadPropertyString('HausverbrauchEinheit');
-
-        if ($eventID && ($hvID <= 0 || @IPS_GetEvent($eventID)['TriggerVariableID'] != $hvID)) {
-            IPS_DeleteEvent($eventID);
-            $eventID = 0;
-        }
-        if ($hvID > 0 && IPS_VariableExists($hvID)) {
-            if (!$eventID) {
-                $eventID = IPS_CreateEvent(0);
-                IPS_SetIdent($eventID, $eventIdent);
-                IPS_SetParent($eventID, $this->InstanceID);
-                IPS_SetEventTrigger($eventID, 0, $hvID);
-                IPS_SetEventActive($eventID, true);
-                IPS_SetName($eventID, "Aktualisiere Hausverbrauch_W");
-            }
-            $script = <<<'EOD'
-    $wert = GetValue($_IPS['VARIABLE']);
-    $einheit = IPS_GetProperty($_IPS['INSTANCE'], 'HausverbrauchEinheit');
-    if ($einheit == 'kW') $wert *= 1000;
-    SetValue($_IPS['TARGET'], round($wert));
-    EOD;
-            $script = str_replace(['$_IPS[\'INSTANCE\']', '$_IPS[\'TARGET\']'], [$this->InstanceID, $myVarID], $script);
-
-            IPS_SetEventScript($eventID, $script);
-        }
-
-        $eventIdent2 = "UpdateHausverbrauchAbzWallbox";
-        $eventID2 = @$this->GetIDForIdent($eventIdent2);
-        $myVarID2 = $this->GetIDForIdent('Hausverbrauch_abz_Wallbox');
-        $srcVarID = $this->GetIDForIdent('Hausverbrauch_W');
-
-        if ($eventID2 && (@IPS_GetEvent($eventID2)['TriggerVariableID'] != $srcVarID)) {
-            IPS_DeleteEvent($eventID2);
-            $eventID2 = 0;
-        }
-        if ($srcVarID > 0 && IPS_VariableExists($srcVarID)) {
-            if (!$eventID2) {
-                $eventID2 = IPS_CreateEvent(0);
-                IPS_SetIdent($eventID2, $eventIdent2);
-                IPS_SetParent($eventID2, $this->InstanceID);
-                IPS_SetEventTrigger($eventID2, 0, $srcVarID);
-                IPS_SetEventActive($eventID2, true);
-                IPS_SetName($eventID2, "Aktualisiere Hausverbrauch_abz_Wallbox");
-            }
-            $script2 = <<<'EOD'
-    $hv = GetValue($_IPS['VARIABLE']);
-    $wb = GetValue(IPS_GetObjectIDByIdent('Leistung', $_IPS['INSTANCE']));
-    SetValue(IPS_GetObjectIDByIdent('Hausverbrauch_abz_Wallbox', $_IPS['INSTANCE']), round($hv - $wb));
-    EOD;
-            $script2 = str_replace(['$_IPS[\'INSTANCE\']'], [$this->InstanceID], $script2);
-            IPS_SetEventScript($eventID2, $script2);
+        // Retire only our two known event identities. Preserve objects for rollback/history.
+        foreach (['UpdateHausverbrauchW','UpdateHausverbrauchAbzWallbox'] as $ident) {
+            $id = @$this->GetIDForIdent($ident);
+            if ($id && IPS_EventExists($id)) IPS_SetEventActive($id, false);
         }
     }
 
@@ -2171,51 +1860,24 @@ if ($limitedAmpere < $minAmpere) {
 
     private function getStatusFromCharger()
     {
+        if ($this->chargerSnapshot !== null) return $this->chargerSnapshot;
         $ip = trim($this->ReadPropertyString('WallboxIP'));
-
-        if ($ip == "" || $ip == "0.0.0.0") {
-            $this->LogTemplate('error', 'Keine IP-Adresse für Wallbox konfiguriert');
+        if (!filter_var($ip, FILTER_VALIDATE_IP) || $ip === '0.0.0.0') return false;
+        $response = $this->simpleCurlGet('http://' . $ip . '/api/status');
+        $data = is_string($response['result']) ? json_decode($response['result'], true) : null;
+        if ((int)$response['httpcode'] !== 200 || !is_array($data) || !$this->validChargerStatus($data)) {
+            $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+            $this->LogTemplate('error', 'Wallboxstatus ungültig', 'HTTP, Pflichtfelder oder Messwerte fehlerhaft');
             return false;
         }
-        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
-            $this->LogTemplate('error', 'Ungültige IP-Adresse konfiguriert', $ip);
-            $this->SetStatus(201);
-            return false;
-        }
-        if (!$this->ping($ip, 80, 1)) {
-            $this->LogTemplate('error', 'Wallbox nicht erreichbar', "{$ip}:80");
-            return false;
-        }
-
-        $url = "http://$ip/api/status";
-        $json = false;
-        try {
-            $ch = curl_init($url);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
-            $json = curl_exec($ch);
-            curl_close($ch);
-        } catch (Exception $e) {
-            $this->LogTemplate('error', 'HTTP-Fehler', $e->getMessage());
-            return false;
-        }
-
-        if ($json === false || strlen($json) < 2) {
-            $this->LogTemplate('error', 'Keine Antwort von Wallbox', $url);
-            return false;
-        }
-
-        $data = json_decode($json, true);
-        if (!is_array($data)) {
-            $this->LogTemplate('error', 'Ungültiges JSON von Wallbox', $url);
-            return false;
-        }
-
+        $this->observeVehiclePhases($data, $ip);
+        $this->chargerSnapshot = $data;
+        $this->WriteAttributeString('WallboxLimits', json_encode(['ip'=>$ip, 'time'=>$this->now(),
+            'max'=>min($this->getHardwareMaxAmpereFromStatus($data),$this->getConfiguredWallboxMaxAmpereFromStatus($data))]));
         return $data;
     }
 
-    private function simpleCurlGet($url)
+    protected function simpleCurlGet($url)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
@@ -2234,162 +1896,44 @@ if ($limitedAmpere < $minAmpere) {
         ];
     }
 
-    private function ping($host, $port = 80, $timeout = 1)
-    {
-        $fp = @fsockopen($host, $port, $errno, $errstr, $timeout);
-        if ($fp) {
-            fclose($fp);
-            return true;
-        }
-        return false;
-    }
+
 
     public function SetChargingCurrent(int $ampere)
     {
-        $requestedAmpere = $ampere;
-        $ampere = $this->clampAmpere($ampere);
-
-        if ($requestedAmpere !== $ampere) {
-
-            if ($ampere > $requestedAmpere) {
-                $this->LogTemplate(
-                    'debug',
-                    'Mindestladestrom angewendet',
-                    "{$requestedAmpere} A → {$ampere} A"
-                );
-            } else {
-                $this->LogTemplate(
-                    'warn',
-                    'Ladestrom begrenzt',
-                    "{$requestedAmpere} A → {$ampere} A"
-                );
-            }
-        }
-
-        $ip = $this->ReadPropertyString('WallboxIP');
-        $url = "http://$ip/api/set?amp=" . intval($ampere);
-
-        $this->LogTemplate('debug', 'SetChargingCurrent', "{$ampere} A → {$url}");
-
-        $response = $this->simpleCurlGet($url);
-
-        if ($response['result'] === false || (int)$response['httpcode'] !== 200) {
-            $this->LogTemplate(
-                'error',
-                'SetChargingCurrent fehlgeschlagen',
-                "{$ampere} A, HTTP={$response['httpcode']}, cURL={$response['error']}"
-            );
-            return false;
-        }
-
-        $this->WriteAttributeInteger('LastChargingCurrent', $ampere);
-        $this->WriteAttributeInteger('LastChargingCurrentChange', time());
-
-        $this->LogTemplate('debug', 'Ladestrom gesetzt', "{$ampere} A, HTTP={$response['httpcode']}");
-        return true;
+        return $this->controlled(function () use ($ampere) {
+            if ($this->getCurrentModeKey() !== 'manuell' || $ampere < 6 || $ampere > 32) return false;
+            $this->SetValue('ManuellAmpere', $ampere);
+            $this->UpdateStatus('external');
+            return $this->phaseState() !== 'fault';
+        });
     }
 
     public function SetPhaseMode(int $mode)
     {
-        if ($mode < 0 || $mode > 2) {
-            $this->LogTemplate('warn', 'SetPhaseMode ungültig', "{$mode} (0=Auto, 1=1-phasig, 2=3-phasig)");
-            return false;
-        }
-
-        $ip = $this->ReadPropertyString('WallboxIP');
-        $url = "http://$ip/api/set?psm=" . intval($mode);
-
-        $modes = [0 => "Auto", 1 => "1-phasig", 2 => "3-phasig"];
-        $modeText = $modes[$mode] ?? $mode;
-
-        $this->LogTemplate('debug', 'SetPhaseMode', "{$modeText} ({$mode}) → {$url}");
-
-        $response = $this->simpleCurlGet($url);
-
-        if ($response['result'] === false || $response['httpcode'] != 200) {
-            $this->LogTemplate(
-                'error',
-                'SetPhaseMode fehlgeschlagen',
-                "{$modeText} ({$mode}), HTTP={$response['httpcode']}, cURL={$response['error']}"
-            );
-            return false;
-        } else {
-            $this->LogTemplate('debug', 'SetPhaseMode gesetzt', "{$modeText} ({$mode}), HTTP={$response['httpcode']}");
-            return true;
-        }
+        if (!in_array($mode, [1,2], true)) return false;
+        return $this->controlled(function () use ($mode) {
+            if ($this->getCurrentModeKey() !== 'manuell') return false;
+            // Accepted preference, not a synchronous assertion that switching has completed.
+            $this->SetValue('ManuellPhasen', $mode);
+            $this->UpdateStatus('external');
+            return $this->phaseState() !== 'fault';
+        });
     }
 
     public function SetForceState(int $state)
     {
-        if ($state < 0 || $state > 2) {
-            $this->LogTemplate('warn', 'SetForceState ungültig', "{$state} (0=Neutral, 1=OFF, 2=ON)");
-            return false;
-        }
-
-        $ip       = $this->ReadPropertyString('WallboxIP');
-        $url      = "http://{$ip}/api/set?frc=" . intval($state);
-        $modes    = [
-            0 => "Neutral (Wallbox entscheidet)",
-            1 => "Nicht Laden (gesperrt)",
-            2 => "Laden (erzwungen)"
-        ];
-        $modeText = $modes[$state] ?? $state;
-
-        $this->LogTemplate('debug', 'SetForceState', "HTTP GET → {$url}");
-
-        $response = $this->simpleCurlGet($url);
-
-        if ($response['result'] === false || $response['httpcode'] != 200) {
-            $this->LogTemplate(
-                'error',
-                'SetForceState fehlgeschlagen',
-                "{$modeText} ({$state}), HTTP={$response['httpcode']}, cURL={$response['error']}"
-            );
-            return false;
-        }
-
-        $this->LogTemplate('debug', 'SetForceState gesetzt', "{$modeText} ({$state}), HTTP={$response['httpcode']}");
-
-        if ($this->GetNoChargeReason() === 'Wallbox nicht erreichbar') {
-            $this->ClearNoChargeReason();
-        }
-
-        $varID = $this->GetIDForIdent('AccessStateV2');
-        if ($varID) {
-            SetValue($varID, $state);
-        }
-
-        return true;
+        if (!in_array($state, [1,2], true)) return false;
+        return $this->controlled(function () use ($state) {
+            if ($state === 1) return $this->stopCharging();
+            // Enabling always re-evaluates the selected mode and its constraints.
+            $this->UpdateStatus('external');
+            return $this->chargerSnapshot !== null && $this->phaseState() !== 'fault' && $this->ReadPropertyBoolean('ModulAktiv');
+        });
     }
 
     public function SetChargingEnabled(bool $enabled)
     {
-        $ip = $this->ReadPropertyString('WallboxIP');
-        $apiKey = $this->ReadPropertyString('WallboxAPIKey');
-        $alwValue = $enabled ? 1 : 0;
-        $statusText = $enabled ? "Laden erlaubt" : "Laden gesperrt";
-
-        if ($apiKey != '') {
-            $url = "http://$ip/api/set?dwo=0&alw=$alwValue&key=" . urlencode($apiKey);
-            $this->LogTemplate('debug', 'SetChargingEnabled', "{$statusText} ({$alwValue}) mit API-Key → {$url}");
-        } else {
-            $url = "http://$ip/api/set?dwo=0&alw=$alwValue";
-            $this->LogTemplate('debug', 'SetChargingEnabled', "{$statusText} ({$alwValue}) → {$url}");
-        }
-
-        $response = $this->simpleCurlGet($url);
-
-        if ($response['result'] === false || $response['httpcode'] != 200) {
-            $this->LogTemplate(
-                'error',
-                'SetChargingEnabled fehlgeschlagen',
-                "ALW={$alwValue}, HTTP={$response['httpcode']}, cURL={$response['error']}"
-            );
-            return false;
-        } else {
-            $this->LogTemplate('debug', 'SetChargingEnabled gesetzt', "{$statusText} ({$alwValue}), HTTP={$response['httpcode']}");
-            return true;
-        }
+        return $this->SetForceState($enabled ? 2 : 1);
     }
 
     private function extractChargerVariables(array $data): array
@@ -2426,7 +1970,7 @@ if ($limitedAmpere < $minAmpere) {
             'debug'
         );
 
-        $accessStateV2 = ($vars['frcRaw'] === 2 || $vars['stateRaw'] === 2) ? 2 : 1;
+        $accessStateV2 = (int)$vars['frcRaw'];
         $this->SetValueAndLogChange('Status',                $vars['car'],               'Status');
         $this->SetValueAndLogChange('AccessStateV2',         $accessStateV2,             'Wallbox Modus');
         $this->SetValueAndLogChange('Leistung',              $vars['leistung'],          'Aktuelle Ladeleistung (W)',  'W');
@@ -2439,8 +1983,9 @@ if ($limitedAmpere < $minAmpere) {
 
     private function handleChargerUnavailable(): void
     {
-        $this->ResetWallboxVisualisierungKeinFahrzeug();
-        $this->SetNoChargeReason('Wallbox nicht erreichbar');
+        if (in_array($this->phaseState(), ['stopping','confirming'], true)) $this->phaseFault('Wallbox während Phasenwechsel nicht erreichbar');
+        $this->stopCharging(false);
+        $this->SetNoChargeReason('Wallbox nicht erreichbar; Ladestop nicht bestätigt');
         $this->LogTemplate('debug', 'Wallbox nicht erreichbar – Visualisierung zurückgesetzt');
         $this->UpdateStatusAnzeige();
     }
@@ -2469,15 +2014,12 @@ if ($limitedAmpere < $minAmpere) {
 
     private function getEffectiveWallboxMaxAmpere(): int
     {
+        $cached = json_decode($this->ReadAttributeString('WallboxLimits'),true);
+        if (is_array($cached) && ($cached['ip'] ?? '') === trim($this->ReadPropertyString('WallboxIP'))
+            && isset($cached['time'],$cached['max']) && $this->now() >= $cached['time'] && $this->now() - $cached['time'] <= 300) return (int)$cached['max'];
         $status = $this->getStatusFromCharger();
-        if (!is_array($status)) {
-            return 16;
-        }
-
-        $hardwareMaxAmpere = $this->getHardwareMaxAmpereFromStatus($status);
-        $configuredWallboxMaxAmpere = $this->getConfiguredWallboxMaxAmpereFromStatus($status);
-
-        return min($hardwareMaxAmpere, $configuredWallboxMaxAmpere);
+        if ($status === false) return 0;
+        return min($this->getHardwareMaxAmpereFromStatus($status),$this->getConfiguredWallboxMaxAmpereFromStatus($status));
     }
 
     private function getHardwareMaxAmpereFromStatus(array $status): int
@@ -2506,8 +2048,8 @@ if ($limitedAmpere < $minAmpere) {
         $effectiveMaxAmpere = min($maxAmpere, $this->getEffectiveWallboxMaxAmpere());
 
         if ($minAmpere > $effectiveMaxAmpere) {
-            $this->LogDebug(
-                'clampAmpere',
+            $this->LogTemplate(
+                'warn', 'clampAmpere',
                 sprintf(
                     'MinAmpere (%dA) liegt über effectiveMaxAmpere (%dA) und wird begrenzt.',
                     $minAmpere,
@@ -2516,7 +2058,7 @@ if ($limitedAmpere < $minAmpere) {
             );
         }
         
-        $minAmpere = min($minAmpere, $effectiveMaxAmpere);
+        if ($minAmpere > $effectiveMaxAmpere) return 0;
 
         return max($minAmpere, min($ampere, $effectiveMaxAmpere));
     }
@@ -2527,6 +2069,7 @@ if ($limitedAmpere < $minAmpere) {
 
     private function GetInitialCheckInterval() {
         $val = intval($this->ReadPropertyInteger('InitialCheckInterval'));
+        if ($val === 0) return 0;
         if ($val < 5 || $val > 60) $val = 5;
         return $val;
     }
@@ -2555,7 +2098,7 @@ if ($limitedAmpere < $minAmpere) {
             return;
         }
 
-        $mainInterval    = intval($this->ReadPropertyInteger('RefreshInterval'));
+        $mainInterval    = max(15, min(600, intval($this->ReadPropertyInteger('RefreshInterval'))));
         $initialInterval = $this->GetInitialCheckInterval();
 
         if ($car === false || $car <= 1) {
@@ -2569,7 +2112,7 @@ if ($limitedAmpere < $minAmpere) {
 
     private function SetMarketPriceTimerZurVollenStunde()
     {
-        if (!$this->ReadPropertyBoolean('UseMarketPrices')) {
+        if (!$this->ReadPropertyBoolean('UseMarketPrices') || !$this->ReadPropertyBoolean('ModulAktiv')) {
             $this->SetTimerInterval('PVWM_UpdateMarketPrices', 0);
             $this->WriteAttributeBoolean('MarketPricesActive', false);
             return;
@@ -2577,7 +2120,7 @@ if ($limitedAmpere < $minAmpere) {
 
         $this->AktualisiereMarktpreise();
 
-        $now = time();
+        $now = $this->now();
         $sekBisNaechsteStunde = (60 - date('i', $now)) * 60 - date('s', $now);
         if ($sekBisNaechsteStunde <= 0) $sekBisNaechsteStunde = 3600;
 
@@ -2589,7 +2132,7 @@ if ($limitedAmpere < $minAmpere) {
     {
         $socID       = $this->ReadPropertyInteger('CarSOCID');
         $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
-        if ($socID <= 0 || $socTargetID <= 0 || !IPS_VariableExists($socID) || !IPS_VariableExists($socTargetID)) {
+        if (!$this->validSocValue($socID) || !$this->validSocValue($socTargetID)) {
             return 'n/a';
         }
 
@@ -2669,9 +2212,10 @@ if ($limitedAmpere < $minAmpere) {
 
     private function AktualisiereMarktpreise()
     {
+        $this->SetValue('MarketPricesValid', false);
         $this->LogTemplate('debug', 'AktualisiereMarktpreise', 'aufgerufen');
 
-        if (!$this->ReadPropertyBoolean('UseMarketPrices')) {
+        if (!$this->ReadPropertyBoolean('UseMarketPrices') || !$this->ReadPropertyBoolean('ModulAktiv')) {
             $this->LogTemplate('debug', 'Börsenpreis-Update übersprungen', 'deaktiviert');
             return;
         }
@@ -2701,11 +2245,26 @@ if ($limitedAmpere < $minAmpere) {
         }
         $json = $response['result'];
         $data = json_decode($json, true);
-        if (!is_array($data) || !isset($data['data'])) {
+        if (!is_array($data) || !isset($data['data']) || !is_array($data['data']) || count($data['data']) === 0) {
             $this->LogTemplate('error', 'Fehlerhafte API-Antwort', "Feld 'data' fehlt");
             return;
         }
 
+        foreach ($data['data'] as $item) {
+            if (!is_array($item) || !isset($item['start_timestamp'], $item['end_timestamp'], $item['marketprice'])
+                || !is_numeric($item['start_timestamp']) || !is_numeric($item['end_timestamp']) || !is_numeric($item['marketprice'])
+                || !is_finite((float)$item['start_timestamp']) || !is_finite((float)$item['end_timestamp']) || !is_finite((float)$item['marketprice'])
+                || $item['end_timestamp'] <= $item['start_timestamp']) {
+                $this->LogTemplate('error', 'Ungültiger Strompreiseintrag');
+                return;
+            }
+        }
+        usort($data['data'], function ($a,$b) { return $a['start_timestamp'] <=> $b['start_timestamp']; });
+        $current = null;
+        foreach ($data['data'] as $item) {
+            if ($item['start_timestamp'] <= $this->now()*1000 && $this->now()*1000 < $item['end_timestamp']) $current=$item;
+        }
+        if ($current === null) { $this->LogTemplate('warn','Kein aktuelles Strompreisintervall'); return; }
         $preise = array_map(function($item) {
             return [
                 'timestamp' => intval($item['start_timestamp'] / 1000),
@@ -2717,7 +2276,7 @@ if ($limitedAmpere < $minAmpere) {
         $aufschlagPct = $this->ReadPropertyFloat('MarketPriceSurcharge') / 100;
         $steuersatz   = $this->ReadPropertyFloat('MarketPriceTaxRate') / 100;
 
-        $aktuellerNetto = $preise[0]['price'];
+        $aktuellerNetto = (float)$current['marketprice'] / 10;
 
         $preisVorAufschlag = $aktuellerNetto + $grundpreis;
 
@@ -2735,6 +2294,7 @@ if ($limitedAmpere < $minAmpere) {
         unset($p);
 
         $this->SetValueAndLogChange('MarketPrices', json_encode($preise));
+        $this->SetValue('MarketPricesValid', true);
         $this->LogTemplate('debug', 'MarketPrices gesetzt', substr(json_encode($preise), 0, 100) . '...');
 
         $this->SetValue('MarketPricesPreview', $this->FormatMarketPricesPreviewHTML(24));
@@ -2913,17 +2473,6 @@ if ($limitedAmpere < $minAmpere) {
         $this->WriteAttributeFloat('SmoothedSurplus', 0.0);
 
         $this->SetValue('Leistung', 0);
-        $this->SetValue('PV_Ueberschuss', 0);
-        $this->SetValue('PV_Ueberschuss_A', 0);
-        
-        $hvID = $this->ReadPropertyInteger('HausverbrauchID');
-        $hvEinheit = $this->ReadPropertyString('HausverbrauchEinheit');
-        $invertHV = $this->ReadPropertyBoolean('InvertHausverbrauch');
-        $hausverbrauch = ($hvID > 0) ? @GetValueFloat($hvID) : 0;
-        if ($hvEinheit == "kW") $hausverbrauch *= 1000;
-        if ($invertHV) $hausverbrauch *= -1;
-        $hausverbrauch = round($hausverbrauch);
-
         $this->SetValue('Freigabe', false);
         $this->SetValue('AccessStateV2', 1);
         $this->SetValue('Status', 1);
@@ -3123,6 +2672,42 @@ if ($limitedAmpere < $minAmpere) {
     private function GetNoChargeReason(): string
     {
         return $this->ReadAttributeString('LastNoChargeReason');
+    }
+
+    // Learn only from sustained charging in 3P mode; never carry a fixed vehicle limit.
+    private function observeVehiclePhases(array $data, string $ip): void
+    {
+        $count = $this->determinePhases($data);
+        if ($data['car'] !== 2 || !$data['alw'] || $data['psm'] !== 2 || $data['err'] !== 0 || $count === 0) {
+            $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+            return;
+        }
+        // Low-current ramp-up and tapering are not reliable evidence of vehicle capability.
+        foreach ([4,5,6] as $index) {
+            $current = abs((float)$data['nrg'][$index]);
+            if ($current > 0.2 && $current < max(1.5, $data['amp'] * 0.7)) {
+                $this->WriteAttributeString('VehiclePhaseObservation', '{}');
+                return;
+            }
+        }
+        $previous = json_decode($this->ReadAttributeString('VehiclePhaseObservation'), true) ?: [];
+        $now = $this->now();
+        $maxGap = max(15, $this->ReadPropertyInteger('RefreshInterval')) * 2 + 5;
+        if (($previous['ip'] ?? '') !== $ip || ($previous['count'] ?? 0) !== $count
+            || $now - ($previous['time'] ?? 0) > $maxGap || $now < ($previous['time'] ?? 0)) {
+            $previous = ['ip'=>$ip, 'count'=>$count, 'samples'=>1, 'time'=>$now];
+        } elseif ($now - $previous['time'] >= 2) {
+            $previous['samples'] = min(3, $previous['samples'] + 1);
+            $previous['time'] = $now;
+        }
+        $this->WriteAttributeString('VehiclePhaseObservation', json_encode($previous));
+    }
+
+    private function vehiclePhaseCount(int $wallboxPhases): int
+    {
+        if ($wallboxPhases !== 3) return 1;
+        $observed = json_decode($this->ReadAttributeString('VehiclePhaseObservation'), true) ?: [];
+        return ($observed['samples'] ?? 0) >= 3 ? (int)$observed['count'] : 3;
     }
 
     private function phaseModeToPhaseCount(int $phaseMode): int

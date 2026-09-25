@@ -4,7 +4,7 @@
       "type": "ExpansionPanel",
       "caption": "🛑 Modulsteuerung",
       "items": [
-        { "type": "CheckBox", "name": "ModulAktiv", "caption": "⚡ Modul aktiv (bei Deaktivierung werden keine Aktionen ausgeführt)"},
+        { "type": "CheckBox", "name": "ModulAktiv", "caption": "Modul aktiv (Deaktivieren fordert Ladestop an)"},
         { "type": "CheckBox", "name": "DebugLogging", "caption": "🐞 Debug-Logging aktivieren (Details zu allen Variablen und Werten ins IPS-Log)", "default": false },
         { "type": "Select", "name": "ModeAfterUnplug", "caption": "Lademodus nach Fahrzeug-Abstecken", "options": [
           { "caption": "Aktuellen Lademodus beibehalten", "value": -1 },
@@ -29,7 +29,7 @@
           { "type": "NumberSpinner", "name": "InitialCheckInterval", "caption": "Initial-Check Intervall (0 = deaktivert)", "suffix": "Sek.", "minimum": 0, "maximum": 60 }
         ]},
         { "type": "RowLayout", "items": [
-          { "type": "PasswordTextBox", "name": "WallboxAPIKey", "caption": "API-Key (optional)"}
+          { "type": "PasswordTextBox", "name": "WallboxAPIKey", "caption": "API-Key (Legacy; lokale API v2 verwendet diesen Wert nicht)"}
         ]},
         { "type": "RowLayout", "items": [
           { "type": "NumberSpinner", "name": "MinAmpere", "caption": "Minimaler Ladestrom (A)", "icon": "Minus", "suffix": "A", "minimum": 6, "maximum": 32, "default": 6 },
@@ -96,7 +96,7 @@
         },
         {
           "type": "Label",
-          "label": "Die Netzleistung muss vom Smartmeter oder Hausanschluss-Zähler kommen. Positiv = Netzbezug, negativ = Einspeisung."
+          "label": "Die Netzleistung muss vom Zähler am Hausanschluss kommen. Standard: positiv = Netzbezug, negativ = Einspeisung. Bei umgekehrtem Vorzeichen die folgende Option aktivieren."
         },
         {
           "type": "RowLayout",
@@ -105,7 +105,9 @@
               "type": "SelectVariable",
               "name": "NetzleistungID",
               "caption": "Netzleistung Hausanschluss",
-              "validVariableTypes": [2]
+              "validVariableTypes": [
+                2
+              ]
             },
             {
               "type": "Label",
@@ -130,26 +132,25 @@
           ]
         },
         {
-          "type": "RowLayout",
-          "items": [
-            {
-              "type": "CheckBox",
-              "name": "NetzlimitStartAktiv",
-              "caption": "Netzbegrenzung initial aktiv"
-            },
-            {
-              "type": "NumberSpinner",
-              "name": "MaxGridLoadWatt",
-              "caption": "Startwert maximale Netzbelastung",
-              "suffix": "W",
-              "minimum": 0,
-              "default": 0
-            }
-          ]
+          "type": "CheckBox",
+          "name": "InvertNetzleistung",
+          "caption": "Vorzeichen umkehren (Zähler liefert Einspeisung positiv)"
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "GridMeasurementMaxAge",
+          "caption": "Maximales Messwertalter",
+          "suffix": "s",
+          "minimum": 10,
+          "maximum": 3600
         },
         {
           "type": "Label",
-          "label": "Diese Einstellungen dienen als Startwerte. Im laufenden Betrieb werden die Netzbegrenzung und der Grenzwert über die Instanzvariablen bedient."
+          "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
+        },
+        {
+          "type": "Label",
+          "label": "Netzbegrenzung bedienen: In der Visualisierung oder im Objektbaum unter dieser PVWallboxManager-Instanz „Maximale Netzbelastung“ auf den gewünschten Grenzwert in Watt stellen und „Netzbegrenzung aktiv“ einschalten. Diese beiden Instanzvariablen bestimmen die laufende Begrenzung. Bei 0 W ist sie deaktiviert."
         },
         {
           "type": "Label",
@@ -161,19 +162,89 @@
       "type": "ExpansionPanel",
       "caption": "⚡ Phasenumschaltung",
       "items": [
-        { "type": "Label", "label": "⬇️ Schwelle in Watt zum Umschalten auf 1-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 1-phasig." },
-         { "type": "RowLayout", "items": [
-           { "type": "NumberSpinner", "name": "Phasen1Schwelle", "caption": "Schwelle auf 1-phasig (W)" },
-           { "type": "Label", "caption": "    " },
-            { "type": "NumberSpinner", "name": "Phasen1Limit", "caption": "Zählerlimit für Umschaltung zu 1-phasig" }
-        ]},
-        { "type": "Label", "caption": "    " },
-        { "type": "Label", "label": "⬆️ Schwelle in Watt zum Umschalten auf 3-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 3-phasig." },
-           { "type": "RowLayout", "items": [
-             { "type": "NumberSpinner", "name": "Phasen3Schwelle", "caption": "Schwelle auf 3-phasig (W)" },
-             { "type": "Label", "caption": "    " },
-             { "type": "NumberSpinner", "name": "Phasen3Limit", "caption": "Zählerlimit für Umschaltung zu 3-phasig" }
-        ]}
+        {
+          "type": "Label",
+          "label": "⬇️ Schwelle in Watt zum Umschalten auf 1-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 1-phasig."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen1Schwelle",
+              "caption": "Schwelle auf 1-phasig (W)"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen1Limit",
+              "caption": "Zählerlimit für Umschaltung zu 1-phasig"
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "caption": "    "
+        },
+        {
+          "type": "Label",
+          "label": "⬆️ Schwelle in Watt zum Umschalten auf 3-phasig & 🔢 Zählerlimit für stabile Umschaltung auf 3-phasig."
+        },
+        {
+          "type": "RowLayout",
+          "items": [
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen3Schwelle",
+              "caption": "Schwelle auf 3-phasig (W)"
+            },
+            {
+              "type": "Label",
+              "caption": "    "
+            },
+            {
+              "type": "NumberSpinner",
+              "name": "Phasen3Limit",
+              "caption": "Zählerlimit für Umschaltung zu 3-phasig"
+            }
+          ]
+        },
+        {
+          "type": "Label",
+          "caption": "Ablauf und Wartezeiten"
+        },
+        {
+          "type": "Label",
+          "caption": "Phasenwechsel: Ladung stoppen, Stillstand bestätigen, Phasenmodus wechseln und bestätigen. Erst danach wird die Ladefreigabe erneut geprüft."
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchCooldown",
+          "caption": "Mindestabstand zwischen Phasenwechseln (Cooldown)",
+          "suffix": "s",
+          "minimum": 30,
+          "maximum": 1800
+        },
+        {
+          "type": "NumberSpinner",
+          "name": "PhaseSwitchTimeout",
+          "caption": "Maximale Wartezeit je Bestätigung",
+          "suffix": "s",
+          "minimum": 15,
+          "maximum": 300
+        },
+        {
+          "type": "Label",
+          "caption": "Cooldown (Standard 180 s): Verhindert häufige Wechsel. Laden mit der bisherigen Phasenanzahl bleibt bei ausreichender Leistung möglich. Bestätigungsfrist (Standard 60 s je Schritt): Sobald der Status bestätigt ist, geht es weiter; keine feste Ladepause. Ohne Bestätigung bleibt die Ladung gesperrt."
+        },
+        {
+          "type": "Button",
+          "caption": "Phasenfehler nach Stillstand zurücksetzen",
+          "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
+        }
       ]
     },
     {
@@ -190,7 +261,7 @@
         },
         {
           "type": "Label",
-          "label": "☀️ Im Lademodus „PV-Anteil“ werden Ladefreigabe und PV-Anteil direkt im WebFront gesteuert."
+          "label": "☀️ PV-Anteil: Unterhalb der Hausakku-SoC-Schwelle gilt der eingestellte Anteil, ab Erreichen automatisch 100 %. Ohne gültige Hausakku-SoC-Variable bleibt der eingestellte Anteil wirksam. 0 % bedeutet weiterhin Stop."
         },
         {
           "type": "RowLayout",
@@ -274,6 +345,7 @@
       "type": "ExpansionPanel",
       "caption": "🚗 Fahrzeugdaten & Ziel-SOC",
       "items": [
+        { "type": "Label", "caption": "Die genutzten Fahrzeugphasen werden automatisch aus drei zeitlich getrennten Strommessungen im 3P-Wallboxmodus erkannt. Bis dahin wird mit drei Phasen gerechnet. Nach Ladepause, Phasenwechsel oder Abstecken wird neu erkannt. Im 1P-Modus gilt immer eine Phase." },
         { "type": "Label", "label": "🔋 Aktueller SoC des Fahrzeugs & 🎯 Ziel-SoC für das Fahrzeug" },
         { "type": "RowLayout", "items": [
           { "type": "SelectVariable", "name": "CarSOCID", "caption": "Aktueller SoC des Fahrzeugs", "suffix": "%", "minimum": 0, "maximum": 100 },
@@ -325,7 +397,7 @@
         { "type": "Label", "caption": "Aufschlag zum Marktpreis für Versorger-Marge, Bilanzierungs- und Beschaffungskosten" },
         { "type": "NumberSpinner", "name": "MarketPriceSurcharge", "caption": "Aufschlag", "default": 0.00, "suffix": " %", "minimum": 0, "maximum": 100 },
         { "type": "Label", "caption": "Steuersatz" },
-        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 20, "suffix": " %", "minimum": 0, "maximum": 100 },
+        { "type": "NumberSpinner", "name": "MarketPriceTaxRate", "caption": "Steuersatz", "default": 0, "suffix": " %", "minimum": 0, "maximum": 100 },
         {
           "type": "Label",
           "label": "Börsenpreise und Vorschau erscheinen im WebFront und werden in die Variable 'CurrentSpotPrice' geschrieben."
