@@ -30,4 +30,4 @@ Start wie Nur PV. Nach Beginn hält Hybrid bei abnehmendem Überschuss die Minde
 
 ## Ladeende
 
-Ziel-SoC fordert Stop an. Zusätzlich besteht eine Leistungs-Fallbackerkennung über mehrere Zyklen; während Übergängen unterdrückt, im manuellen Modus nicht verwendet. ModeAfterUnplug gilt nach Abstecken und Ladeende. Stop erzwingt keinen unnötigen Wechsel auf 1P.
+Ziel-SoC fordert Stop an. Zusätzlich besteht eine Ladeende-Erkennung über mehrere Zyklen: Nach der letzten Freigabe muss zunächst Status „Fahrzeug lädt“ mit mindestens 300 W beobachtet worden sein. Erst danach zählen Messungen unter 300 W bei Wallboxstatus „Ladung beendet“ (car=4) als Ladeende. Eine Freigabe ohne Leistungsaufnahme ist ein Wartezustand und löst keinen Wechsel auf den Standardmodus aus. Eigene Stopbefehle, Abstecken und zurückgenommene Freigabe verwerfen den Nachweis. Während Phasenübergängen ist diese Erkennung unterdrückt; im manuellen Modus wird sie nicht verwendet. ModeAfterUnplug gilt nach Abstecken und Ladeende. Stop erzwingt keinen unnötigen Wechsel auf 1P.

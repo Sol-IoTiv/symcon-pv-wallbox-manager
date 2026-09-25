@@ -444,6 +444,34 @@ $tests['automatic full PV share still obeys grid limit'] = function () {
     for($i=0;$i<5;$i++) $m->UpdateStatus();
     expect(!in_array(['frc',2],$m->commands,true),'Full share must not bypass insufficient net budget');
 };
+$tests['PV share waiting vehicle does not fall back to manual'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->properties['ModeAfterUnplug']=2;
+    $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
+    $m->status['car']=4; $m->status['frc']=2; $m->status['alw']=false;
+    for($i=0;$i<12;$i++) { $m->clock+=16; $m->UpdateStatus(); }
+    expect($m->GetValue('LademodusAuswahl')===1,'A release without observed charging is not a charge end');
+};
+$tests['actual completed charging still applies configured end mode'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->properties['ModeAfterUnplug']=2;
+    $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=2000;
+    $m->UpdateStatus(); $m->status['car']=4; $m->status['alw']=false; $m->status['nrg'][11]=0;
+    for($i=0;$i<4;$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    expect($m->GetValue('LademodusAuswahl')===2,'Confirmed charging followed by completion applies configured mode');
+};
+$tests['temporary low charging power is not completion'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->properties['ModeAfterUnplug']=2;
+    $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=2000;
+    $m->UpdateStatus(); $m->status['nrg'][11]=100;
+    for($i=0;$i<6;$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    expect($m->GetValue('LademodusAuswahl')===1,'Low power with charging status must not change mode');
+};
+$tests['intentional stop resets completed session evidence'] = function () {
+    $m=new SimulatedManager(); $m->attributes['ChargingPowerObserved']=true; $m->attributes['NoPowerCounter']=2;
+    $m->plan(1,6,false);
+    expect($m->attributes['ChargingPowerObserved']===false && $m->attributes['NoPowerCounter']===0,'Each restart needs fresh charging evidence');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

@@ -83,6 +83,8 @@ trait ChargingControl
 
     private function stopCharging(bool $cancel = true): bool
     {
+        $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        $this->resetNoPowerCounter();
         $this->WriteAttributeString('VehiclePhaseObservation', '{}');
         if ($cancel && $this->phaseState() === 'confirming') return $this->phaseFault('Umschaltung vor Bestätigung abgebrochen');
         if ($cancel && $this->phaseState() !== 'fault') $this->clearTransition();
@@ -213,10 +215,14 @@ trait ChargingControl
         if ($data['frc'] !== 2) {
             // Check again immediately before release (deactivation may have changed the property).
             if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->vehicleSocInvalid() || $this->targetSocReached()) return $this->stopCharging();
+            $this->WriteAttributeBoolean('ChargingPowerObserved', false);
             if (!$this->sendChargerCommand('frc', 2)) return $this->phaseFault('Ladefreigabe abgelehnt');
             $this->WriteAttributeInteger('LastManualStartTimestamp', $this->now());
         }
         $this->WriteAttributeBoolean('PhaseResumePending', false);
+        if ((float)$data['nrg'][11] < 300 && !$this->ReadAttributeBoolean('ChargingPowerObserved')) {
+            $this->SetNoChargeReason('Ladefreigabe angefordert – warte auf Leistungsaufnahme des Fahrzeugs');
+        }
         return true;
     }
 

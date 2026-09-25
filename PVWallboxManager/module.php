@@ -43,6 +43,7 @@ class PVWallboxManager extends IPSModule
             'HausverbrauchAbzWallboxBuffer'  => '[]',
             'HausverbrauchAbzWallboxLast'    => 0.0,
             'NoPowerCounter'                 => 0,
+            'ChargingPowerObserved'          => false,
             'LastTimerStatus'                => -1,
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
@@ -699,6 +700,11 @@ class PVWallboxManager extends IPSModule
         $this->desiredPhaseMode = $data['psm'] === 2 ? 2 : 1;
         $vars = $this->extractChargerVariables($data);
         $this->syncChargerVariables($vars, $phasen);
+        if ($data['car'] === 1 || $data['frc'] !== 2) $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        $this->LogTemplate('debug', 'Laderegelung Rückmeldung', sprintf(
+            'car=%d, frc=%d, alw=%s, psm=%d, amp=%d A, Leistung=%.0f W, Ströme=%.2f/%.2f/%.2f A',
+            $data['car'], $data['frc'], $data['alw'] ? 'true' : 'false', $data['psm'], $data['amp'],
+            $data['nrg'][11], $data['nrg'][4], $data['nrg'][5], $data['nrg'][6]));
         try {
             $energyRaw = $this->gatherEnergyData();
         } catch (RuntimeException $e) {
@@ -1388,6 +1394,14 @@ class PVWallboxManager extends IPSModule
         }
 
         if ($loadActive && $currentFRC === 2) {
+            if ((int)$this->GetValue('Status') === 2 && (float)$this->GetValue('Leistung') >= self::NO_POWER_THRESHOLD_W) {
+                $this->WriteAttributeBoolean('ChargingPowerObserved', true);
+            }
+            // Release alone is not evidence of a started session. car=4 can persist during restart.
+            if (!$this->ReadAttributeBoolean('ChargingPowerObserved') || (int)$this->GetValue('Status') !== 4) {
+                $this->resetNoPowerCounter();
+                return false;
+            }
             if ($this->isChargeEndFallbackBlocked()) {
                 return false;
             }
