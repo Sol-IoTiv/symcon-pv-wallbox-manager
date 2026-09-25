@@ -4,7 +4,7 @@ LademodusAuswahl: 0 Nur PV, 1 PV-Anteil, 2 Manuell, 5 Hybrid. 3/4 sind keine imp
 
 ## Gemeinsame Regeln
 
-Aktivzustand, Fahrzeug, gültige Statusdaten und Ziel-SoC prüfen; Modusbedarf berechnen; Stromgrenzen und Netzbudget anwenden; nötigen Phasenwechsel bestätigen; Strom setzen; erst danach freigeben. Ein Moduswunsch ist kein direkter HTTP-Befehl. Moduswechsel verwerfen alte Überschussglättung, Hysterese-/Phasenzähler und Hybrid-Endladungszeit. Ungültige konfigurierte Fahrzeug-/Ziel-SoC-Werte sperren die Ladung in allen Modi. Ein ungültiger konfigurierter Hausakku-SoC sperrt PV und Hybrid; ohne zugeordnete Hausakkuvariable besteht diese Bedingung nicht.
+Aktivzustand, Fahrzeug, gültige Statusdaten und Ziel-SoC prüfen; Modusbedarf berechnen; Stromgrenzen und Netzbudget anwenden; nötigen Phasenwechsel bestätigen; Strom setzen; erst danach freigeben. Ein Moduswunsch ist kein direkter HTTP-Befehl. Bei PV, PV-Anteil und Hybrid wartet ein noch nicht ladendes Fahrzeug zusätzlich auf eine abgeschlossene Phasenentscheidung, falls die Schaltschwellen einen anderen Modus verlangen. Der kontrollierte Phasenwechsel und seine Rücklesebestätigung erfolgen vor der Ladefreigabe. Während eines Cooldowns wird ein wartendes Fahrzeug nicht vorübergehend im falschen Phasenmodus gestartet. Bereits laufende Ladung verwendet weiterhin die Schalthysterese. Moduswechsel verwerfen alte Überschussglättung, Hysterese-/Phasenzähler und Hybrid-Endladungszeit. Ungültige konfigurierte Fahrzeug-/Ziel-SoC-Werte sperren die Ladung in allen Modi. Ein ungültiger konfigurierter Hausakku-SoC sperrt PV und Hybrid; ohne zugeordnete Hausakkuvariable besteht diese Bedingung nicht.
 
 ## Nur PV
 

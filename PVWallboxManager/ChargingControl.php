@@ -6,6 +6,7 @@ trait ChargingControl
     private $controlDepth = 0;
     private $chargerSnapshot = null;
     private $desiredPhaseMode = null;
+    private $phaseDecisionPending = false;
     private $energySnapshot = null;
 
     protected function now(): int { return time(); }
@@ -25,6 +26,7 @@ trait ChargingControl
         finally {
             $this->chargerSnapshot = null;
             $this->desiredPhaseMode = null;
+            $this->phaseDecisionPending = false;
             $this->energySnapshot = null;
             $this->controlDepth--;
             IPS_SemaphoreLeave($key);
@@ -178,6 +180,7 @@ trait ChargingControl
             $last = $this->ReadAttributeInteger('LetztePhasenUmschaltung');
             if ($last > 0 && $this->now() - $last < $this->configuredPhaseCooldown()) {
                 $this->SetNoChargeReason('Cooldown nach Phasenumschaltung aktiv');
+                if ($data['car'] !== 2 || !$data['alw'] || (float)$data['nrg'][11] <= 30) return $this->stopCharging();
                 // Keep the observed phase, but never increase the requested power budget.
                 if (!in_array($data['psm'], [1,2], true)) return $this->stopCharging();
                 $actualPhases = $this->phaseModeToPhaseCount($data['psm']);

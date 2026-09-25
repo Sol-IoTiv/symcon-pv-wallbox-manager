@@ -1552,6 +1552,7 @@ class PVWallboxManager extends IPSModule
 
     private function PruefeUndSetzePhasenmodus($pvUeberschuss = null, $forceThreePhase = false, $forceOnePhase = false)
     {
+        $this->phaseDecisionPending = false;
         $current = (int)$this->GetValue('PhasenmodusEinstellung') === 2 ? 2 : 1;
         if ($forceOnePhase || $forceThreePhase) {
             $this->desiredPhaseMode = $forceThreePhase ? 2 : 1;
@@ -1568,11 +1569,25 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('Phasen1Zaehler', $down ? $this->ReadAttributeInteger('Phasen1Zaehler') + 1 : 0);
         if ($up && $this->ReadAttributeInteger('Phasen3Zaehler') >= max(1,$this->ReadPropertyInteger('Phasen3Limit'))) $this->desiredPhaseMode = 2;
         if ($down && $this->ReadAttributeInteger('Phasen1Zaehler') >= max(1,$this->ReadPropertyInteger('Phasen1Limit'))) $this->desiredPhaseMode = 1;
+        $this->phaseDecisionPending = ($up || $down) && $this->desiredPhaseMode === $current;
+        $this->LogTemplate('debug', 'Phasenplanung', sprintf(
+            'Budget=%.0f W, aktuell=%dP, Ziel=%dP, Entscheidung=%s, Zähler 1P=%d/%d, 3P=%d/%d',
+            $pvUeberschuss, $this->phaseModeToPhaseCount($current), $this->phaseModeToPhaseCount($this->desiredPhaseMode),
+            $this->phaseDecisionPending ? 'ausstehend' : 'stabil', $this->ReadAttributeInteger('Phasen1Zaehler'),
+            max(1,$this->ReadPropertyInteger('Phasen1Limit')), $this->ReadAttributeInteger('Phasen3Zaehler'),
+            max(1,$this->ReadPropertyInteger('Phasen3Limit'))));
     }
 
     private function SteuerungLadefreigabe($pvUeberschuss, $modus = 'pvonly', $ampere = 0, $anzPhasen = 1, $overrideFRC = null)
     {
         $enabled = $overrideFRC !== null ? $overrideFRC === 2 : $pvUeberschuss >= $this->ReadPropertyInteger('MinLadeWatt');
+        $status = $this->chargerSnapshot;
+        if ($enabled && $this->phaseDecisionPending && $status !== null
+            && ($status['car'] !== 2 || !$status['alw'] || (float)$status['nrg'][11] <= 30)) {
+            $this->SetNoChargeReason('Ladestart wartet auf stabile Phasenentscheidung');
+            $this->stopCharging();
+            return;
+        }
         $this->executeChargingPlan($anzPhasen === 3 ? 2 : 1, (int)$ampere, $enabled && $ampere > 0);
     }
 
@@ -1630,6 +1645,16 @@ class PVWallboxManager extends IPSModule
             $bat = -$bat;
         }
 
+        $houseUpdated = $hvID > 0 ? (int)IPS_GetVariable($hvID)['VariableUpdated'] : 0;
+        $this->LogTemplate('debug', 'Energiebilanz Messwerte', sprintf(
+            'PV=%.0f W, Haus inkl. Wallbox=%.0f W, Wallbox=%.0f W, Haus netto roh=%.0f W, Haus-Messalter=%d s',
+            $pv, $hv, $wb, $hv - $wb, $houseUpdated > 0 ? $this->now() - $houseUpdated : -1));
+        if ($hvID > 0 && $hv + 100 < $wb) {
+            $this->LogStateOnce('house_wallbox_inconsistent', 'warn', 'Hausverbrauch kleiner als Wallboxleistung',
+                'Zeitversatz oder Messquelle prüfen: Hausverbrauch muss die Wallbox enthalten.');
+        } else {
+            $this->ResetStateLog('house_wallbox_inconsistent');
+        }
         return $this->energySnapshot = [
             'pv'      => round($pv),
             'wallbox' => $wb,

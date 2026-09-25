@@ -472,6 +472,49 @@ $tests['intentional stop resets completed session evidence'] = function () {
     $m->plan(1,6,false);
     expect($m->attributes['ChargingPowerObserved']===false && $m->attributes['NoPowerCounter']===0,'Each restart needs fresh charging evidence');
 };
+$tests['PV start waits for phase decision before release'] = function () {
+    foreach([0,1,5] as $mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode);
+        $m->status['psm']=2; $m->properties['PVErzeugungID']=43; SetValue(43,2800.0);
+        $m->properties['StartLadeHysterese']=1; $m->properties['Phasen1Limit']=5;
+        for($i=0;$i<4;$i++) { $m->clock+=16; $m->UpdateStatus(); }
+        expect(!in_array(['frc',2],$m->commands,true),'Do not briefly release in old 3P mode');
+        $m->clock+=16; $m->UpdateStatus();
+        expect($m->attributes['PhaseTransitionState']==='stopping','Stable 1P choice starts controlled transition');
+    }
+};
+$tests['waiting car with prior release settles phase choice first'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1);
+    $m->status['car']=4; $m->status['frc']=2; $m->status['psm']=2;
+    $m->properties['PVErzeugungID']=43; SetValue(43,2800.0); $m->properties['Phasen1Limit']=5;
+    $m->UpdateStatus();
+    expect(in_array(['frc',1],$m->commands,true),'Waiting car must not remain released with unresolved phase choice');
+};
+$tests['cooldown does not start stopped car in wrong phase mode'] = function () {
+    $m=new SimulatedManager(); $m->status['psm']=1; $m->attributes['LetztePhasenUmschaltung']=990;
+    $m->plan(2,6);
+    expect(!in_array(['frc',2],$m->commands,true),'Wait for target phase instead of starting briefly during cooldown');
+};
+$tests['PV startup releases only after target phase readback'] = function () {
+    foreach([[2,1,2800],[1,2,9000]] as [$initial,$target,$surplus]) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->status['psm']=$initial;
+        $m->properties['PVErzeugungID']=43; SetValue(43,(float)$surplus);
+        $m->properties['StartLadeHysterese']=1; $m->properties['Phasen1Limit']=3; $m->properties['Phasen3Limit']=3;
+        for($i=0;$i<5;$i++) { $m->clock+=2; $m->UpdateStatus(); }
+        expect(in_array(['psm',$target],$m->commands,true),'Stable choice must command target phase while stopped');
+        expect(!in_array(['frc',2],$m->commands,true),'No release before phase readback');
+        $m->status['psm']=$target;
+        for($i=0;$i<4;$i++) { $m->clock+=2; $m->UpdateStatus(); }
+        expect(in_array(['frc',2],$m->commands,true),'Confirmed target allows charging');
+    }
+};
+$tests['running PV charge keeps phase hysteresis without immediate stop'] = function () {
+    $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->status['psm']=2;
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=2760;
+    $m->properties['PVErzeugungID']=43; SetValue(43,2800.0); $m->properties['Phasen1Limit']=5;
+    $m->UpdateStatus();
+    expect(!in_array(['frc',1],$m->commands,true),'Running charge retains hysteresis while threshold settles');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
