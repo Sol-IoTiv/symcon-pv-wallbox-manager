@@ -8,6 +8,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ### Steuerung und Fehlerbehandlung
+- Nicht bestätigte Ladefreigaben erhalten maximal drei Versuche mit mindestens 30 Sekunden Abstand und erneuter Prüfung aller Ladebedingungen. Unbestätigte Stop-/Phasenbefehle bleiben dauerhaft gesperrt; erschöpfte Freigabeversuche erfordern Reset bei bestätigtem Stillstand. Diagnose um HTTP-, Transport- und JSON-Ergebnis ergänzt; Reset meldet Erfolg oder Ablehnung.
 - Hausverbrauchsberechnung zentralisiert; bekannte alte Modulereignisse deaktiviert, Variablen und Historie erhalten. Verzögerte Hauswerte nach Wallbox-Leistungsänderungen sperren PV-Erhöhungen und überschussbedingte Phasenwechsel bis zu zwei neuen plausiblen Quellaktualisierungen; bei ausbleibender Bestätigung begrenzte Wartezeit mit Stop. Netz-/SoC-Schutz bleibt aktiv.
 - PV-Ladestart wartet bei ausstehender Phasenwahl auf deren Hysterese und bestätigten Zielmodus; kein kurzes Anladen im bisherigen Modus während der Planung oder eines Cooldowns. Diagnose für Phasenentscheidung und zeitversetzte Haus-/Wallboxmesswerte ergänzt.
 - Fehlenden Ladestart nicht mehr nach drei 0-W-Abfragen als Ladeende behandeln: Rückwechsel auf Standardmodus erst nach zuvor beobachteter Ladung und wiederholtem Wallbox-Endstatus. Wartezustand anzeigen und technische Debug-Rückmeldung ergänzen.

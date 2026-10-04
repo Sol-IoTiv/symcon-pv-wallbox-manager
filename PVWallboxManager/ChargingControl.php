@@ -49,7 +49,13 @@ trait ChargingControl
         $response = $this->simpleCurlGet('http://' . $ip . '/api/set?' . $key . '=' . $value);
         $body = is_string($response['result']) ? json_decode($response['result'], true) : null;
         $ok = (int)$response['httpcode'] === 200 && is_array($body) && ($body[$key] ?? null) === true;
-        if (!$ok) $this->LogTemplate('error', 'Wallbox-Befehl nicht bestätigt', $key . '=' . $value . ', HTTP=' . $response['httpcode']);
+        if (!$ok) {
+            $detail = $key . '=' . $value . ', HTTP=' . $response['httpcode'];
+            $detail .= ', Transport=' . substr(str_replace(["\r", "\n"], ' ', (string)($response['error'] ?? '')), 0, 200);
+            // Only log the requested result field; never dump credentials or a complete status response.
+            $detail .= ', JSON=' . json_last_error_msg() . ', Bestätigung=' . json_encode($body[$key] ?? null);
+            $this->LogTemplate('error', 'Wallbox-Befehl nicht bestätigt', $detail);
+        }
         return $ok;
     }
 
@@ -112,11 +118,15 @@ trait ChargingControl
             $status = $this->getStatusFromCharger();
             if ($status === false || !$this->chargerStopped($status)) {
                 $this->stopCharging(false);
+                $this->LogTemplate('warn', 'Fehlerreset abgelehnt', $status === false ? 'Kein gültiger Wallboxstatus' : 'Stillstand nicht bestätigt');
                 return false;
             }
             $this->clearTransition();
             $this->WriteAttributeString('PhaseTransitionError', '');
+            $this->WriteAttributeInteger('ReleaseFailures', 0);
+            $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
             $this->ClearNoChargeReason();
+            $this->LogTemplate('ok', 'Fehlersperre zurückgesetzt', 'Stillstand bestätigt; Ladeplan wird im nächsten Regelzyklus geprüft');
             return true;
         });
     }
@@ -137,6 +147,10 @@ trait ChargingControl
             return false;
         }
         if ($data['err'] !== 0) return $this->phaseFault('Wallbox meldet Fehler ' . $data['err']);
+        if ($this->ReadAttributeInteger('ReleaseFailures') >= 3) {
+            $this->SetNoChargeReason('Ladefreigabe nach 3 fehlgeschlagenen Versuchen gesperrt – Fehlerreset erforderlich');
+            return $this->stopCharging(false);
+        }
         if ($this->vehicleSocInvalid()) { $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig'); return $this->stopCharging(); }
         if ($this->targetSocReached()) { $this->SetNoChargeReason('Ziel-SoC erreicht'); return $this->stopCharging(); }
         $phases = $this->phaseModeToPhaseCount($phaseMode);
@@ -206,6 +220,17 @@ trait ChargingControl
 
     private function startAtCurrentPhase(array $data, int $ampere): bool
     {
+        if ($this->ReadAttributeInteger('ReleaseFailures') > 0) {
+            // Fresh readback can confirm a command whose HTTP acknowledgement was lost.
+            if ($data['frc'] === 2 && $data['alw']) {
+                $this->WriteAttributeInteger('ReleaseFailures', 0);
+                $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
+                $this->LogTemplate('ok', 'Ladefreigabe durch Rückmeldung bestätigt');
+            } elseif ($this->now() < $this->ReadAttributeInteger('ReleaseRetryAfter')) {
+                $this->SetNoChargeReason('Ladefreigabe nicht bestätigt – Wiederholung frühestens nach 30 Sekunden');
+                return false;
+            }
+        }
         $ampere = $this->clampAmpere($ampere);
         if ($ampere < 6 || !$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested')) return $this->stopCharging();
         if ($data['amp'] !== $ampere) {
@@ -219,7 +244,20 @@ trait ChargingControl
             // Check again immediately before release (deactivation may have changed the property).
             if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || $this->vehicleSocInvalid() || $this->targetSocReached()) return $this->stopCharging();
             $this->WriteAttributeBoolean('ChargingPowerObserved', false);
-            if (!$this->sendChargerCommand('frc', 2)) return $this->phaseFault('Ladefreigabe abgelehnt');
+            if (!$this->sendChargerCommand('frc', 2)) {
+                $failures = $this->ReadAttributeInteger('ReleaseFailures') + 1;
+                $this->WriteAttributeInteger('ReleaseFailures', $failures);
+                $this->WriteAttributeInteger('ReleaseRetryAfter', $this->now() + 30);
+                $this->SetNoChargeReason($failures >= 3
+                    ? 'Ladefreigabe nach 3 fehlgeschlagenen Versuchen gesperrt – Fehlerreset erforderlich'
+                    : 'Ladefreigabe nicht bestätigt – Wiederholung frühestens nach 30 Sekunden');
+                $this->LogTemplate('warn', 'Ladefreigabe nicht bestätigt', 'Versuch ' . $failures . '/3');
+                // Stop is a separate safety command; failed stop acknowledgement still latches a fault.
+                if (!$this->sendChargerCommand('frc', 1)) return $this->phaseFault('Ladestop nach Freigabefehler nicht bestätigt');
+                return false;
+            }
+            $this->WriteAttributeInteger('ReleaseFailures', 0);
+            $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
             $this->WriteAttributeInteger('LastManualStartTimestamp', $this->now());
         }
         $this->WriteAttributeBoolean('PhaseResumePending', false);

@@ -6,6 +6,7 @@ class SimulatedManager extends PVWallboxManager {
     public $commands = [];
     public $requests = 0;
     public $reject = null;
+    public $rejectEnable = false;
     public $status;
     public $offline = false;
     public $prices = null;
@@ -24,7 +25,7 @@ class SimulatedManager extends PVWallboxManager {
             parse_str(parse_url($url,PHP_URL_QUERY),$args);
             $key=key($args); $this->commands[]=[$key,(int)$args[$key]];
             if ($key==='amp' && $this->stopOnAmp) $this->attributes['ControlStopRequested']=true;
-            return ['result'=>json_encode([$key=>$this->reject===$key ? 'rejected' : true]),'httpcode'=>200,'error'=>''];
+            return ['result'=>json_encode([$key=>($this->reject===$key || ($this->rejectEnable && $key==='frc' && (int)$args[$key]===2)) ? 'rejected' : true]),'httpcode'=>200,'error'=>''];
         }
         return ['result'=>json_encode($this->prices),'httpcode'=>200,'error'=>''];
     }
@@ -577,6 +578,44 @@ $tests['house wait allows phase confirmation but never releases before fresh mea
     for($i=0;$i<3;$i++) { $m->clock+=2; invoke($m,'controlled',function()use($m){invoke($m,'holdForHouseMeasurement',$m->status);}); }
     expect($m->attributes['PhaseTransitionState']==='idle','Readback completes transition');
     expect(!in_array(['frc',2],$m->commands,true),'House wait still prevents resume');
+};
+$tests['release retry is delayed and bounded independently of phase faults'] = function () {
+    $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='idle','Release failure must not become a phase fault');
+    expect($m->commands===[['frc',2],['frc',1]],'Unconfirmed release requests stop');
+    $m->plan(1,6); expect(count($m->commands)===2,'No immediate retry');
+    for ($i=0;$i<2;$i++) { $m->clock+=30; $m->plan(1,6); }
+    expect($m->attributes['ReleaseFailures']===3,'Three attempts exhaust retry budget');
+    $m->clock+=60; $m->plan(1,6);
+    expect(count($m->commands)===6,'Exhausted retries cannot enable again');
+    expect($m->ResetPhaseFault(),'Confirmed standstill permits reset');
+    $m->rejectEnable=false; $m->plan(1,6);
+    expect(end($m->commands)===['frc',2],'Reset allows a newly checked plan');
+};
+$tests['release retry rechecks target SOC and deactivation'] = function () {
+    foreach (['soc','inactive'] as $condition) {
+        $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
+        $m->rejectEnable=false; $m->clock+=30;
+        if ($condition==='inactive') $m->properties['ModulAktiv']=false;
+        else { $m->properties['CarSOCID']=91; $m->properties['CarTargetSOCID']=92; SetValue(91,100); SetValue(92,100); }
+        $m->plan(1,6);
+        expect(count(array_filter($m->commands,function($c){return $c===['frc',2];}))===1,'Changed conditions must prevent retry');
+    }
+};
+$tests['unconfirmed stop after release failure remains a phase fault'] = function () {
+    $m=new SimulatedManager(); $m->reject='frc'; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Stop rejection still requires manual reset');
+};
+$tests['transient release failure recovers without a manual reset'] = function () {
+    $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
+    $m->rejectEnable=false; $m->clock+=30; $m->plan(1,6);
+    expect(end($m->commands)===['frc',2],'Valid fresh plan retries release');
+    expect($m->attributes['ReleaseFailures']===0,'Acknowledged release clears retry budget');
+};
+$tests['release retry respects a newly exhausted grid budget'] = function () {
+    $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
+    $m->rejectEnable=false; $m->clock+=30; $m->grid(3000,2000); $m->plan(1,6);
+    expect(count($m->commands)===2,'No further release when grid budget is exhausted');
 };
 $failures=0;
 foreach ($tests as $name=>$test) {

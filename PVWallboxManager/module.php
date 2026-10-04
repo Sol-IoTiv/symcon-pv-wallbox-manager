@@ -67,6 +67,8 @@ class PVWallboxManager extends IPSModule
             'PhaseTransitionSampleTime'     => 0,
             'PhaseTransitionError'          => '',
             'PhaseResumePending'            => false,
+            'ReleaseFailures'               => 0,
+            'ReleaseRetryAfter'             => 0,
             'ControlStopRequested'          => false,
             'WallboxLimits'                 => '{}',
             'HouseSpikeCount'               => 0,

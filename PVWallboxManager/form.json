@@ -242,7 +242,7 @@
         },
         {
           "type": "Button",
-          "caption": "Phasenfehler nach Stillstand zurücksetzen",
+          "caption": "Phasen-/Ladefreigabefehler nach Stillstand zurücksetzen",
           "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
         }
       ]
