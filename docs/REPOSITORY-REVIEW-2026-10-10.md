@@ -20,12 +20,12 @@ Geprüfter Codestand: 5d9755383d70285ffc242b3d47aba17e8fed055f (04.10.2026), Arb
 | Issue-Vorlagen fragen nach nicht implementierter Zielzeitladung | Durch Versions-/Branchangabe ersetzt; Buglabel bereinigt |
 | Phasendokumentation erklärt neue Freigabeversuche nicht | Drei Versuche und 30-s-Abstand ergänzt; Stop-/Phasenfehler getrennt erklärt |
 | Unklare Pflegeverantwortung für Ideen und Anleitung | CONTRIBUTING.md beschreibt Discussions → Issue → PR → Changelog |
-| Entwicklungsbranch mit einmaligem Versionsnamen | dev als dauerhafter Branch; alter Remote-Branch zunächst für Draft-PR #22 erhalten |
+| Entwicklungsbranch mit einmaligem Versionsnamen | dev als dauerhafter Branch; alter Remote-Branch nach Abschluss von Draft-PR #22 gelöscht |
 
 ## Remote-Struktur und nächste Entscheidungen
 
 - main ist Standardbranch, beta-staging liegt auf e9337aa, bisheriger Stabilisationsbranch auf 5d97553. main und beta-staging sind ältere Entwicklungsstände. Die neue README erscheint deshalb zunächst auf dev; vor einer Übernahme nach main muss der gesamte Codeunterschied geprüft werden.
-- Draft-PR #22 zielt von codex/1.4.10b-stabilization nach beta-staging. Alten Remote-Branch erst nach Abschluss oder bewusster Ablösung dieses PR entfernen. Ein lokaler Branchwechsel ersetzt dessen Head nicht.
+- Nachtrag 10.10.2026: Draft-PR #22 ohne Merge geschlossen. codex/1.4.10b-stabilization auf ausdrücklichen Nutzerwunsch gelöscht; vorher per merge-base geprüft, dass sämtliche Commits in origin/dev enthalten sind. main und beta-staging unverändert.
 - Zuletzt veröffentlichtes Release laut Releaseliste: 1.4.7b vom 19.05.2026. 1.4.9b ist ein vorhandener Code-/Changelogstand, kein hier nachgewiesenes Release. Das b-Release 1.4.7b ist als regulär statt Prerelease markiert. Zukünftige Beta/RC-Releases konsistent kennzeichnen; historische Tags unverändert lassen.
 - GitHub-Kurzbeschreibung „Modularer Energie-Manager für PV, Speicher, Wallbox etc.“ ist zu breit. GitHub-Kurzbeschreibung aktualisiert auf: „IP-Symcon-Modul für go-eCharger: PV-Überschussladen, PV-Anteil, manuelles und hybrides Laden mit Netzbezugsbegrenzung.“
 - Discussions sind aktiviert. Bestehende Inhalte und Kategorien konnten in diesem Durchlauf nicht zuverlässig gelesen werden; keine Übertragung oder Veröffentlichung einzelner Ideen behauptet. FEATURES.md bleibt bis zum verlinkten Transfer erhalten.
