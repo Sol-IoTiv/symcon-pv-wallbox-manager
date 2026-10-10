@@ -7,7 +7,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
-### Steuerung und Fehlerbehandlung
+### 🐛 Steuerung und Fehlerbehandlung
 - Nicht bestätigte Ladefreigaben erhalten maximal drei Versuche mit mindestens 30 Sekunden Abstand und erneuter Prüfung aller Ladebedingungen. Unbestätigte Stop-/Phasenbefehle bleiben dauerhaft gesperrt; erschöpfte Freigabeversuche erfordern Reset bei bestätigtem Stillstand. Diagnose um HTTP-, Transport- und JSON-Ergebnis ergänzt; Reset meldet Erfolg oder Ablehnung.
 - Hausverbrauchsberechnung zentralisiert; bekannte alte Modulereignisse deaktiviert, Variablen und Historie erhalten. Verzögerte Hauswerte nach Wallbox-Leistungsänderungen sperren PV-Erhöhungen und überschussbedingte Phasenwechsel bis zu zwei neuen plausiblen Quellaktualisierungen; bei ausbleibender Bestätigung begrenzte Wartezeit mit Stop. Netz-/SoC-Schutz bleibt aktiv.
 - PV-Ladestart wartet bei ausstehender Phasenwahl auf deren Hysterese und bestätigten Zielmodus; kein kurzes Anladen im bisherigen Modus während der Planung oder eines Cooldowns. Diagnose für Phasenentscheidung und zeitversetzte Haus-/Wallboxmesswerte ergänzt.
@@ -26,7 +26,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Deaktiviertes Modul kann über Bedienaktionen keine Ladung wieder starten.
 - Nicht vorhandenen LogDebug-Aufruf ersetzt; widersprüchliche Min-/Maximalströme sperren die Freigabe.
 
-### Berechnung und Anzeige
+### 🔄 Berechnung und Anzeige
 - Automatische Erkennung der genutzten Fahrzeugphasen aus drei getrennten Messungen. Keine manuelle Fahrzeugauswahl; nach Unterbrechungen erneute Erkennung, bis dahin konservative Berechnung mit drei Phasen.
 - Schieberegler „Maximale Netzbelastung“ auf 0–22.000 W in 100-W-Schritten begrenzt.
 - Irreführende Netzlimit-Startwerte aus dem Formular entfernt; Bedienhinweis verweist auf die tatsächlich wirksamen Instanzvariablen. Vorhandene Grenzwerte bleiben erhalten.
@@ -39,7 +39,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Leere/fehlerhafte Strompreisantworten abgesichert, aktuelles Preisintervall ausgewählt und Gültigkeitsanzeige ergänzt.
 - InitialCheckInterval=0 deaktiviert die Abfrage ohne Fahrzeug; manuelle Phasenanzeige korrigiert.
 
-### Migration und Qualität
+### 📝 Migration und Qualität
 - Dokumentation auf den Entwicklungsbranch dev ausgerichtet; PV-Anteil mit automatischer 100-%-Anhebung erklärt, offene Ideen von erledigten Funktionen getrennt und Pflegeablauf für Discussions, Issues und Wiki dokumentiert. Issue-Vorlagen an die tatsächlich verfügbaren Modi angepasst.
 - Forenfall zu PV-Anteil durch Tests für Hausakku-SoC-Übergang und anteilige Stoppschwelle ergänzt; Anteilssemantik zunächst dokumentiert und anschließend um die automatische 100-%-Anhebung ab Hausakku-Ziel ergänzt.
 - Bestehende Variablen und Historie bleiben erhalten; öffentliche Steuerfunktionen behalten ihre Namen, umgehen aber die gemeinsame Regelung nicht mehr. Siehe docs/MIGRATION-1.4.10b.md.
@@ -48,26 +48,26 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Historische Changelog-Einträge unverändert erhalten.
 
 ## [1.4.9b] - 2026-06-26
-### 🛠️ Verbesserungen
+### ⚡ Verbesserungen
 - Hybrid-Laden nutzt nun die normale Phasenumschaltung mit Hysterese und Cooldown.
 - Phasenwechsel erfolgen im Hybrid-Modus deutlich ruhiger und nachvollziehbarer.
 - Hybrid-Endladung kann optional mit Verzögerung aktiviert werden.
 
-### 🚀 Neu
+### ✨ Neu
 - Konfigurierbare Hybrid-Endladung (deaktiviert, fix 1-phasig oder fix 3-phasig).
 - Frei einstellbarer Ladestrom für die Hybrid-Endladung.
 - Einstellbare Verzögerung bis zur Aktivierung der Hybrid-Endladung.
 - Automatischer Wechsel in die Endladung bei dauerhaft zu geringem PV-Überschuss.
 - Automatische Rückkehr zur normalen Hybrid-Regelung bei ausreichendem PV-Überschuss.
 
-### 🔧 Intern
+### 🧹 Intern
 - Hybrid-Logik erweitert und überarbeitet.
 - Zeitgesteuerte Aktivierung der Hybrid-Endladung integriert.
 - Erweiterte Zustands- und Timerverwaltung für Hybrid-Laden.
 
 
 ## [1.4.7b] - 2026-05-18
-### 🚀 Neu
+### ✨ Neu
 - HTML-Status um dynamische Ladehinweise erweitert
 - Anzeige von Ladeblockierungsgründen direkt im WebFront
 - Neue Hinweise für:
@@ -82,13 +82,13 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - Wallbox nicht erreichbar
   - Kein Fahrzeug verbunden
 
-### 🛠️ Verbesserungen
+### ⚡ Verbesserungen
 - Ladehinweise werden nur bei verbundenem Fahrzeug angezeigt
 - HTML-Status optisch überarbeitet und Ladehinweise hervorgehoben
 - Doppelanzeigen bei „Kein Fahrzeug verbunden“ reduziert
 - Verbesserte Transparenz der Ladeentscheidungen und Regelzustände
 
-### 🛠️ Fixes
+### 🐛 Fixes
 - Fehlerstatus „Wallbox nicht erreichbar“ wird nach erfolgreicher HTTP-Kommunikation automatisch zurückgesetzt
 - Stabilisierung der Phasenumschaltung (1P/3P)
 - Saubere Trennung zwischen Wallbox-Sollmodus und tatsächlich genutzten Fahrzeugphasen
@@ -96,24 +96,24 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Verbesserte Rückfall-Logik nach Phasenwechsel
 
 ## [1.4.6b] - 2026-05-13
-### 🚀 Neu
+### ✨ Neu
 - Begrenzung der maximalen Netzbelastung (Peak-Shaving / Lastbegrenzung)
   - Eigene Smartmeter-/Netzleistungsvariable für den Hausanschluss integriert
   - Automatische Reduktion des Ladestroms bei überschrittenem Netzbezug
   - Globale Begrenzung unabhängig vom Lademodus
   - Erweiterte Debug-Logs bei aktiver Netzbegrenzung
 
-### 🧠 Konfiguration
+### 🔄 Konfiguration
 - Neuer Bereich „Netzanschluss / Netzbezug“
   - Unterstützung für Smartmeter-/Hausanschluss-Leistungswerte
   - Unterstützung für W/kW
   - `0 W` = Funktion deaktiviert
 
-### 🔧 Intern
+### 🧹 Intern
 - Neue Hilfsfunktion `applyMaxGridLoadLimit()` integriert
 - Ladefreigabe-Logik um Netzlimit-Prüfung erweitert
 
-### 🛠️ Fixes
+### 🐛 Fixes
 - Rückschaltung von 3-phasig auf 1-phasig entschärft
   - kurze PV-Einbrüche führen nicht mehr sofort zur Phasenumschaltung
   - 3-phasiges Laden wird bei wechselhaftem Wetter länger gehalten
@@ -125,7 +125,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - robusteres Verhalten nach Ladefreigabe und Phasenwechsel
 
 ## [1.4.5b] - 2026-04-27
-### 🛠️ Fixes
+### 🐛 Fixes
 - Verzögerter Ladestart nach Modul-Update behoben
   - Initialer `UpdateStatus('startup')` Run beim Modulstart hinzugefügt
   - Interne Zähler und Statuswerte werden sauber zurückgesetzt
@@ -150,23 +150,23 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - Speicherladung wird nun zuverlässig vom PV-Überschuss abgezogen
   - Laden erfolgt nur noch bei echtem PV-Überschuss
   
-### 🚀 Neu
+### ✨ Neu
 - Schnellstart für `PVonly` und `PV2Car`
   - sofortiger Ladebeginn bei ausreichendem Überschuss
   - Start-Hysterese wird beim ersten Start übersprungen
   - automatische initiale Phasenwahl
 
-### 🛠️ Änderungen
+### 🔄 Änderungen
 - `PV2Car`: direkter Start ohne Ramp-Up → schnellere Reaktion auf PV-Überschuss
 - `PVonly` startet jetzt erst, wenn der konfigurierte Hausakku-SoC erreicht wurde
   - Sperre greift direkt vor der PV-Überschussberechnung und verhindert ungewollte Ladestarts
 
-### ⚙️ Optimierung
+### ⚡ Optimierung
 - API-Schreibzugriffe reduziert
   - Ladestrom nur bei Änderung
   - Tracking über `LastSentChargingCurrent`
 
-### 🧾 Logging
+### 📝 Logging
 - Einheitliches Format (`Kurztext | Detail`)
 - Neue Log-Typen: `start`, `stop`
 - Weniger Log-Spam durch konsequentes `debug`
@@ -180,7 +180,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - `ResetLock` war im Modul nicht mehr angebunden
   - Modulsteuerung im Formular vereinfacht
 
-### 🎨 UI
+### 🔄 UI
 - Status-Info übersichtlicher strukturiert (Icons, Gruppierung, kompakter)
 
 ## [1.4.4b] - 2026-04-24
@@ -191,10 +191,10 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Magic Numbers in zentralen Logikbereichen durch Konstanten ersetzt
 - Mapping-Funktionen für Lademodi auf Konstanten umgestellt
 
-### 🛠️ Fixes
+### 🐛 Fixes
 - Spike-Filter verbessert: starke Lastabfälle (z. B. nach Abschalten der Wärmepumpe) werden nicht mehr blockiert → verhindert „festhängenden“ Hausverbrauch und ermöglicht korrektes Wiederanlaufen der PV-Ladung
 
-### 🔧 Wartbarkeit
+### 🧹 Wartbarkeit
 - Lesbarkeit und Orientierung im Code verbessert
 - Grundlage für weitere Code-Verschlankung geschaffen
 - Keine funktionalen Änderungen an der Lade- oder Phasenlogik
@@ -203,11 +203,11 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 ### ✨ Neu
 - Konfigurierbarer Lademodus nach Fahrzeug-Abstecken (`ModeAfterUnplug`)
 
-### 🔧 Verbesserung
+### ⚡ Verbesserung
 - Einheitliches Verhalten bei Fahrzeug-Abstecken und Ladeende
 - Lademodus wird nur noch bei tatsächlichem Statuswechsel geändert (kein zyklisches Zurücksetzen mehr)
 
-### 🧠 Logik
+### 🔄 Logik
 - Zentrale Fallback-Logik für Lademodus eingeführt (`ApplyModeAfterDisconnectOrChargeEnd`)
 - Ladeende verwendet nun die gleiche Logik wie Fahrzeug-Abstecken
 
@@ -217,14 +217,14 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 
 ## [1.4.2b] - 2026-04-21
-### Update
+### 🔄 Update
 - Clamp charging current to wallbox limits (16/32A)
 
-### 🛠️ Fixes
+### 🐛 Fixes
 - clampAmpere(): verhindert, dass MinAmpere über dem effektiven Wallbox-Maximalstrom liegt
 
 ## [1.4.1b] - 2026-04-20
-### Refactor
+### 🧹 Refactor
 - Legacy-Code und veraltete Hilfsfunktionen entfernt (`FahrzeugVerbunden`, `GetFrcText`, ungenutzte Methoden)
 - Ladelogik überarbeitet und Lademodi vereinheitlicht (`pvonly`, `pv2car`, `manuell`)
 - Saubere Trennung von Zustandsprüfung und Aktionen:
@@ -234,7 +234,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Timer-Handling und Statusfluss vereinfacht und konsolidiert
 - Kommentare bereinigt und Code insgesamt lesbarer gemacht
 
-### Fixes
+### 🐛 Fixes
 - Börsenpreis-Vorschau korrigiert → aktuelle Stunde wird jetzt korrekt angezeigt
 - Fixed Phasenumschaltung (`Phasenmodus`) korrigiert (thx @brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/b4c744119a09afd9a6d508878c35d885efda791c#diff-30c80afda9db4a50bf1f908b20eca6a8c7242c6db1b302cd1fcb9b8839035ca4L76
 - Verwendung von `HausakkuSOCID` in der Überschussberechnung korrigiert (thx @brownson) https://github.com/brownson/symcon-pv-wallbox-manager/commit/602f479dc5597e4eef5def64677816b5ce254c29
@@ -249,17 +249,17 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - Ramp-Rate-Limiting: Die Änderung des Lade­stroms pro Zyklus wird auf einen konfigurierbaren Maximalwert (MaxRampDeltaAmp derzeit 2A fix) begrenzt, sodass der Strom sanft von Minimum bis Maximum ansteigt und abrupte Sprünge vermieden werden.
 
 ## [1.3b] - 2025-07-29
-### Hinzugefügt
+### ✨ Hinzugefügt
 - SOC-Werte (IST/ZIEL) werden jetzt in allen Lademodi berücksichtigt  
 - Manuelles Vollladen startet sofort mit konfigurierter Stromstärke und Phasen (Hysterese nicht angewendet)
 
-### Geändert
+### 🔄 Geändert
 - Status-Anzeige komplett neu gestaltet  
 - „Warte auf Fahrzeug“ umbenannt in „Fahrzeug verbunden / Bereit zum Laden“  
 - Modul-deaktiviert-Zustand wird jetzt angezeigt  
 - SOC IST/ZIEL vom Fahrzeug in der Status-Info angezeigt
 
-### Behoben
+### 🐛 Behoben
 - Anzeige- und Berechnungsfehler in der Status-Info korrigiert  
 - Doppelte Berechnungen und redundante Logs entfernt  
 - API-Befehle werden nur gesendet, wenn sich ein Wert tatsächlich ändert  
@@ -267,7 +267,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 - PV-Überschuss < 250 W wird als 0 W angezeigt
 - NoPowerCounter nach 3 aufeinanderfolgenden fehlenden Leistungswerten (unter 100 W) wir Ladeende angenommen
 
-### Bereinigt
+### 🧹 Bereinigt
 - Modulstruktur bereinigt und neu organisiert
 
 ## [1.2b] - 2025-07-28
@@ -293,7 +293,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ## [1.0b] – 2025-07-13
 
-### 🚀 Wichtige Neuerungen
+### ✨ Wichtige Neuerungen
 
 - **KEIN IPSCoyote/GO-eCharger Modul mehr erforderlich!**
   - Direkte, native Anbindung an die GO-eCharger API (V3 & V4).
@@ -322,9 +322,9 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ---
 
-## 🐞 Bugfix und Update seit Version 0.9b
+## 🐛 Bugfix und Update seit Version 0.9b
 
-- **Update:**
+- 🔄 **Update:**
   - alte Variablen „Zielzeitladung PV-optimiert“ und „Strompreis-Modus aktiv“ löschen !!!
   - Zielzeitladung komplett überarbeitet:
     - Anbindung der Awattar-API (AT/DE) zur automatischen Abfrage der aktuellen und zukünftigen Marktstrompreise.
@@ -339,7 +339,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - Beim Modewechsel zu Fahrzeug Verbunden soll auch initial das Modul durchlaufen
   - KEINE Berechnung PV-Überschuss bei getrenntem Fahrzeug
 
-- **Bugfix:**
+- 🐛 **Bugfix:**
   - StrompreisModus Boolean wurde nicht angelegt
   - Der aktuelle Lademodus („standard“, „manuell“, „pv2car“ oder „zielzeit“) wird nun als Variable gespeichert und bei jedem Moduswechsel korrekt gesetzt bzw. zurückgesetzt und berechnet.
   - Die Property für den PV2Car-Anteil (PVAnteilAuto) wird nun durchgehend verwendet, Namenskonflikte behoben.
@@ -354,7 +354,7 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
 
 ## [0.9] – 2025-06-30
 
-### 🚀 Neue Funktionen & Verbesserungen
+### ✨ Neue Funktionen & Verbesserungen
 
 - **PV-Batterieentladung:**
   -  Über die Instanzkonfiguration steuerbar (Boolean, Standard: aktiviert).
@@ -384,55 +384,55 @@ Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
   - Vorbereitung zur Integration mit dem Symcon-Strompreis-Modul ([Awattar, Tibber, …](https://github.com/symcon/Strompreis)) für automatisierte, zeit- und preisbasierte Ladeplanung (z.B. Laden bei günstigen Börsenstrompreisen).  
   - Interne Platzhalter und Properties für die kommende Preislogik angelegt.
 
-- **Logging & Debug:**
+- 📝 **Logging & Debug:**
   - Debug-Logging in der Instanzkonfig Modulsteuerung eingebaut
   - Modul aktivieren/deaktivieren in der Instanzkonfig Modulsteuerung eingebaut
   - PV-Überschussberechnung mit detailreichem Logging (PV, Hausverbrauch, Batterie, Netz, Ladeleistung, Puffer).
   - Hysterese-Zustände, Phasenumschaltung und Ladestatus werden jetzt nachvollziehbar mitprotokolliert.
   - Reduktion unnötiger/wiederholter Logeinträge.
 
-- **Diverse Bugfixes & Cleanups:**  
+- 🐛 **Diverse Bugfixes & Cleanups:**  
   - Optimierte Fehlerbehandlung, robusteres Status- und Hysterese-Handling.
   - Properties, die nicht mehr benötigt werden entfernt.
 
 ---
 
-**Hinweis:**  
+⚠️ **Hinweis:**  
 Nach dem Update sollten die Modul-Properties (insbesondere IDs und Schwellenwerte) sowie die Wallbox-Konfiguration überprüft werden!
 
 ---
 
 ## [0.8] – 2025-06-25
 
-🛠️ **Großes Refactoring & Aufräumen**
+🧹 **Großes Refactoring & Aufräumen**
 - Entfernen von alten und doppelten Funktionen ("Altlasten"), komplette Konsolidierung des Codes.
 - Klare Trennung und Vereinfachung der Hauptfunktionen: PV-Überschussberechnung, Modus-Weiche, Zielzeitladung, Phasenumschaltung, Button-Logik, etc.
 - Code vollständig modularisiert und für künftige Feature-Erweiterungen vorbereitet.
 
-✨ **Verbesserte Logik & UX**
+⚡ **Verbesserte Logik & UX**
 - Buttons im WebFront ("Manuell Vollladen", "PV2Car", "Zielzeitladung PV-optimiert") schließen sich jetzt zuverlässig gegenseitig aus.
 - Reset-Logik der Buttons bei Trennung des Fahrzeugs optimiert.
 - Buttons funktionieren nur, wenn ein Fahrzeug angeschlossen ist **oder** die Option "Nur laden, wenn Fahrzeug verbunden" deaktiviert ist (sichtbarer Hinweis empfohlen).
 - Meldungen zu allen Status- und Umschaltaktionen verbessert.
 
-📈 **PV-Überschuss-Formel überarbeitet**
+🔄 **PV-Überschuss-Formel überarbeitet**
 - Formel im Modul und in der README vereinheitlicht:  
   `PV-Überschuss = PV-Erzeugung – Hausverbrauch – Batterieladung`
 - Logging und Debug-Ausgaben bei Anwendung des dynamischen Puffers deutlich verbessert (inkl. Puffer-Faktor und berechnetem Wert).
 
-🐞 **Bugfixes**
+🐛 **Bugfixes**
 - Fehlerbehebung: "Modus 1/2 springt hin und her", wenn kein Fahrzeug angeschlossen ist.
 - Diverse kleinere Korrekturen an Statusmeldungen und der Steuerlogik.
 
 ---
 
-**Hinweis:**  
+⚠️ **Hinweis:**  
 Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable-IDs) und die Werte im WebFront prüfen!
 
 ---
 
 ## [0.7] – 2025-06-24
-### 🚀 Highlights
+### ✨ Highlights
 - Zielzeitladung (PV-optimiert) ist jetzt verfügbar (Beta): Tagsüber PV-Überschuss, 4h vor Zielzeit Umschalten auf Vollladung.
 - Vollständige Überarbeitung der PV-Überschussberechnung:  
   - Es werden keine negativen Werte mehr als PV-Überschuss geschrieben.
@@ -449,9 +449,9 @@ Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable
 - Unterstützung für PV2Car: Prozentsatz des Überschusses als Ladeleistung konfigurierbar.
 - Automatische Deaktivierung aller Modi, wenn Fahrzeug getrennt.
 
-### 🛠️ Fixes & interne Änderungen
-- **Bugfix:** Negative Überschusswerte werden nicht mehr als Ladeleistung verwendet.
-- **Bugfix:** PV-Überschuss-Variable zeigt immer >= 0 W.
+### 🐛 Fixes & interne Änderungen
+- 🐛 **Bugfix:** Negative Überschusswerte werden nicht mehr als Ladeleistung verwendet.
+- 🐛 **Bugfix:** PV-Überschuss-Variable zeigt immer >= 0 W.
 - Fehlerhafte/unnötige Properties entfernt (z. B. MinAktivierungsWatt).
 - PV-Überschuss wird jetzt ausschließlich über den aktuellen Betriebsmodus berechnet (keine doppelten Berechnungen).
 - Modul-URL und Doku-Links auf `github.com/Sol-IoTiv` aktualisiert.
@@ -462,7 +462,7 @@ Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable
 ---
 
 ## [0.6] – 2025-06-18
-### 🚗 Zielzeitladung (Beta)
+### ✨ Zielzeitladung (Beta)
 - Einführung Zielzeitladung (SoC-basiert, Vorlaufzeit 4 h, nur PV oder mit Netz).
 - Fahrzeug-SOC-Integration.
 - Archiv-Variablen und Zielzeit-Vergleich.
@@ -471,7 +471,7 @@ Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable
 ---
 
 ## [0.5] – 2025-06-14
-### 🧠 Fahrzeugdaten, Modus-Buttons & Logging
+### ✨ Fahrzeugdaten, Modus-Buttons & Logging
 - SOC-basierte Ladeentscheidung (aktiver vs. Ziel-SoC).
 - Buttons: Manuell, PV2Car, Zielzeitladung – gegenseitig exklusiv, mit Modus-Statusanzeige.
 - Erweiterung Logging (Phasenumschaltung, Lademodus, SoC).
@@ -480,7 +480,7 @@ Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable
 ---
 
 ## [0.4] – 2025-06-10
-### 🔁 Phasenumschaltung & Pufferlogik
+### ✨ Phasenumschaltung & Pufferlogik
 - Dynamische Phasenumschaltung (Hysterese 3x unter/über Schwelle).
 - Neuer „Dynamischer Puffer“ für stabilere Ladeleistungsregelung.
 - Neue Properties für Phasenschwellen und Limit.
@@ -489,7 +489,7 @@ Nach Update bitte einmal alle Modul-Properties kontrollieren (vor allem Variable
 ---
 
 ## [0.3] – 2025-06-07
-### 🏁 Start/Stop Schwellen, Logging
+### ✨ Start/Stop Schwellen, Logging
 - Separate Properties für Start/Stopp-Leistung (Watt).
 - Überschussberechnung mit Wallbox-Eigenverbrauch.
 - Erweiterte Logik für Batterie (nur positive Werte).
