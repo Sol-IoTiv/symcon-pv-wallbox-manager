@@ -2,7 +2,7 @@
 name: "\U0001F41E Bug report"
 about: Melde einen Fehler im PVWallboxManager
 title: "[BUG]"
-labels: bug, enhancement
+labels: bug
 assignees: ''
 
 ---
@@ -30,10 +30,10 @@ Was passiert stattdessen?
 ---
 
 ## ⚙️ Umgebung
-- PVWallboxManager Version:  
-- IP-Symcon Version:  
-- Wallbox (z. B. go-e):  
-- PV-Anlage / Batterie vorhanden:  
+- PVWallboxManager Version:
+- IP-Symcon Version:
+- Wallboxmodell und Firmware:
+- PV-Anlage / Batterie vorhanden:
 
 ---
 
