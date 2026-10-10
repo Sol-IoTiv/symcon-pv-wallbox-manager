@@ -1,5 +1,7 @@
 name: PHP regression
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   regression:
     runs-on: ubuntu-latest
@@ -9,7 +11,18 @@ jobs:
     container: php:${{ matrix.php }}-cli
     steps:
       - uses: actions/checkout@v4
-      - run: php -l PVWallboxManager/module.php && php -l PVWallboxManager/ChargingControl.php
-      - run: php tests/regression.php
-      - run: php tests/charging.php
-      - run: php tests/metadata.php
+      - name: PHP syntax
+        run: |
+          php -l PVWallboxManager/module.php
+          if [ -f PVWallboxManager/ChargingControl.php ]; then
+            php -l PVWallboxManager/ChargingControl.php
+          fi
+      - name: Regression and metadata
+        run: |
+          if [ -d tests ]; then
+            php tests/regression.php
+            php tests/charging.php
+            php tests/metadata.php
+          else
+            echo "Historical branch baseline: regression suite not yet introduced; PHP syntax checked only."
+          fi

@@ -42,3 +42,12 @@ Kategorien Ideen, Hilfe, Setups und Ankündigungen. Offene Themen aus FEATURES.m
 ## Festgelegter Freigabeweg
 
 dev dient Entwicklung und Tests, beta-staging der Vorbereitung der Beta-Veröffentlichung im Symcon Store und main den später freigegebenen Produktionsständen. Noch keine Stable-Freigabe. README, CONTRIBUTING und RELEASING beschreiben jetzt denselben Ablauf. Store-Konto-Konfiguration nicht zugänglich und nicht geändert; keine neue Store-Einreichung und keine Branchzusammenführung durchgeführt.
+
+## Abschluss der Repository-Bereinigung
+
+- main-README durch einen klar gekennzeichneten Einstieg ersetzt; keine Stable-Freigabe und keine Übernahme des Entwicklungscodes. GitHub-Themen gesetzt.
+- Discussion-Kategorien Ideen, Hilfe, Setups und Ankündigungen eingerichtet. Alle 13 offenen Ideen aus FEATURES.md sind als Discussions #23–#35 übertragen; konkreter Wiederanlauf-Test als Issue #36. Der angeheftete Einstieg #20 wurde aktualisiert. FEATURES.md ist nur noch ein Verweis; erledigte Discussions werden geschlossen und aus der offenen Ansicht ausgeblendet, nicht gelöscht.
+- Wiki erstmals initialisiert und als Navigation zu README/docs eingerichtet. Keine zweite Betriebsanleitung gepflegt.
+- main und beta-staging durch verpflichtende PRs, PHP-8.2/8.3-CI, aktuelle PR-Basis und aufgelöste Review-Kommentare geschützt; auch für Administratoren. Force-Push und Branchlöschung gesperrt. Historische Branchstände prüfen mangels Testsuite ausdrücklich nur Syntax; dev führt alle Regressionstests aus.
+- Öffentliche Issue-Einstiege richten Fragen, Setups und offene Wünsche an Discussions. PR #37 nach erfolgreicher CI nach main übernommen; ausschließlich Vorlagen geändert.
+- Symcon-Entwicklerbereich geprüft: Beta 1.4.9b veröffentlicht auf c3685a2e5fb2015a7756a5cf26a4f92219581181, Testing abgeschlossen, keine Stable-Version. Keine Store-Einreichung oder Änderung vorgenommen; Details in STORE-STATUS.md.

@@ -1,11 +1,14 @@
 ---
-name: "\U0001F4A1 Feature request"
-about: Vorschlag für neue Funktion oder Verbesserung
+name: "\U0001F4A1 Konkrete Umsetzung"
+about: Bereits abgestimmte Funktion oder Verbesserung zur Umsetzung einplanen.
 title: "[FEATURE]"
 labels: enhancement
 assignees: ''
 
 ---
+
+## Zugehörige Discussion
+Bitte die bereits abgestimmte Idee verlinken. Neue offene Wünsche gehören zuerst in die Kategorie Ideen in Discussions.
 
 ## 💡 Feature Beschreibung
 Beschreibe kurz die gewünschte Funktion oder Verbesserung.

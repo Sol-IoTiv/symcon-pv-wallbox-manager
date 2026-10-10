@@ -14,7 +14,7 @@ php tests/metadata.php
 
 In-Memory-Symcon und kontrollierte HTTP-Antworten; keine reale Wallbox. PHP-Warnungen werden zu Fehlern. Geprüft werden Befehlsreihenfolge, Rücklesebestätigung, Timeouts, Semaphorfreigabe, deaktiviertes Modul, vier Modi, Netzbudget/Vorzeichen/Messwertalter, Hardwaregrenzen, Preisantworten und persistente Übergänge.
 
-Der Adapter ersetzt weder Symcon-Kernel noch echte gleichzeitige Prozesse. Reale Semaphore, Timer, Installation und Upgrade sind separat zu prüfen. CI ist für PHP 8.2/8.3 vorbereitet; lokale Erfolge bedeuten keinen bereits ausgeführten GitHub-Workflow.
+Der Adapter ersetzt weder Symcon-Kernel noch echte gleichzeitige Prozesse. Reale Semaphore, Timer, Installation und Upgrade sind separat zu prüfen. CI läuft unter PHP 8.2/8.3; erfolgreiche GitHub-Läufe des Entwicklungsstands sind nachgewiesen. Auf den historischen main-/beta-staging-Ständen läuft mangels Testsuite zunächst ausschließlich PHP-Lint.
 
 ## Offene Hardwareabnahme
 
@@ -39,3 +39,5 @@ Der Adapter ersetzt weder Symcon-Kernel noch echte gleichzeitige Prozesse. Reale
 Je Versuch Zeitstempel, Soll-/Ist-Modus, frc/alw, Leistung und Ströme protokollieren. Veröffentlichung/Freigabe erfordert dokumentierte Abnahme.
 
 Die Hardwareangaben identifizieren den vorgesehenen Testaufbau; sie sind noch kein erfolgreicher Praxistest. CarBatteryCapacity erst mit bestätigter nutzbarer Kapazität in kWh setzen. Aus der Modellbezeichnung wird keine unterstützte Fahrzeug-Phasenanzahl abgeleitet; diese ist anhand der Statuswerte im Test festzustellen.
+
+Der offene Wiederanlauf-Test nach Stromausfall/Neustart wird in [Issue #36](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/issues/36) nachverfolgt. Ein Issue ersetzt kein ausgefülltes Hardwareprotokoll.

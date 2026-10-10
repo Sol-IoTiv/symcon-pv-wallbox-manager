@@ -16,7 +16,7 @@ Der Freigabeweg ist `dev` → `beta-staging` → `main`:
 
 `main` ist aktuell der GitHub-Standardbranch. Diese Einstellung ist keine Produktionsfreigabe. Alle bisherigen [GitHub Releases](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/releases) sind als Pre-release gekennzeichnet. Die Einreichung für einen Symcon-Store-Kanal erfolgt separat im Entwicklerbereich; ein Push oder GitHub Release veröffentlicht das Modul nicht automatisch im Store. Details: [Versionierung und Releases](docs/RELEASING.md).
 
-[Discussions](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions) dienen Ideen, Fragen und Erfahrungsaustausch. Reproduzierbare Fehler und konkret geplante Umsetzung gehören in [Issues](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/issues). Offene Ideen stehen bis zur vollständigen Übertragung in [FEATURES.md](FEATURES.md); erledigte Funktionen im Changelog.
+[Discussions](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions) dienen Ideen, Fragen und Erfahrungsaustausch. Reproduzierbare Fehler und konkret geplante Umsetzung gehören in [Issues](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/issues). Offene Ideen werden in Discussions gepflegt; [FEATURES.md](FEATURES.md) verweist auf die offene Ideenansicht. Erledigte Funktionen stehen im Changelog. Der [Wiki-Einstieg](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/wiki) bündelt die Dokumentationslinks.
 
 ## Voraussetzungen
 

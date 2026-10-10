@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "💡 Idee oder Funktionswunsch"
+    url: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions/categories/ideen
+    about: Offene Vorschläge zunächst gemeinsam in Discussions klären.
+  - name: "❓ Hilfe zur Konfiguration oder Nutzung"
+    url: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions/categories/hilfe
+    about: Fragen stellen und hilfreiche Antworten als Lösung markieren.
+  - name: "🔌 Setup und Praxiserfahrungen"
+    url: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions/categories/setups
+    about: Anlage, Wallbox, Fahrzeug und Messquellen vorstellen.
+  - name: "📖 Dokumentation und Einstieg"
+    url: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/wiki
+    about: Anleitung, Branches, Voraussetzungen und Freigabeweg.

@@ -14,7 +14,7 @@ library.json ist die maßgebliche Bibliotheksversion; module.json muss für die 
 
 Freigabeweg: dev → beta-staging → main. Übernahmen erfolgen per geprüftem Pull Request. main ist aktuell GitHub-Standardbranch; diese Einstellung bedeutet keine Stable-Freigabe. dev und beta-staging werden durch diese Dokumentationsänderung nicht zusammengeführt.
 
-Die Store-Kanäle werden im Symcon-Entwicklerbereich verwaltet. Bei einer GitHub-Einreichung ist der passende getestete Stand auszuwählen und vor dem Einreichen mit dem Release-Commit abzugleichen. Beta/Testing und Stable haben unterschiedliche Einreichungsabläufe; Stable durchläuft Symcons Review. Ein GitHub-Pre-release setzt nicht automatisch den Store-Kanal auf Beta. Die aktuelle Konto-Konfiguration wurde hier nicht geprüft.
+Die Store-Kanäle werden im Symcon-Entwicklerbereich verwaltet. Bei einer GitHub-Einreichung ist der passende getestete Stand auszuwählen und vor dem Einreichen mit dem Release-Commit abzugleichen. Beta/Testing und Stable haben unterschiedliche Einreichungsabläufe; Stable durchläuft Symcons Review. Ein GitHub-Pre-release setzt nicht automatisch den Store-Kanal auf Beta. Die aktuelle Konto-Konfiguration wurde am 10.10.2026 geprüft: Beta 1.4.9b auf Commit c3685a2, Testing abgeschlossen, noch keine Stable-Version. Details: [Store-Stand](STORE-STATUS.md).
 
 Quelle: [Symcon – Einreichen](https://www.symcon.de/de/service/dokumentation/entwicklerbereich/sdk-tools/sdk-php/store/einreichen/).
 
@@ -45,3 +45,9 @@ Vorgesehene Folge: 1.4.10b → 1.5.0-rc.1 → 1.5.0. Vor RC-Metadaten deren Akze
 5. Installation und Upgrade des veröffentlichten Standes prüfen; Versionshinweise auch auf dev und beta-staging konsistent halten.
 
 Historische Tags nicht verschieben, Versionslücken nicht nachträglich erfinden. Draft-PR #22 ist ohne Merge geschlossen; der alte Stabilisationsbranch wurde zugunsten von dev gelöscht. Diese Bereinigung erstellt keine neue Beta-/Stable-Version und reicht nichts im Symcon Store ein.
+
+## Schutz der Freigabebranches
+
+main und beta-staging verlangen Pull Requests, erfolgreiche Checks regression (8.2) und regression (8.3) auf aktuellem PR-Stand und aufgelöste Review-Kommentare. Die Regeln gelten auch für Administratoren; Force-Push und Branchlöschung sind gesperrt. Für den Einzelmaintainer ist keine zweite Person als Pflichtreviewer eingerichtet.
+
+Die historischen main-/beta-staging-Stände enthalten noch keine Regressionstest-Suite; dort prüft die CI nur PHP-Syntax und weist darauf hin. Nach Übernahme der Tests führt derselbe Workflow Regression, Ladeverhalten und Metadaten aus. Ein grüner Lauf ersetzt die Hardwareabnahme nicht.
