@@ -1,0 +1,28 @@
+name: PHP regression
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['8.2', '8.3']
+    container: php:${{ matrix.php }}-cli
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax
+        run: |
+          php -l PVWallboxManager/module.php
+          if [ -f PVWallboxManager/ChargingControl.php ]; then
+            php -l PVWallboxManager/ChargingControl.php
+          fi
+      - name: Regression and metadata
+        run: |
+          if [ -d tests ]; then
+            php tests/regression.php
+            php tests/charging.php
+            php tests/metadata.php
+          else
+            echo "Historical branch baseline: regression suite not yet introduced; PHP syntax checked only."
+          fi
