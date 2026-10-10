@@ -25,7 +25,7 @@ Erledigte Discussions nicht löschen: Sie enthalten Begründungen und verhindern
 
 ## Branches und Releases
 
-bdevb ist der dauerhafte Entwicklungsbranch. bmainb bleibt vorerst Standardbranch. bbeta-stagingb und der bisherige Stabilisationsbranch werden bis zur Klärung von Draft-PR #22 als Übergang erhalten. Keine automatische Zusammenführung oder Stable-Freigabe durch die Branchumstellung.
+`dev` ist der dauerhafte Entwicklungsbranch. `main` bleibt vorerst Standardbranch. `beta-staging` bleibt vorerst als bisheriger Teststand erhalten. Draft-PR #22 wurde ohne Merge geschlossen; der alte Stabilisationsbranch wurde nach Prüfung der vollständig in dev enthaltenen Commits gelöscht. Keine automatische Zusammenführung oder Stable-Freigabe durch die Branchumstellung.
 
 Neue Arbeiten und Dokumentationsänderungen auf dev aufbauen. Für Freigaben gelten [RELEASING.md](docs/RELEASING.md) und [TESTING.md](docs/TESTING.md). Historische Testberichte bleiben datierte Nachweise; aktuelle Nachträge müssen ihren geprüften Commit benennen.
 
