@@ -16,3 +16,7 @@ Vorgesehene Folge: 1.4.10b → 1.5.0-rc.1 → 1.5.0. Vor RC-Metadaten deren Akze
 6. Installation/Upgrade des veröffentlichten Standes prüfen.
 
 Historische Tags nicht verschieben oder umbenennen. Alte uneinheitliche Präfixe/Prerelease-Kennzeichnungen dokumentieren, keine Historie erfinden. Dieser Arbeitsstand erstellt keine Remote-Tags oder Releases.
+
+## Entwicklungsbranch
+
+Laufende Entwicklung auf dev; main bleibt bis zu einer bewussten Änderung Standardbranch. Vor Übernahme nach main den vollständigen Unterschied prüfen, insbesondere Issue-Vorlagen. beta-staging und Draft-PR #22 zunächst als Übergang erhalten. Versionsnummern werden durch eine Branchumstellung nicht erhöht.

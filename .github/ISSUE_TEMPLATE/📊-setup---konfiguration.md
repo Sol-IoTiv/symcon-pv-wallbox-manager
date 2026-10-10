@@ -40,8 +40,8 @@ assignees: ''
 - Lademodus:
 - MinAmpere:
 - MaxAmpere:
-- PV2Car aktiv:
-- Zielzeitladung aktiv:
+- PV-Anteil (%), Hausakku-SoC und Zielschwelle:
+- Modulversion / Commit und Branch:
 - Phasenumschaltung aktiv:
 
 ---

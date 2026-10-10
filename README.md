@@ -4,6 +4,12 @@ IP-Symcon-Modul zur Regelung eines go-eChargers über die lokale HTTP-API v2: PV
 
 **Arbeitsstand 1.4.10b – unveröffentlicht.** Die Hardwareabnahme mit konkretem Modell, Firmware und Fahrzeug steht aus. 1.5.0 Stable folgt erst nach erfolgreicher Abnahme.
 
+## Entwicklungsstand und Mitarbeit
+
+`main` ist der Standardbranch; `dev` enthält den unveröffentlichten Entwicklungsstand. `beta-staging` ist der bisherige Teststand und wird vorerst für den bestehenden Review beibehalten. Ein Branchname ist keine Release-Freigabe. Veröffentlichte Versionen stehen unter [Releases](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/releases).
+
+[Discussions](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions) dienen Ideen, Fragen und Erfahrungsaustausch. Reproduzierbare Fehler und konkret geplante Umsetzung gehören in [Issues](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/issues). Offene Ideen stehen bis zur vollständigen Übertragung in [FEATURES.md](FEATURES.md); erledigte Funktionen im Changelog.
+
 ## Voraussetzungen
 
 - Bibliotheksmetadaten deklarieren weiterhin Symcon ab 7.1. Diese Mindestversion benötigt Integrationstests; lokale Prüfungen verwenden PHP 8.3 mit simuliertem Symcon.
@@ -16,7 +22,7 @@ IP-Symcon-Modul zur Regelung eines go-eChargers über die lokale HTTP-API v2: PV
 ## Einstieg
 
 1. Repository über die Symcon-Modulverwaltung einbinden: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager.
-2. Für diesen Entwurf den Testbranch `codex/1.4.10b-stabilization` wählen. Er ist noch kein freigegebenes Beta- oder Stable-Release.
+2. Für diesen Entwurf den Testbranch `dev` wählen. Er ist noch kein freigegebenes Beta- oder Stable-Release.
 3. Instanz PVWallboxManager anlegen; Wallbox-IP, Energiewerte, Einheiten und Vorzeichen konfigurieren.
 4. Hausverbrauch inklusive Wallbox eintragen. Die Wallboxleistung zieht das Modul selbst ab.
 5. Stromgrenzen prüfen und Lademodus auswählen. Bei Netzlimit Messwertalter und Vorzeichen prüfen.
@@ -27,7 +33,7 @@ IP-Symcon-Modul zur Regelung eines go-eChargers über die lokale HTTP-API v2: PV
 | Modus | Verhalten |
 |---|---|
 | Nur PV | Überschussladen mit optionaler Hausakku-Startbedingung und Hysterese |
-| PV-Anteil | Eingestellter Prozentsatz des Überschusses aus PV minus Hausverbrauch ohne Wallbox |
+| PV-Anteil | Eingestellter Anteil des Überschusses; ab erreichtem Hausakku-Ziel automatisch 100 %, 0 % bleibt Stop |
 | Manuell | Benutzerdefinierte Ampere und Phasen innerhalb gemeinsamer Grenzen |
 | Hybrid | PV-Regelung, Mindestladung bei abnehmendem Überschuss, optionale Endladung |
 

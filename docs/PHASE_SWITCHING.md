@@ -20,3 +20,7 @@ Timeout, Ablehnung, Kommunikationsverlust im Übergang oder Abbruch nach unbest�
 Reset über Formularbutton oder PVWM_ResetPhaseFault: nur bei zurückgelesenem Stillstand; gibt selbst nicht frei. Bei Kommunikationsverlust kann das Modul einen tatsächlichen Stop nicht garantieren.
 
 180 s Cooldown, 60 s Timeout und Stillstandsschwellen sind vorläufige Beta-Defaults; Hardware-/Firmware-/Fahrzeugprüfung erforderlich.
+
+## Nicht bestätigte Ladefreigabe
+
+Für eine abgelehnte Freigabe gelten höchstens drei Versuche insgesamt und mindestens 30 s Abstand. Vor einem erneuten Versuch werden Stopbestätigung und aktuelle Ladebedingungen geprüft. Das gilt ausschließlich für Freigaben; unbestätigte Stop-/Phasenbefehle bleiben gesperrt. Details und Reset: [Fehlerdiagnose](TROUBLESHOOTING.md).

@@ -13,7 +13,7 @@ Beschreibe kurz die gewünschte Funktion oder Verbesserung.
 ---
 
 ## 🎯 Ziel / Nutzen
-Welches Problem wird damit gelöst?  
+Welches Problem wird damit gelöst?
 Warum ist das Feature sinnvoll?
 
 ---
@@ -24,7 +24,7 @@ Hast du eine Idee, wie es technisch umgesetzt werden könnte?
 ---
 
 ## 🔌 Umgebung (optional)
-- Wallbox (z. B. go-e):
+- Wallboxmodell und Firmware:
 - PV-Anlage vorhanden:
 - Batteriespeicher vorhanden:
 - Besonderheiten im Setup:

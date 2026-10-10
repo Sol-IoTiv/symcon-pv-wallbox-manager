@@ -23,7 +23,7 @@ Was möchtest du erreichen?
 - MinAmpere:
 - MaxAmpere:
 - Phasenmodus:
-- Zielzeitladung aktiv:
+- Modulversion / Commit und Branch:
 
 ---
 
