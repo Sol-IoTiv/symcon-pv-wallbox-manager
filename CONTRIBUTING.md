@@ -25,10 +25,14 @@ Erledigte Discussions nicht löschen: Sie enthalten Begründungen und verhindern
 
 ## Branches und Releases
 
-`dev` ist der dauerhafte Entwicklungsbranch. `main` bleibt vorerst Standardbranch. `beta-staging` bleibt vorerst als bisheriger Teststand erhalten. Draft-PR #22 wurde ohne Merge geschlossen; der alte Stabilisationsbranch wurde nach Prüfung der vollständig in dev enthaltenen Commits gelöscht. Keine automatische Zusammenführung oder Stable-Freigabe durch die Branchumstellung.
+Freigabeweg: `dev` → `beta-staging` → `main`. Entwicklung und Tests erfolgen auf `dev`. Geprüfte Beta-Kandidaten werden per PR nach `beta-staging` übernommen und von dort separat für den Beta-Kanal im Symcon Store eingereicht. Erst ein erfolgreich abgenommener Stand wird per PR nach `main` übernommen und für Stable eingereicht.
+
+`main` bleibt aktuell GitHub-Standardbranch, hat aber noch keine Stable-Freigabe. Alle bisherigen GitHub Releases sind Pre-releases. Branchübernahmen, GitHub Releases und Store-Einreichungen sind getrennte Schritte; keine automatische Veröffentlichung durch einen Push.
+
+Draft-PR #22 wurde ohne Merge geschlossen; der alte Stabilisationsbranch wurde nach Prüfung der vollständig in dev enthaltenen Commits gelöscht.
 
 Neue Arbeiten und Dokumentationsänderungen auf dev aufbauen. Für Freigaben gelten [RELEASING.md](docs/RELEASING.md) und [TESTING.md](docs/TESTING.md). Historische Testberichte bleiben datierte Nachweise; aktuelle Nachträge müssen ihren geprüften Commit benennen.
 
 ## Wiki
 
-README und docs/ sind die maßgebliche, gemeinsam mit dem Code geprüfte Anleitung. Im Wiki nur Einstieg, Navigationslinks und gegebenenfalls Community-Beispiele pflegen. Konfiguration, Property-Referenz und Lademodi nicht nochmals abschreiben. Eine Wiki-Startseite sollte auf main, dev und die Releases verweisen und deren unterschiedlichen Status erklären.
+README und docs/ sind die maßgebliche, gemeinsam mit dem Code geprüfte Anleitung. Im Wiki nur Einstieg, Navigationslinks und gegebenenfalls Community-Beispiele pflegen. Konfiguration, Property-Referenz und Lademodi nicht nochmals abschreiben. Eine Wiki-Startseite sollte auf dev, beta-staging, main und die Releases verweisen und deren unterschiedlichen Status erklären.

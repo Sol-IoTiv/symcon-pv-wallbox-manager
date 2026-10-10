@@ -6,7 +6,15 @@ IP-Symcon-Modul zur Regelung eines go-eChargers über die lokale HTTP-API v2: PV
 
 ## Entwicklungsstand und Mitarbeit
 
-`main` ist der Standardbranch; `dev` enthält den unveröffentlichten Entwicklungsstand. `beta-staging` ist der bisherige Teststand und wird vorerst für den bestehenden Review beibehalten. Ein Branchname ist keine Release-Freigabe. Veröffentlichte Versionen stehen unter [Releases](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/releases).
+Der Freigabeweg ist `dev` → `beta-staging` → `main`:
+
+| Branch | Zweck |
+|---|---|
+| `dev` | Laufende Entwicklung und Tests; aktueller Arbeitsstand 1.4.10b, unveröffentlicht |
+| `beta-staging` | Zur Beta-Veröffentlichung im Symcon Store vorgesehener Teststand |
+| `main` | Für freigegebene Produktionsversionen vorgesehen; derzeit noch keine Stable-Freigabe |
+
+`main` ist aktuell der GitHub-Standardbranch. Diese Einstellung ist keine Produktionsfreigabe. Alle bisherigen [GitHub Releases](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/releases) sind als Pre-release gekennzeichnet. Die Einreichung für einen Symcon-Store-Kanal erfolgt separat im Entwicklerbereich; ein Push oder GitHub Release veröffentlicht das Modul nicht automatisch im Store. Details: [Versionierung und Releases](docs/RELEASING.md).
 
 [Discussions](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/discussions) dienen Ideen, Fragen und Erfahrungsaustausch. Reproduzierbare Fehler und konkret geplante Umsetzung gehören in [Issues](https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager/issues). Offene Ideen stehen bis zur vollständigen Übertragung in [FEATURES.md](FEATURES.md); erledigte Funktionen im Changelog.
 

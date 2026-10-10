@@ -26,7 +26,7 @@ Geprüfter Codestand: 5d9755383d70285ffc242b3d47aba17e8fed055f (04.10.2026), Arb
 
 - main ist Standardbranch, beta-staging liegt auf e9337aa, bisheriger Stabilisationsbranch auf 5d97553. main und beta-staging sind ältere Entwicklungsstände. Die neue README erscheint deshalb zunächst auf dev; vor einer Übernahme nach main muss der gesamte Codeunterschied geprüft werden.
 - Nachtrag 10.10.2026: Draft-PR #22 ohne Merge geschlossen. codex/1.4.10b-stabilization auf ausdrücklichen Nutzerwunsch gelöscht; vorher per merge-base geprüft, dass sämtliche Commits in origin/dev enthalten sind. main und beta-staging unverändert.
-- Zuletzt veröffentlichtes Release laut Releaseliste: 1.4.7b vom 19.05.2026. 1.4.9b ist ein vorhandener Code-/Changelogstand, kein hier nachgewiesenes Release. Das b-Release 1.4.7b ist als regulär statt Prerelease markiert. Zukünftige Beta/RC-Releases konsistent kennzeichnen; historische Tags unverändert lassen.
+- Zuletzt veröffentlichtes Release laut Releaseliste: 1.4.7b vom 19.05.2026. 1.4.9b ist ein vorhandener Code-/Changelogstand, kein hier nachgewiesenes Release. Nachtrag 10.10.2026: Alle elf bisherigen Releases sind jetzt Pre-releases. Die vier zuvor regulären Beta-Releases wurden korrigiert; der fehlende Titel von v1.4.3b wurde ergänzt. Tags, Release-Texte, Zielstände und Veröffentlichungsdaten unverändert.
 - GitHub-Kurzbeschreibung „Modularer Energie-Manager für PV, Speicher, Wallbox etc.“ ist zu breit. GitHub-Kurzbeschreibung aktualisiert auf: „IP-Symcon-Modul für go-eCharger: PV-Überschussladen, PV-Anteil, manuelles und hybrides Laden mit Netzbezugsbegrenzung.“
 - Discussions sind aktiviert. Bestehende Inhalte und Kategorien konnten in diesem Durchlauf nicht zuverlässig gelesen werden; keine Übertragung oder Veröffentlichung einzelner Ideen behauptet. FEATURES.md bleibt bis zum verlinkten Transfer erhalten.
 - Wiki ist aktiviert; Abruf des Wiki-Git-Repositories liefert „Repository not found“. Das belegt kein bereits gepflegtes Wiki und kann auf fehlende Initialisierung oder Zugriff hindeuten. Keine bestehenden Seiten verändert.
@@ -38,3 +38,7 @@ Eine Startseite „PVWallboxManager – Dokumentation“ mit Links zu README auf
 ## Vorschlag für Discussions
 
 Kategorien Ideen, Hilfe, Setups und Ankündigungen. Offene Themen aus FEATURES.md einzeln übernehmen und dort ihre URLs hinterlegen. Erst nach vollständigem Transfer die Datei durch einen kurzen Verweis ersetzen oder entfernen. Umgesetzte Ideen aus der offenen Liste entfernen, Discussion mit Commit/PR und Veröffentlichungsstatus erhalten. Bereits implementiert bedeutet noch nicht veröffentlicht.
+
+## Festgelegter Freigabeweg
+
+dev dient Entwicklung und Tests, beta-staging der Vorbereitung der Beta-Veröffentlichung im Symcon Store und main den später freigegebenen Produktionsständen. Noch keine Stable-Freigabe. README, CONTRIBUTING und RELEASING beschreiben jetzt denselben Ablauf. Store-Konto-Konfiguration nicht zugänglich und nicht geändert; keine neue Store-Einreichung und keine Branchzusammenführung durchgeführt.
