@@ -3,9 +3,9 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
-## [Unreleased] – vorgesehen für 1.4.10b
+## [1.4.10b] - 2026-10-10
 
-Noch nicht veröffentlicht; Hardwareabnahme ausstehend.
+Beta-Kandidat zur Veröffentlichung vorbereitet; vollständige Hardwareabnahme ausstehend. 87 automatisierte Verhaltenstests sowie Syntax- und Metadatenprüfung bestanden. Simulation ersetzt keine Hardwareabnahme.
 
 ### 🐛 Steuerung und Fehlerbehandlung
 - Nicht bestätigte Ladefreigaben erhalten maximal drei Versuche mit mindestens 30 Sekunden Abstand und erneuter Prüfung aller Ladebedingungen. Unbestätigte Stop-/Phasenbefehle bleiben dauerhaft gesperrt; erschöpfte Freigabeversuche erfordern Reset bei bestätigtem Stillstand. Diagnose um HTTP-, Transport- und JSON-Ergebnis ergänzt; Reset meldet Erfolg oder Ablehnung.

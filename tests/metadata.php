@@ -4,7 +4,9 @@ $library=json_decode(file_get_contents($root.'/library.json'),true,512,JSON_THRO
 $module=json_decode(file_get_contents($root.'/PVWallboxManager/module.json'),true,512,JSON_THROW_ON_ERROR);
 $form=json_decode(file_get_contents($root.'/PVWallboxManager/form.json'),true,512,JSON_THROW_ON_ERROR);
 if ($library['version']!==$module['version']) throw new RuntimeException('Version mismatch');
-if (strpos(file_get_contents($root.'/CHANGELOG.md'),'vorgesehen für '.$library['version'])===false) throw new RuntimeException('Unreleased version missing');
+$changelog=file_get_contents($root.'/CHANGELOG.md');
+if (!preg_match('/^## \\['.preg_quote($library['version'],'/').'\\] - \\d{4}-\\d{2}-\\d{2}$/m',str_replace("\r",'', $changelog))
+    && strpos($changelog,'vorgesehen für '.$library['version'])===false) throw new RuntimeException('Version missing from changelog');
 $source=file_get_contents($root.'/PVWallboxManager/module.php');
 preg_match_all("/'(\\w+)'\\s*=>\\s*\\['type'\\s*=>/",$source,$matches);
 $properties=$matches[1];
