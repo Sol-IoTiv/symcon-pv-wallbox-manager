@@ -3,6 +3,12 @@
 Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.  
 **Repository:** https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager
 
+## [Unreleased]
+
+### 🐛 Steuerung und Fehlerbehandlung
+- Bei Transportausfall der Stop-Bestätigung nach fehlgeschlagener Ladefreigabe begrenzte Wiederherstellung: maximal drei Stop-/Statusprüfungen im Abstand von 30 Sekunden innerhalb von 120 Sekunden. Zwei aufeinanderfolgende Stillstandsbestätigungen erforderlich; erst ein späterer vollständig neu geprüfter Ladeplan darf wieder freigeben. Echte Wallbox-/Phasenfehler und API-Ablehnungen bleiben quittierungspflichtig; der Freigabezähler wird durch Wiederherstellung nicht zurückgesetzt. Zustand und Frist bleiben über Instanzaufrufe erhalten.
+- Nach unbestätigter Ladefreigabe und ebenfalls unbestätigtem Stop einen frischen Wallboxstatus abrufen. Nur bestätigter Stillstand verhindert eine dauerhafte Fehlersperre; die verzögerten, maximal drei Freigabeversuche bleiben erhalten. Ein alter Status vor der Freigabe wird nicht als Stop-Bestätigung verwendet. Bereits gespeicherte Fehler werden nicht automatisch quittiert.
+
 ## [1.4.10b] - 2026-10-10
 
 Beta-Kandidat zur Veröffentlichung vorbereitet; vollständige Hardwareabnahme ausstehend. 87 automatisierte Verhaltenstests sowie Syntax- und Metadatenprüfung bestanden. Simulation ersetzt keine Hardwareabnahme.

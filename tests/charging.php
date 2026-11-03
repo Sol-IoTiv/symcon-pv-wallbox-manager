@@ -11,6 +11,8 @@ class SimulatedManager extends PVWallboxManager {
     public $offline = false;
     public $prices = null;
     public $stopOnAmp = false;
+    public $afterCommand = null;
+    public $commandOffline = false;
     public function __construct() {
         parent::__construct();
         $this->status=['car'=>3,'psm'=>1,'frc'=>1,'alw'=>false,'amp'=>6,'err'=>0,'var'=>11,'ama'=>16,'nrg'=>array_fill(0,12,0)];
@@ -25,6 +27,8 @@ class SimulatedManager extends PVWallboxManager {
             parse_str(parse_url($url,PHP_URL_QUERY),$args);
             $key=key($args); $this->commands[]=[$key,(int)$args[$key]];
             if ($key==='amp' && $this->stopOnAmp) $this->attributes['ControlStopRequested']=true;
+            if ($this->afterCommand !== null) ($this->afterCommand)($this, $key, (int)$args[$key]);
+            if ($this->commandOffline) return ['result'=>false,'httpcode'=>0,'error'=>'Connection timed out'];
             return ['result'=>json_encode([$key=>($this->reject===$key || ($this->rejectEnable && $key==='frc' && (int)$args[$key]===2)) ? 'rejected' : true]),'httpcode'=>200,'error'=>''];
         }
         return ['result'=>json_encode($this->prices),'httpcode'=>200,'error'=>''];
@@ -602,9 +606,35 @@ $tests['release retry rechecks target SOC and deactivation'] = function () {
         expect(count(array_filter($m->commands,function($c){return $c===['frc',2];}))===1,'Changed conditions must prevent retry');
     }
 };
-$tests['unconfirmed stop after release failure remains a phase fault'] = function () {
+$tests['fresh standstill confirms stop after release failure'] = function () {
     $m=new SimulatedManager(); $m->reject='frc'; $m->plan(1,6);
-    expect($m->attributes['PhaseTransitionState']==='fault','Stop rejection still requires manual reset');
+    expect($m->attributes['PhaseTransitionState']==='idle','Fresh confirmed standstill resolves missing stop acknowledgement');
+    expect($m->requests===2,'Must read fresh status after both failed acknowledgements');
+};
+$tests['lost release and stop acknowledgements recover only after fresh standstill'] = function () {
+    $m=new SimulatedManager(); $m->reject='frc'; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='idle','Confirmed stop must not latch phase fault');
+    $m->plan(1,6); expect(count($m->commands)===2,'Still respect retry delay');
+    $m->reject=null; $m->clock+=30; $m->plan(1,6);
+    expect(end($m->commands)===['frc',2],'Freshly checked retry can proceed without reset');
+};
+$tests['failed stop cannot use pre-command cached standstill'] = function () {
+    $m=new SimulatedManager(); $m->reject='frc';
+    $m->afterCommand=function($manager,$key,$value) {
+        if ($key==='frc' && $value===2) {
+            $manager->status['frc']=2; $manager->status['alw']=true;
+            $manager->status['car']=2; $manager->status['nrg'][11]=3000;
+        }
+    };
+    $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Actual running charger must remain faulted');
+    expect($m->requests===2,'Cached stopped status is insufficient');
+};
+$tests['unavailable stop readback remains latched'] = function () {
+    $m=new SimulatedManager(); $m->reject='frc';
+    $m->afterCommand=function($manager,$key,$value) { if ($key==='frc' && $value===1) $manager->offline=true; };
+    $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Missing fresh status cannot confirm stop');
 };
 $tests['transient release failure recovers without a manual reset'] = function () {
     $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
@@ -616,6 +646,114 @@ $tests['release retry respects a newly exhausted grid budget'] = function () {
     $m=new SimulatedManager(); $m->rejectEnable=true; $m->plan(1,6);
     $m->rejectEnable=false; $m->clock+=30; $m->grid(3000,2000); $m->plan(1,6);
     expect(count($m->commands)===2,'No further release when grid budget is exhausted');
+};
+function recoveryManager() {
+    $m=new SimulatedManager(); $m->commandOffline=true;
+    $m->afterCommand=function($manager,$key,$value) { if ($key==='frc' && $value===1) $manager->offline=true; };
+    $m->plan(1,6);
+    expect($m->attributes['ReleaseRecovery']!=='{}','Timeout starts persistent recovery');
+    expect($m->attributes['PhaseTransitionState']==='idle','Transport loss is not yet a phase fault');
+    return $m;
+}
+$tests['recovery suppresses release phase and current commands until two fresh stops'] = function () {
+    $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+    $m->commands=[];
+    $m->plan(2,16); expect($m->commands===[],'No commands before recovery delay');
+    foreach([1,2] as $i) {
+        $m->clock+=30; $m->plan(2,16);
+        expect($m->commands===array_fill(0,$i,['frc',1]),'Only stop is permitted');
+    }
+    expect($m->attributes['ReleaseRecovery']==='{}','Two distinct readbacks finish recovery');
+    expect($m->attributes['ReleaseFailures']===1,'Do not reset the release budget');
+    expect($m->attributes['PhaseTransitionState']==='idle','Never switch phases in completion cycle');
+};
+$tests['recovery works through full update while status is offline'] = function () {
+    $m=recoveryManager(); $m->clock+=30; $m->UpdateStatus();
+    expect(json_decode($m->attributes['ReleaseRecovery'],true)['attempts']===1,'Unavailable-status early return must not bypass recovery');
+};
+$tests['persistent outage exhausts recovery and requires reset'] = function () {
+    $m=recoveryManager();
+    for($i=0;$i<4;$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    expect($m->attributes['PhaseTransitionState']==='fault','Bounded recovery must eventually latch');
+    expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===1,'Outage must never retry release');
+};
+$tests['late restart expires recovery instead of extending deadline'] = function () {
+    $m=recoveryManager(); $attrs=$m->attributes;
+    $n=new SimulatedManager(); $n->attributes=$attrs; $n->clock=$m->clock+121; $n->UpdateStatus();
+    expect($n->attributes['PhaseTransitionState']==='fault','Persistent deadline survives recreation');
+};
+$tests['recovery fresh readback rejects neutral running malformed and wallbox error'] = function () {
+    foreach(['neutral','running','malformed','error'] as $kind) {
+        $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+        if($kind==='neutral') $m->status['frc']=0;
+        if($kind==='running') { $m->status['car']=2; $m->status['nrg'][11]=3000; }
+        if($kind==='malformed') unset($m->status['nrg'][4]);
+        if($kind==='error') $m->status['err']=9;
+        $m->clock+=30; $m->plan(1,6);
+        expect($m->attributes['ReleaseRecovery']!=='{}' || $m->attributes['PhaseTransitionState']==='fault','No false success: '.$kind);
+        expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===1,'No re-enable: '.$kind);
+    }
+};
+$tests['recovery does not erase an existing phase fault'] = function () {
+    $m=recoveryManager(); $m->attributes['PhaseTransitionState']='fault'; $m->attributes['PhaseTransitionError']='Phasenbefehl abgelehnt';
+    $m->offline=false; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Existing true fault stays latched');
+};
+$tests['recovery respects deactivation target SOC and grid limit after completion'] = function () {
+    foreach(['inactive','soc','grid'] as $kind) {
+        $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+        for($i=0;$i<2;$i++) { $m->clock+=30; $m->UpdateStatus(); }
+        if($kind==='inactive') $m->properties['ModulAktiv']=false;
+        if($kind==='soc') { $m->properties['CarSOCID']=91; $m->properties['CarTargetSOCID']=92; SetValue(91,100); SetValue(92,100); }
+        if($kind==='grid') $m->grid(4000,2000);
+        $m->clock+=30; $m->UpdateStatus();
+        expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===1,'New plan obeys '.$kind);
+    }
+};
+$tests['explicit stop rejection during recovery remains a true fault'] = function () {
+    $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false; $m->reject='frc';
+    $m->clock+=30; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','API rejection cannot auto recover');
+};
+$tests['recovery resumes only a later revalidated plan'] = function () {
+    $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+    for($i=0;$i<2;$i++) { $m->clock+=30; $m->plan(1,6); }
+    $m->plan(1,6);
+    expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===1,'Completion is followed by retry delay');
+    $m->clock+=30; $m->plan(1,6);
+    expect(end($m->commands)===['frc',2],'Later valid plan resumes');
+    expect($m->attributes['ReleaseFailures']===0,'Acknowledged new release clears failures');
+};
+$tests['interrupted stop samples cannot finish recovery'] = function () {
+    $m=recoveryManager(); $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+    $m->clock+=30; $m->plan(1,6);
+    $m->offline=true; $m->clock+=30; $m->plan(1,6);
+    $m->offline=false; $m->clock+=30; $m->plan(1,6);
+    expect($m->attributes['ReleaseRecovery']!=='{}','Separated single samples are insufficient');
+    $m->clock+=30; $m->plan(1,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','No unbounded extra attempts');
+};
+$tests['recovery state and command gate survive recreation'] = function () {
+    $m=recoveryManager(); $n=new SimulatedManager(); $n->attributes=$m->attributes; $n->clock=$m->clock+5;
+    expect(!invoke($n,'sendChargerCommand','psm',2),'Persisted recovery gates direct phase writes');
+    expect(!invoke($n,'sendChargerCommand','frc',2),'Persisted recovery gates direct release');
+    expect($n->commands===[],'No writes after recreation before scheduled check');
+    $n->clock+=30; $n->plan(1,6);
+    expect(json_decode($n->attributes['ReleaseRecovery'],true)['attempts']===1,'Continue original attempt budget');
+};
+$tests['repeated recovery never replenishes three release attempts'] = function () {
+    $m=recoveryManager();
+    for($failure=1;$failure<=3;$failure++) {
+        $m->afterCommand=null; $m->offline=false; $m->commandOffline=false;
+        for($i=0;$i<2;$i++) { $m->clock+=30; $m->plan(1,6); }
+        expect($m->attributes['ReleaseFailures']===$failure,'Recovery preserves failure count');
+        if($failure<3) {
+            $m->commandOffline=true;
+            $m->afterCommand=function($manager,$key,$value) { if($key==='frc' && $value===1) $manager->offline=true; };
+        }
+        $m->clock+=30; $m->plan(1,6);
+    }
+    expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===3,'Never more than three unconfirmed releases');
 };
 $failures=0;
 foreach ($tests as $name=>$test) {

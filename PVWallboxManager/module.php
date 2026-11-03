@@ -69,6 +69,7 @@ class PVWallboxManager extends IPSModule
             'PhaseResumePending'            => false,
             'ReleaseFailures'               => 0,
             'ReleaseRetryAfter'             => 0,
+            'ReleaseRecovery'               => '{}',
             'ControlStopRequested'          => false,
             'WallboxLimits'                 => '{}',
             'HouseSpikeCount'               => 0,
@@ -678,6 +679,11 @@ class PVWallboxManager extends IPSModule
 
     private function updateStatusControlled(string $triggerMode): void
     {
+        // Recovery runs before mode selection and unavailable-status early returns.
+        if ($this->recoverReleaseStop()) {
+            $this->UpdateStatusAnzeige();
+            return;
+        }
         if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested')) {
             $this->stopCharging();
             $this->SetTimerNachModusUndAuto();

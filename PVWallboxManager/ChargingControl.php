@@ -8,6 +8,7 @@ trait ChargingControl
     private $desiredPhaseMode = null;
     private $phaseDecisionPending = false;
     private $energySnapshot = null;
+    private $commandTransportFailed = false;
 
     protected function now(): int { return time(); }
 
@@ -42,11 +43,16 @@ trait ChargingControl
 
     private function sendChargerCommand(string $key, int $value): bool
     {
+        $this->commandTransportFailed = false;
+        if ($key !== 'frc' || $value !== 1) {
+            if ($this->ReadAttributeString('ReleaseRecovery') !== '{}') return false;
+        }
         if (($key !== 'frc' || $value !== 1) &&
             (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested'))) return false;
         $ip = trim($this->ReadPropertyString('WallboxIP'));
         if (!filter_var($ip, FILTER_VALIDATE_IP)) return false;
         $response = $this->simpleCurlGet('http://' . $ip . '/api/set?' . $key . '=' . $value);
+        $this->commandTransportFailed = (int)$response['httpcode'] === 0;
         $body = is_string($response['result']) ? json_decode($response['result'], true) : null;
         $ok = (int)$response['httpcode'] === 200 && is_array($body) && ($body[$key] ?? null) === true;
         if (!$ok) {
@@ -125,6 +131,7 @@ trait ChargingControl
             $this->WriteAttributeString('PhaseTransitionError', '');
             $this->WriteAttributeInteger('ReleaseFailures', 0);
             $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
             $this->ClearNoChargeReason();
             $this->LogTemplate('ok', 'Fehlersperre zurückgesetzt', 'Stillstand bestätigt; Ladeplan wird im nächsten Regelzyklus geprüft');
             return true;
@@ -138,6 +145,7 @@ trait ChargingControl
 
     private function executeChargingPlan(int $phaseMode, int $ampere, bool $enable): bool
     {
+        if ($this->recoverReleaseStop()) return false;
         $data = $this->chargerSnapshot ?? $this->getStatusFromCharger();
         if ($data === false) return $this->phaseFault('Kein gültiger Wallboxstatus');
         if (!$this->ReadPropertyBoolean('ModulAktiv') || $this->ReadAttributeBoolean('ControlStopRequested') || !$enable || !$this->isCarConnected($data)) return $this->stopCharging();
@@ -252,8 +260,26 @@ trait ChargingControl
                     ? 'Ladefreigabe nach 3 fehlgeschlagenen Versuchen gesperrt – Fehlerreset erforderlich'
                     : 'Ladefreigabe nicht bestätigt – Wiederholung frühestens nach 30 Sekunden');
                 $this->LogTemplate('warn', 'Ladefreigabe nicht bestätigt', 'Versuch ' . $failures . '/3');
-                // Stop is a separate safety command; failed stop acknowledgement still latches a fault.
-                if (!$this->sendChargerCommand('frc', 1)) return $this->phaseFault('Ladestop nach Freigabefehler nicht bestätigt');
+                // A lost acknowledgement does not establish whether either command took effect.
+                // Never reuse the snapshot from before frc=2: that may still describe an idle charger.
+                if (!$this->sendChargerCommand('frc', 1)) {
+                    $this->chargerSnapshot = null;
+                    $stopped = $this->getStatusFromCharger();
+                    if ($stopped === false || !$this->chargerStopped($stopped)) {
+                        if ($this->commandTransportFailed) {
+                            $this->WriteAttributeString('ReleaseRecovery', json_encode([
+                                'deadline'=>$this->now()+120, 'next'=>$this->now()+30,
+                                'attempts'=>0, 'samples'=>0
+                            ]));
+                            $this->SetNoChargeReason('Kommunikationsausfall: Stop-Wiederherstellung wartet auf bestätigten Stillstand');
+                            $this->LogTemplate('warn', 'Stop-Wiederherstellung gestartet', 'Maximal 3 Prüfungen im Abstand von 30 Sekunden; keine Freigabe oder Phasenwechsel');
+                            return false;
+                        }
+                        return $this->phaseFault('Ladestop nach Freigabefehler nicht bestätigt');
+                    }
+                    $this->LogTemplate('warn', 'Ladestop durch Rückmeldung bestätigt',
+                        'Befehlsbestätigung fehlt; frischer Status bestätigt Stillstand. Freigabe bleibt verzögert und begrenzt.');
+                }
                 return false;
             }
             $this->WriteAttributeInteger('ReleaseFailures', 0);
@@ -264,6 +290,53 @@ trait ChargingControl
         if ((float)$data['nrg'][11] < 300 && !$this->ReadAttributeBoolean('ChargingPowerObserved')) {
             $this->SetNoChargeReason('Ladefreigabe angefordert – warte auf Leistungsaufnahme des Fahrzeugs');
         }
+        return true;
+    }
+
+    /** Returns true for the entire recovery cycle, including its completion. */
+    private function recoverReleaseStop(): bool
+    {
+        $state = json_decode($this->ReadAttributeString('ReleaseRecovery'), true);
+        if ($state === []) return false;
+        // A genuine phase fault always wins. Never turn an existing latch into recovery.
+        if ($this->phaseState() === 'fault') {
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
+            return false;
+        }
+        if (!is_array($state) || !isset($state['deadline'],$state['next'],$state['attempts'],$state['samples'])) {
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
+            $this->phaseFault('Ungültiger Zustand der Stop-Wiederherstellung');
+            return true;
+        }
+        $this->SetNoChargeReason('Kommunikationsausfall: Stop-Wiederherstellung wartet auf bestätigten Stillstand');
+        if ($this->now() >= $state['deadline'] || $state['attempts'] >= 3) {
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
+            $this->phaseFault('Stop-Wiederherstellung erschöpft – Fehlerreset erforderlich');
+            return true;
+        }
+        if ($this->now() < $state['next']) return true;
+        // Persist the attempt before I/O, so restart/re-entry cannot reset its budget.
+        $state['attempts']++;
+        $state['next'] = $this->now()+30;
+        $this->WriteAttributeString('ReleaseRecovery', json_encode($state));
+        $ack = $this->sendChargerCommand('frc', 1);
+        $transport = $this->commandTransportFailed;
+        $this->chargerSnapshot = null;
+        $data = $this->getStatusFromCharger();
+        if ((!$ack && !$transport) || ($data !== false && $data['err'] !== 0)) {
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
+            $this->phaseFault('Stop-Wiederherstellung: Stop abgelehnt oder Wallboxfehler');
+            return true;
+        }
+        $state['samples'] = $data !== false && $this->chargerStopped($data) ? $state['samples']+1 : 0;
+        $this->LogTemplate('info', 'Stop-Wiederherstellung', 'Prüfung '.$state['attempts'].'/3, Stillstandsbestätigungen '.$state['samples'].'/2');
+        if ($state['samples'] >= 2) {
+            $this->WriteAttributeString('ReleaseRecovery', '{}');
+            $this->WriteAttributeInteger('ReleaseRetryAfter', $this->now()+30);
+            $this->LogTemplate('ok', 'Stop-Wiederherstellung abgeschlossen', 'Zweimal Stillstand bestätigt; Ladeplan wird erneut geprüft. Freigabeversuche bleiben begrenzt.');
+            return true;
+        }
+        $this->WriteAttributeString('ReleaseRecovery', json_encode($state));
         return true;
     }
 
