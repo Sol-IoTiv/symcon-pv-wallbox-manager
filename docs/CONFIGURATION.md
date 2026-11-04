@@ -2,6 +2,8 @@
 
 Alle registrierten Eigenschaften mit Typ und Default: [PROPERTY-REFERENCE.md](PROPERTY-REFERENCE.md). Defaults überschreiben keine vorhandenen Werte.
 
+Die Variablenauswahl für PV-Erzeugung, Hausverbrauch, Batterieladung und Netzleistung sowie Hausakku-SoC, Fahrzeug-SoC und Ziel-SoC erlaubt Integer und Float. Leistungswerte können in W oder kW vorliegen; die konfigurierte Einheit muss zur Quelle passen. SoC-Werte werden in Prozent von 0 bis 100 erwartet. Numerische Strings und Boolean-Variablen sind nicht zur Auswahl vorgesehen.
+
 ## Verbindung und Betrieb
 
 WallboxIP ist eine lokale IP-Adresse; der Client verwendet API v2 über HTTP/Port 80. WallboxAPIKey bleibt als Legacy-Einstellung erhalten, wird von der aktuellen Steuerung nicht verwendet.
