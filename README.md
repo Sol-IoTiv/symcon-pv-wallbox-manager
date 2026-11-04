@@ -2,7 +2,7 @@
 
 IP-Symcon-Modul zur Regelung eines go-eChargers über die lokale HTTP-API v2: PV-Überschussladen, PV-Anteil, Manuell, Hybrid und Begrenzung des gesamten Netzbezugs.
 
-**Arbeitsstand 1.4.10b – unveröffentlicht.** Die Hardwareabnahme mit konkretem Modell, Firmware und Fahrzeug steht aus. 1.5.0 Stable folgt erst nach erfolgreicher Abnahme.
+**Beta-Version 1.4.11b.** Die Hardwareabnahme mit konkretem Modell, Firmware und Fahrzeug steht aus. 1.5.0 Stable folgt erst nach erfolgreicher Abnahme.
 
 ## Entwicklungsstand und Mitarbeit
 
@@ -10,7 +10,7 @@ Der Freigabeweg ist `dev` → `beta-staging` → `main`:
 
 | Branch | Zweck |
 |---|---|
-| `dev` | Laufende Entwicklung und Tests; aktueller Arbeitsstand 1.4.10b, unveröffentlicht |
+| `dev` | Laufende Entwicklung und Tests; aktueller Stand 1.4.11b |
 | `beta-staging` | Zur Beta-Veröffentlichung im Symcon Store vorgesehener Teststand |
 | `main` | Für freigegebene Produktionsversionen vorgesehen; derzeit noch keine Stable-Freigabe |
 
@@ -30,11 +30,11 @@ Der Freigabeweg ist `dev` → `beta-staging` → `main`:
 ## Einstieg
 
 1. Repository über die Symcon-Modulverwaltung einbinden: https://github.com/Sol-IoTiv/symcon-pv-wallbox-manager.
-2. Für diesen Entwurf den Testbranch `dev` wählen. Er ist noch kein freigegebenes Beta- oder Stable-Release.
+2. Für die Beta-Version den Branch `beta-staging` wählen. `dev` enthält die laufende Entwicklung.
 3. Instanz PVWallboxManager anlegen; Wallbox-IP, Energiewerte, Einheiten und Vorzeichen konfigurieren.
 4. Hausverbrauch inklusive Wallbox eintragen. Die Wallboxleistung zieht das Modul selbst ab.
 5. Stromgrenzen prüfen und Lademodus auswählen. Bei Netzlimit Messwertalter und Vorzeichen prüfen.
-6. Bestehende Instanzen gemäß [Migration](docs/MIGRATION-1.4.10b.md) aktualisieren, nicht neu anlegen.
+6. Für das Update von 1.4.10b siehe [Update auf 1.4.11b](docs/MIGRATION-1.4.11b.md). Ältere Instanzen gemäß [Migration](docs/MIGRATION-1.4.10b.md) aktualisieren, nicht neu anlegen.
 
 ## Funktionen
 

@@ -5,6 +5,8 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ## [Unreleased]
 
+## [1.4.11b] - 2026-11-04
+
 ### 🔧 Konfiguration
 - Variablenauswahl für PV-Erzeugung, Hausverbrauch, Batterieladung und Netzleistung auf Integer und Float erweitert. Hausakku-SoC, Fahrzeug-SoC und Ziel-SoC auf dieselben numerischen Typen begrenzt. Erlaubte Datentypen und die Unterscheidung zwischen Variablen-ID und Messwerttyp dokumentiert.
 

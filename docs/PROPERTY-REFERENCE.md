@@ -1,6 +1,6 @@
 # Registrierte Eigenschaften
 
-Stand: unveröffentlichter Entwurf 1.4.10b. Defaults gelten bei neuen Instanzen; vorhandene Werte werden nicht überschrieben.
+Stand: Beta-Version 1.4.11b. Defaults gelten bei neuen Instanzen; vorhandene Werte werden nicht überschrieben.
 
 Bei Eigenschaften mit Variablen-IDs bezeichnet `integer` den Typ der Objekt-ID. Die zugeordneten Leistungs- und SoC-Variablen dürfen Integer oder Float sein; siehe [Konfiguration](CONFIGURATION.md).
 
