@@ -58,7 +58,7 @@
       "items": [
         { "type": "Label", "label": "🌅 PV-Erzeugung (Pflichtvariable): Leistung der PV-Anlage." },
         { "type": "RowLayout", "items": [
-          { "type": "SelectVariable", "name": "PVErzeugungID", "caption": "PV-Erzeugung", "validVariableTypes": [2] },
+          { "type": "SelectVariable", "name": "PVErzeugungID", "caption": "PV-Erzeugung", "validVariableTypes": [1, 2] },
           { "type": "Label", "caption": "    " },
           { "type": "Select", "name": "PVErzeugungEinheit", "caption": "Einheit", "options": [
             { "caption": "Watt (W)", "value": "W" },
@@ -66,7 +66,7 @@
         ]},
         { "type": "Label", "label": "🏠 Hausverbrauch (Pflichtvariable): Aktueller Gesamtverbrauch." },
         { "type": "RowLayout", "items": [
-          { "type": "SelectVariable", "name": "HausverbrauchID", "caption": "Gesamter Hausverbrauch", "validVariableTypes": [2] },
+          { "type": "SelectVariable", "name": "HausverbrauchID", "caption": "Gesamter Hausverbrauch", "validVariableTypes": [1, 2] },
           { "type": "Label", "caption": "    " },
           { "type": "Select", "name": "HausverbrauchEinheit", "caption": "Einheit", "options": [
             { "caption": "Watt (W)", "value": "W" },
@@ -76,7 +76,7 @@
         ]},
         { "type": "Label", "label": "🔋 Batterieladung (optional): Lade- oder Entladeleistung der Hausbatterie. Wenn keine Variable ausgewählt ist, wird 0 verwendet." },
         { "type": "RowLayout", "items": [
-          { "type": "SelectVariable", "name": "BatterieladungID", "caption": "Batterieladung", "validVariableTypes": [2] },
+          { "type": "SelectVariable", "name": "BatterieladungID", "caption": "Batterieladung", "validVariableTypes": [1, 2] },
           { "type": "Label", "caption": "    " },
           { "type": "Select", "name": "BatterieladungEinheit", "caption": "Einheit", "options": [
             { "caption": "Watt (W)", "value": "W" },
@@ -106,6 +106,7 @@
               "name": "NetzleistungID",
               "caption": "Netzleistung Hausanschluss",
               "validVariableTypes": [
+                1,
                 2
               ]
             },
@@ -269,7 +270,7 @@
             {
               "type": "SelectVariable",
               "name": "HausakkuSOCID",
-              "caption": "Hausakku SoC (%)"
+              "caption": "Hausakku SoC (%)", "validVariableTypes": [1, 2]
             },
             {
               "type": "Label",
@@ -348,9 +349,9 @@
         { "type": "Label", "caption": "Die genutzten Fahrzeugphasen werden automatisch aus drei zeitlich getrennten Strommessungen im 3P-Wallboxmodus erkannt. Bis dahin wird mit drei Phasen gerechnet. Nach Ladepause, Phasenwechsel oder Abstecken wird neu erkannt. Im 1P-Modus gilt immer eine Phase." },
         { "type": "Label", "label": "🔋 Aktueller SoC des Fahrzeugs & 🎯 Ziel-SoC für das Fahrzeug" },
         { "type": "RowLayout", "items": [
-          { "type": "SelectVariable", "name": "CarSOCID", "caption": "Aktueller SoC des Fahrzeugs", "suffix": "%", "minimum": 0, "maximum": 100 },
+          { "type": "SelectVariable", "name": "CarSOCID", "caption": "Aktueller SoC des Fahrzeugs", "validVariableTypes": [1, 2], "suffix": "%", "minimum": 0, "maximum": 100 },
           { "type": "Label", "caption": "    " },
-          { "type": "SelectVariable", "name": "CarTargetSOCID", "caption": "Ziel-SoC für das Fahrzeug" }
+          { "type": "SelectVariable", "name": "CarTargetSOCID", "caption": "Ziel-SoC für das Fahrzeug", "validVariableTypes": [1, 2] }
         ]},
         { "type": "Label", "caption": "    " },
         { "type": "Label", "label": "🔋 Batteriekapazität des Fahrzeugs in kWh (z. B. 52 für ID.3 Pure):" },
