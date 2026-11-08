@@ -1182,7 +1182,7 @@ class PVWallboxManager extends IPSModule
         $desiredA = max($minAmp, min($maxAmp, $desiredA));
 
         $lastA    = $this->ReadAttributeInteger('LastChargingCurrent');
-        $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
+        $maxDelta = $this->currentRampAllowance();
         // Increases ramp up; reductions respect the new power budget immediately.
         $ampere = min($desiredA, $lastA + max(1,$maxDelta));
 
@@ -1752,6 +1752,18 @@ class PVWallboxManager extends IPSModule
         return false;
     }
 
+    private function currentRampAllowance(): int
+    {
+        $step = max(1, $this->ReadPropertyInteger('MaxRampDeltaAmp'));
+        $lastChange = $this->ReadAttributeInteger('LastChargingCurrentChange');
+        // Measurement synchronization may skip regulation cycles. Count elapsed normal
+        // intervals only after an actual current command, never for the initial start.
+        $interval = max(15, $this->ReadPropertyInteger('RefreshInterval'));
+        $periods = $lastChange > 0 && $this->ReadAttributeInteger('LastSentChargingCurrent') > 0
+            ? max(1, (int)floor(max(0, $this->now() - $lastChange) / $interval)) : 1;
+        // No useful allowance exceeds the configured current range.
+        return (int)min(max(1, $this->ReadPropertyInteger('MaxAmpere')), $step * $periods);
+    }
     private function calculateSurplus(array $data, int $anzPhasen, bool $log = true): array
     {
         $battRaw = $data['batt'];
@@ -1799,7 +1811,7 @@ class PVWallboxManager extends IPSModule
         }
 
         $lastAmp  = $this->ReadAttributeInteger('LastChargingCurrent');
-        $maxDelta = $this->ReadPropertyInteger('MaxRampDeltaAmp');
+        $maxDelta = $this->currentRampAllowance();
         $amp      = min($desiredAmp, $lastAmp + max(1,$maxDelta));
         $delta    = $amp - $lastAmp;
 
