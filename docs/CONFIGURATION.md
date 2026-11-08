@@ -42,6 +42,10 @@ Im Formular bündelt „Phasenumschaltung“ die Schaltschwellen, Zählerlimits,
 
 PhaseSwitchCooldown: Mindestabstand zwischen Phasenwechseln, Standard 180 s, 30–1800 s. Währenddessen kann mit der bisherigen Phasenanzahl weitergeladen werden, sofern genug Leistung verfügbar ist. PhaseSwitchTimeout: maximale Wartezeit je Bestätigung (Stillstand bzw. übernommener Phasenmodus), Standard 60 s, im Formular 15–300 s. Sobald die erforderlichen Rückmeldungen vorliegen, geht es weiter; dies ist keine feste Ladepause. Ohne Bestätigung bleibt die Wiederfreigabe gesperrt. Das sind Beta-Defaults für die Hardwareabnahme.
 
+Bei einem Kommunikations-Timeout des Stop-Befehls vor oder während eines Phasenwechsels erfolgen maximal drei Stop-/Statusprüfungen im Abstand von mindestens 30 Sekunden innerhalb von 120 Sekunden. Währenddessen sind keine Phasenbefehle oder Ladefreigaben erlaubt. Zwei aufeinanderfolgende frische Statusabfragen müssen gesperrten Stillstand bestätigen. Danach wird der bisherige Phasenplan verworfen; erst ein späterer Regelzyklus darf nach erneuter Prüfung aller Bedingungen weiterplanen. Eine ausdrückliche Ablehnung, ein Wallboxfehler oder die ausgeschöpfte Nachprüfung erfordern weiterhin einen Fehlerreset.
+
+Der Button zum Zurücksetzen der Phasensperre protokolliert jeden Aufruf mit Instanz-ID und bisherigem Fehler. Erfolg, Ablehnung (einschließlich Statuswerten bei unbestätigtem Stillstand) und nicht ausgeführte Aufrufe werden auch ohne Debug-Logging protokolliert. Der Reset bleibt an einen frischen bestätigten Stillstand gebunden.
+
 ## Netzlimit
 
 Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter sowie den Hinweis zur Bedienung der Begrenzung.

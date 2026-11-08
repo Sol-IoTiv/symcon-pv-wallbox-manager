@@ -5,6 +5,10 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ## [Unreleased]
 
+### 🐛 Stop vor Phasenwechsel und Fehlerreset
+- Transport-Timeouts beim Stop vor oder während eines Phasenwechsels werden begrenzt nachgeprüft: höchstens drei Stop-/Statusprüfungen in 120 Sekunden mit mindestens 30 Sekunden Abstand. Bis zwei aufeinanderfolgende frische Stillstandsbestätigungen vorliegen, bleiben Phasenbefehle und Ladefreigabe gesperrt. Danach wird der alte Phasenplan verworfen und erst in einem späteren Zyklus neu geprüft. Echte Ablehnungen, Wallboxfehler und ausgeschöpfte Prüfungen bleiben quittierungspflichtig.
+- Jeder Phasenfehler-Reset protokolliert Aufruf mit Instanz und bisherigem Fehler sowie Erfolg, Ablehnung mit Statuswerten oder nicht ausgeführte Aktion – auch bei ausgeschaltetem Debug-Logging.
+
 ### 🐛 PV-Hochregelung
 - Stromrampe berücksichtigt nach Messwert-Wartezeiten die seit der letzten gesendeten Stromänderung verstrichenen Aktualisierungsintervalle. Dadurch schnelleres Hochregeln in Nur PV, PV-Anteil und Hybrid; zwei neue plausible Hausverbrauchsaktualisierungen sowie Strom-/Netzgrenzen bleiben erforderlich. Initialer Start und sofortige Reduzierungen bleiben erhalten.
 

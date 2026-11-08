@@ -118,13 +118,30 @@ trait ChargingControl
         return false;
     }
 
+    private function handlePhaseStopFailure(): bool
+    {
+        if (!$this->commandTransportFailed) return $this->phaseFault('Ladestop abgelehnt');
+        // Persist a separate context in the existing stop-only recovery gate. The
+        // original phase deadline must not expire while communication is recovered.
+        $this->WriteAttributeString('ReleaseRecovery', json_encode([
+            'context'=>'phase', 'deadline'=>$this->now()+120, 'next'=>$this->now()+30,
+            'attempts'=>0, 'samples'=>0
+        ]));
+        $this->SetTimerInterval('PVWM_PhaseTransition', 0);
+        $this->SetNoChargeReason('Stop-Timeout vor Phasenwechsel – warte auf bestätigten Stillstand');
+        $this->LogTemplate('warn', 'Stop-Wiederherstellung vor Phasenwechsel gestartet',
+            'Maximal 3 Prüfungen im Abstand von 30 Sekunden innerhalb von 120 Sekunden; keine Phasenbefehle oder Ladefreigabe');
+        return false;
+    }
     public function ResetPhaseFault(): bool
     {
-        return $this->controlled(function () {
+        $this->LogTemplate('info', 'Phasenfehler-Reset angefordert', 'Instanz=' . $this->InstanceID . ', Zustand=' . $this->phaseState() . ', Fehler=' . $this->ReadAttributeString('PhaseTransitionError'));
+        try {
+            return $this->controlled(function () {
             $status = $this->getStatusFromCharger();
             if ($status === false || !$this->chargerStopped($status)) {
                 $this->stopCharging(false);
-                $this->LogTemplate('warn', 'Fehlerreset abgelehnt', $status === false ? 'Kein gültiger Wallboxstatus' : 'Stillstand nicht bestätigt');
+                $this->LogTemplate('warn', 'Fehlerreset abgelehnt', $status === false ? 'Kein gültiger Wallboxstatus' : sprintf('Stillstand nicht bestätigt: car=%d, frc=%d, alw=%s, psm=%d, Leistung=%.0f W, Ströme=%.2f/%.2f/%.2f A', $status['car'], $status['frc'], $status['alw'] ? 'true' : 'false', $status['psm'], $status['nrg'][11], $status['nrg'][4], $status['nrg'][5], $status['nrg'][6]));
                 return false;
             }
             $this->clearTransition();
@@ -135,7 +152,11 @@ trait ChargingControl
             $this->ClearNoChargeReason();
             $this->LogTemplate('ok', 'Fehlersperre zurückgesetzt', 'Stillstand bestätigt; Ladeplan wird im nächsten Regelzyklus geprüft');
             return true;
-        });
+            });
+        } catch (\Throwable $e) {
+            $this->LogTemplate('error', 'Fehlerreset nicht ausgeführt', $e->getMessage());
+            throw $e;
+        }
     }
 
     private function configuredPhaseCooldown(): int
@@ -178,7 +199,7 @@ trait ChargingControl
             $samples = $this->chargerStopped($data) ? $this->ReadAttributeInteger('PhaseTransitionSamples') + 1 : 0;
             if ($state === 'confirming' && $data['psm'] !== $this->ReadAttributeInteger('PhaseTransitionTarget')) $samples = 0;
             $this->WriteAttributeInteger('PhaseTransitionSamples', $samples);
-            if (!$this->chargerStopped($data) && !$this->stopCharging(false)) return $this->phaseFault('Ladestop abgelehnt');
+            if (!$this->chargerStopped($data) && !$this->stopCharging(false)) return $this->handlePhaseStopFailure();
             if ($samples < 2) return false;
             if ($state === 'stopping') {
                 // The planner may have changed its mind while waiting for the stop.
@@ -220,7 +241,7 @@ trait ChargingControl
             $this->WriteAttributeBoolean('PhaseResumePending', true);
             $this->SetNoChargeReason('Phasenumschaltung: Ladestop abwarten');
             $this->SetTimerInterval('PVWM_PhaseTransition', 2000);
-            if (!$this->stopCharging(false)) return $this->phaseFault('Ladestop abgelehnt');
+            if (!$this->stopCharging(false)) return $this->handlePhaseStopFailure();
             return false;
         }
         return $this->startAtCurrentPhase($data, $ampere);
@@ -332,6 +353,10 @@ trait ChargingControl
         $this->LogTemplate('info', 'Stop-Wiederherstellung', 'Prüfung '.$state['attempts'].'/3, Stillstandsbestätigungen '.$state['samples'].'/2');
         if ($state['samples'] >= 2) {
             $this->WriteAttributeString('ReleaseRecovery', '{}');
+            if (($state['context'] ?? '') === 'phase') {
+                // Discard the old phase plan. A later normal cycle must recheck all limits.
+                $this->clearTransition(true);
+            }
             $this->WriteAttributeInteger('ReleaseRetryAfter', $this->now()+30);
             $this->LogTemplate('ok', 'Stop-Wiederherstellung abgeschlossen', 'Zweimal Stillstand bestätigt; Ladeplan wird erneut geprüft. Freigabeversuche bleiben begrenzt.');
             return true;

@@ -790,6 +790,76 @@ $tests['elapsed ramp preserves initial step reductions and power budget'] = func
     $result=invoke($m,'calculateSurplus',$energy,1,false);
     expect($result['ueberschuss_a']===7,'Reduction is immediate');
 };
+function phaseStopTimeoutManager($midTransition=false) {
+    $m=new SimulatedManager(); $m->status['frc']=2; $m->status['alw']=true;
+    if ($midTransition) {
+        $m->plan(2,6); $m->commands=[];
+    }
+    $m->commandOffline=true; $m->plan(2,6);
+    expect($m->attributes['PhaseTransitionState']==='stopping','Timeout keeps transition blocked without a fault');
+    expect(json_decode($m->attributes['ReleaseRecovery'],true)['context']==='phase','Persistent recovery context');
+    expect(!in_array(['psm',2],$m->commands,true),'No phase command after unconfirmed stop');
+    return $m;
+}
+$tests['phase stop timeouts recover at start and during transition with two fresh stops'] = function () {
+    foreach ([false,true] as $mid) {
+        $m=phaseStopTimeoutManager($mid); $m->commandOffline=false;
+        $m->status['frc']=1; $m->status['alw']=false; $m->commands=[];
+        $m->plan(2,16); expect($m->commands===[],'No early retry');
+        $m->clock+=30; $m->plan(2,16);
+        expect($m->commands===[['frc',1]],'First fresh confirmation cannot switch or release');
+        $m->clock+=30; $m->plan(2,16);
+        expect($m->commands===[['frc',1],['frc',1]],'Completion cycle still stop-only');
+        expect($m->attributes['ReleaseRecovery']==='{}','Two fresh samples finish recovery');
+        expect($m->attributes['PhaseTransitionState']==='idle','Old transition and deadline discarded');
+        $m->clock+=30; $m->plan(2,16);
+        expect($m->attributes['PhaseTransitionState']==='stopping','Later plan starts a newly checked transition');
+    }
+};
+$tests['phase stop outage stays bounded across recreation and normal update'] = function () {
+    $m=phaseStopTimeoutManager(); $n=new SimulatedManager(); $n->attributes=$m->attributes;
+    $n->clock=$m->clock; $n->offline=true; $n->commandOffline=true; $n->commands=[];
+    for ($i=0;$i<3;$i++) { $n->clock+=30; $n->UpdateStatus(); }
+    expect($n->commands===array_fill(0,3,['frc',1]),'Exactly three stop retries');
+    $n->clock+=30; $n->UpdateStatus();
+    expect($n->attributes['PhaseTransitionState']==='fault','Deadline requires explicit reset');
+    expect(!in_array(['psm',2],$n->commands,true),'Never switch during outage');
+};
+$tests['phase stop explicit rejection remains a fault and no recovery'] = function () {
+    $m=new SimulatedManager(); $m->status['frc']=2; $m->status['alw']=true; $m->reject='frc';
+    $m->plan(2,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Actual API rejection latches fault');
+    expect($m->attributes['ReleaseRecovery']==='{}','Do not retry explicit rejection');
+};
+$tests['phase recovery never resumes disabled target SOC or exhausted release plans'] = function () {
+    foreach (['inactive','soc','attempts','grid'] as $kind) {
+        $m=phaseStopTimeoutManager(); $m->commandOffline=false; $m->status['frc']=1; $m->status['alw']=false;
+        for($i=0;$i<2;$i++) { $m->clock+=30; $m->plan(2,6); }
+        if($kind==='inactive') $m->properties['ModulAktiv']=false;
+        if($kind==='soc') { $m->properties['CarSOCID']=91; $m->properties['CarTargetSOCID']=92; SetValue(91,100); SetValue(92,100); }
+        if($kind==='attempts') $m->attributes['ReleaseFailures']=3;
+        if($kind==='grid') $m->grid(9000,1000);
+        $m->commands=[]; $m->clock+=30; $m->plan(2,16);
+        expect(!in_array(['psm',2],$m->commands,true) && !in_array(['frc',2],$m->commands,true),'Later revalidation enforces '.$kind);
+    }
+};
+$tests['phase reset logs request and outcome without debug logging'] = function () {
+    foreach (['ok','running','offline','busy'] as $kind) {
+        $m=new SimulatedManager(); $m->attributes['PhaseTransitionState']='fault'; $m->attributes['PhaseTransitionError']='test';
+        $m->properties['DebugLogging']=false; $GLOBALS['logMessages']=[];
+        if($kind==='running') { $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; }
+        if($kind==='offline') $m->offline=true;
+        if($kind==='busy') $GLOBALS['locks']['PVWM.Control.123']=true;
+        try { $result=$m->ResetPhaseFault(); }
+        catch (Throwable $e) { expect($kind==='busy','Only busy may throw'); $result=false; }
+        finally { $GLOBALS['locks']['PVWM.Control.123']=false; }
+        $log=implode('\n',$GLOBALS['logMessages']);
+        expect(strpos($log,'Phasenfehler-Reset angefordert')!==false,'Always log the click');
+        $outcome=$kind==='ok' ? 'Fehlersperre zurückgesetzt' : ($kind==='busy' ? 'Fehlerreset nicht ausgeführt' : 'Fehlerreset abgelehnt');
+        expect(strpos($log,$outcome)!==false,'Log explicit result: '.$kind);
+        expect($result===($kind==='ok'),'Reset only when stopped and reachable');
+    }
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }
