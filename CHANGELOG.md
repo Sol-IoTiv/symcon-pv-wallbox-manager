@@ -5,6 +5,9 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ## [Unreleased]
 
+### 🐛 PV-Hochregelung
+- Stromrampe berücksichtigt nach Messwert-Wartezeiten die seit der letzten gesendeten Stromänderung verstrichenen Aktualisierungsintervalle. Dadurch schnelleres Hochregeln in Nur PV, PV-Anteil und Hybrid; zwei neue plausible Hausverbrauchsaktualisierungen sowie Strom-/Netzgrenzen bleiben erforderlich. Initialer Start und sofortige Reduzierungen bleiben erhalten.
+
 ## [1.4.11b] - 2026-11-04
 
 ### 🔧 Konfiguration

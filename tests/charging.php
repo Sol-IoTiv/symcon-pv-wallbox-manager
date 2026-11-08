@@ -755,6 +755,41 @@ $tests['repeated recovery never replenishes three release attempts'] = function 
     }
     expect(count(array_filter($m->commands,fn($c)=>$c===['frc',2]))===3,'Never more than three unconfirmed releases');
 };
+$tests['PV ramp catches up only after two fresh house updates in all PV modes'] = function () {
+    foreach ([0,1,5] as $mode) {
+        $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',$mode); $m->SetValue('PVAnteil',100);
+        $m->properties['RefreshInterval']=60; $m->properties['SmoothingAlpha']=1.0;
+        $m->properties['PVErzeugungID']=43; SetValue(43,3500.0);
+        $m->properties['HausverbrauchID']=47; SetValue(47,1800.0);
+        $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['amp']=6;
+        $m->attributes['LastChargingCurrent']=6; $m->attributes['LastSentChargingCurrent']=6;
+        $m->attributes['LastChargingCurrentChange']=1000;
+        $m->attributes['EnergyMeasurementState']=json_encode(['source'=>47,'wallbox'=>0]);
+        $m->status['nrg'][11]=1300;
+        foreach ([1060,1120,1180] as $time) {
+            $m->clock=$time; $GLOBALS['metadata'][47]=['VariableType'=>2,'VariableUpdated'=>$time];
+            $m->commands=[]; $m->UpdateStatus();
+            if ($time<1180) expect($m->commands===[],'No increase before two later house updates');
+        }
+        expect(in_array(['amp',12],$m->commands,true),'After 180 s allow 6 A instead of only 2 A');
+        expect($m->attributes['LastChargingCurrentChange']===1180,'Actual command resets ramp time');
+    }
+};
+$tests['elapsed ramp preserves initial step reductions and power budget'] = function () {
+    $m=new SimulatedManager(); $m->properties['RefreshInterval']=60;
+    $m->clock=10000; $m->attributes['LastChargingCurrentChange']=1000;
+    expect(invoke($m,'currentRampAllowance')===2,'Stopped or initial start cannot accumulate ramp credit');
+    $m->attributes['LastSentChargingCurrent']=6; $m->attributes['LastChargingCurrent']=6;
+    $m->attributes['LastChargingCurrentChange']=9940;
+    expect(invoke($m,'currentRampAllowance')===2,'Normal interval keeps configured step');
+    $m->clock=10120;
+    $energy=['pv'=>2000,'hausFiltered'=>500,'batt'=>0];
+    $result=invoke($m,'calculateSurplus',$energy,1,false);
+    expect($result['ueberschuss_a']===7,'Elapsed allowance cannot exceed calculated target');
+    $m->attributes['LastChargingCurrent']=16;
+    $result=invoke($m,'calculateSurplus',$energy,1,false);
+    expect($result['ueberschuss_a']===7,'Reduction is immediate');
+};
 $failures=0;
 foreach ($tests as $name=>$test) {
     try { $test(); echo "PASS $name\n"; }

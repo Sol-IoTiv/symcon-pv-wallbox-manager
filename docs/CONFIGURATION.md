@@ -30,7 +30,7 @@ Die Wallboxleistung wird vom Hausverbrauch abgezogen. Nur PV/Hybrid berücksicht
 
 HausakkuSOCID/HausakkuSOCVollSchwelle bilden eine optionale Startbedingung für PV/Hybrid. Im Modus PV-Anteil wird ab dieser Schwelle automatisch der volle Überschuss zugeteilt; darunter und ohne gültigen Hausakku-SoC gilt der eingestellte Anteil. 0 % bleibt Stop. Ohne zugeordneten SoC keine SoC-Sperre; eine bereits laufende Ladung wird nicht allein wegen Unterschreiten dieser Startschwelle beendet.
 
-SmoothingAlpha steuert exponentielle Glättung (0–1). MaxRampDeltaAmp begrenzt Stromerhöhungen; Reduzierungen erfolgen sofort. Nach drei auffälligen Hauslastanstiegen übernimmt der Spikefilter den neuen Wert.
+SmoothingAlpha steuert exponentielle Glättung (0–1). MaxRampDeltaAmp begrenzt Stromerhöhungen pro regulärem Aktualisierungsintervall (RefreshInterval). Nach einer Messwert-Wartezeit werden die seit der letzten tatsächlich gesendeten Stromänderung verstrichenen Intervalle berücksichtigt: Bei 2 A und 60 s sind nach 180 s bis zu 6 A Erhöhung möglich. Die Erhöhung bleibt durch das berechnete Leistungsbudget und die Strom-/Netzgrenzen begrenzt. Die Prüfung auf zwei neue plausible Hausverbrauchsaktualisierungen bleibt Voraussetzung; wiederholte Abfragen desselben Wertes genügen nicht. Beim ersten Start gilt ein einzelner Rampenschritt; Reduzierungen erfolgen sofort. Nach drei auffälligen Hauslastanstiegen übernimmt der Spikefilter den neuen Wert.
 
 ## Ladegrenzen
 
