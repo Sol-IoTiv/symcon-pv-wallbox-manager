@@ -41,7 +41,6 @@ Bei Eigenschaften mit Variablen-IDs bezeichnet `integer` den Typ der Objekt-ID. 
 | PhaseSwitchTimeout | integer | `60` |
 | InvertNetzleistung | boolean | `false` |
 | GridMeasurementMaxAge | integer | `120` |
-| GridPowerReserveWatt | integer | `0` |
 | NetzleistungID | integer | `0` |
 | NetzleistungEinheit | string | `'W'` |
 | NetzlimitStartAktiv | boolean | `false` |
@@ -60,6 +59,6 @@ Bei Eigenschaften mit Variablen-IDs bezeichnet `integer` den Typ der Objekt-ID. 
 
 Die fachlichen Bedeutungen und Einschränkungen stehen in [CONFIGURATION.md](CONFIGURATION.md).
 
-NetzlimitStartAktiv und MaxGridLoadWatt sind ausgeblendete Legacy-Eigenschaften zur erstmaligen Initialisierung. Die Instanzvariablen NetzlimitAktiv und MaxNetzbezugWatt steuern Aktivierung und Grenzwert. GridPowerReserveWatt legt den Abstand zum Grenzwert fest.
+NetzlimitStartAktiv und MaxGridLoadWatt sind ausgeblendete Legacy-Eigenschaften zur erstmaligen Initialisierung. Für die laufende Bedienung gelten ausschließlich die Instanzvariablen NetzlimitAktiv und MaxNetzbezugWatt.
 
 CarMaxPhases ist eine ausgeblendete, nicht mehr ausgewertete Legacy-Eigenschaft. Fahrzeugphasen werden automatisch erkannt.

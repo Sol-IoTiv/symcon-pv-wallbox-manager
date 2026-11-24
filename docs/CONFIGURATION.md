@@ -48,19 +48,17 @@ Der Button zum Zurücksetzen der Phasensperre protokolliert jeden Aufruf mit Ins
 
 ## Netzlimit
 
-Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter und die Leistungsreserve.
+Im Formular bündelt „Netzanschluss / Netzbezug“ Messvariable, Einheit, Vorzeichen, maximales Messwertalter sowie den Hinweis zur Bedienung der Begrenzung.
 
 NetzleistungID: Gesamt-Netzleistung inklusive Wallbox. Intern positiv=Bezug, negativ=Einspeisung; InvertNetzleistung kehrt das Vorzeichen um. NetzleistungEinheit: W/kW.
 
 GridMeasurementMaxAge: Standard 120 s, Bezug auf Symcons VariableUpdated. Der Zähler muss auch bei gleichem Wert regelmäßig aktualisieren. Fehlende, falsch typisierte, nicht numerische oder zu alte Werte sperren die Ladung bei aktivem Limit.
 
-Die Instanzvariablen „Netzbegrenzung aktiv“ (NetzlimitAktiv) und „Maximale Netzbelastung“ (MaxNetzbezugWatt) sind in der Visualisierung oder im Objektbaum unter der PVWallboxManager-Instanz bedienbar. Der Schieberegler reicht von 0 bis 22.000 W in 100-W-Schritten. Zuerst den gewünschten Grenzwert in Watt setzen, dann einschalten. **Ein Grenzwert von 0 W deaktiviert die Begrenzung.**
+Die Begrenzung ausschließlich über die bedienbaren Instanzvariablen „Netzbegrenzung aktiv“ (NetzlimitAktiv) und „Maximale Netzbelastung“ (MaxNetzbezugWatt) einstellen, in der Visualisierung oder im Objektbaum unter der PVWallboxManager-Instanz. Der Schieberegler reicht von 0 bis 22.000 W in 100-W-Schritten. Zuerst den gewünschten Grenzwert in Watt setzen, dann einschalten. **0 W bedeutet deaktivierte Begrenzung.**
 
 Die früheren Formular-Startwerte NetzlimitStartAktiv und MaxGridLoadWatt bleiben als Legacy-Eigenschaften für die Kompatibilität registriert, sind aber nicht mehr im Formular sichtbar. Sie werden nur bei der erstmaligen Initialisierung übernommen; vorhandene Laufzeitwerte bleiben beim Update erhalten. Neue Instanzen starten standardmäßig mit ausgeschalteter Begrenzung und 0 W.
 
-GridPowerReserveWatt stellt bei aktiver Begrenzung Platz für zusätzliche Verbraucher bereit. Mit 1.500 W Reserve und einem Grenzwert von 10.000 W beträgt das Regelziel 8.500 W. Der Standardwert 0 W übernimmt den Grenzwert direkt als Regelziel. Erreicht oder überschreitet die Reserve den Grenzwert, beträgt das Regelziel 0 W. Laden mit vorhandenem Überschuss bleibt möglich.
-
-Budget = aktuelle Wallboxleistung + Regelziel − Netzbezug. Gilt auch bei Einspeisung. Reicht das Budget nur für 1P-Mindeststrom, wird auf eine Phase gewechselt, sobald es der Cooldown zulässt. Bei weniger Budget fordert das Modul im selben Regelzyklus einen Ladestopp an. Zwischen zwei Regelzyklen können andere Verbraucher den Netzbezug weiter erhöhen.
+Budget = aktuelle Wallboxleistung + Bezugslimit − Netzbezug. Gilt auch bei Einspeisung. Reicht das Budget nicht für 3P-Mindeststrom, wird 1P erwogen; reicht auch das nicht, wird Stop angefordert. Cooldown verzögert keinen nötigen Stop.
 
 ## Hybrid und Fahrzeug
 
