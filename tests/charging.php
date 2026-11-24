@@ -59,6 +59,54 @@ $tests['zero grid power still limits requested load'] = function () {
     $m=new SimulatedManager(); $m->grid(0); $m->plan(2,16);
     expect($m->commands===[['amp',8],['frc',2]],'2000 W budget should stay at 1P/8A');
 };
+$tests['grid reserve reduces current below the configured limit'] = function () {
+    $m=new SimulatedManager();
+    $m->properties['GridPowerReserveWatt']=1500;
+    $m->status['car']=2;
+    $m->status['frc']=2;
+    $m->status['alw']=true;
+    $m->status['amp']=15;
+    $m->status['nrg'][4]=15;
+    $m->status['nrg'][11]=3450;
+    $m->grid(9430,10000);
+    $m->plan(1,16);
+    expect($m->commands===[['amp',10]],'2520 W below the 8500 W target yields at most 10 A');
+};
+$tests['grid reserve stops charging below minimum current'] = function () {
+    $m=new SimulatedManager();
+    $m->properties['GridPowerReserveWatt']=1500;
+    $m->status['car']=2;
+    $m->status['frc']=2;
+    $m->status['alw']=true;
+    $m->status['amp']=10;
+    $m->status['nrg'][4]=10;
+    $m->status['nrg'][11]=2300;
+    $m->grid(9700,10000);
+    $m->plan(1,16);
+    expect($m->commands===[['frc',1]],'1100 W below the reserved target cannot sustain charging');
+};
+$tests['reserve at or above the limit only allows surplus charging'] = function () {
+    foreach ([10000,12000] as $reserve) {
+        $m=new SimulatedManager();
+        $m->properties['GridPowerReserveWatt']=$reserve;
+        $m->grid(200,10000);
+        $m->plan(1,16);
+        expect($m->commands===[],'A zero import target cannot start charging while importing');
+        $m->grid(-1840,10000);
+        $m->plan(1,16);
+        expect($m->commands===[['amp',8],['frc',2]],'1840 W of export can charge at 8 A');
+    }
+};
+$tests['grid reserve only applies to an active nonzero limit'] = function () {
+    foreach ([0,10000] as $limit) {
+        $m=new SimulatedManager();
+        $m->properties['GridPowerReserveWatt']=1500;
+        $m->grid(9800,$limit);
+        $m->SetValue('NetzlimitAktiv',$limit===0);
+        $m->plan(1,16);
+        expect($m->commands===[['amp',16],['frc',2]],'A disabled grid limit must ignore the reserve');
+    }
+};
 $tests['invalid meter never releases charging'] = function () {
     $m=new SimulatedManager(); $m->SetValue('NetzlimitAktiv',true); $m->SetValue('MaxNetzbezugWatt',2000); $m->plan(2,16);
     expect($m->commands===[],'Stopped wallbox must not be enabled');

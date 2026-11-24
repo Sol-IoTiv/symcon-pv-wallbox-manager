@@ -150,12 +150,20 @@
           "caption": "Bei aktivem Limit und fehlendem/ungültigem/veraltetem Messwert wird Ladestop angefordert. Der Zähler muss regelmäßig aktualisieren, auch bei unverändertem Wert."
         },
         {
-          "type": "Label",
-          "label": "Netzbegrenzung bedienen: In der Visualisierung oder im Objektbaum unter dieser PVWallboxManager-Instanz „Maximale Netzbelastung“ auf den gewünschten Grenzwert in Watt stellen und „Netzbegrenzung aktiv“ einschalten. Diese beiden Instanzvariablen bestimmen die laufende Begrenzung. Bei 0 W ist sie deaktiviert."
+          "type": "NumberSpinner",
+          "name": "GridPowerReserveWatt",
+          "caption": "Leistungsreserve für Lastsprünge",
+          "suffix": "W",
+          "minimum": 0,
+          "maximum": 50000
         },
         {
           "type": "Label",
-          "label": "Beispiel: Bei 8000 W wird die Wallbox zurückgeregelt, sobald der gesamte Netzbezug am Hausanschluss den eingestellten Wert überschreiten würde."
+          "label": "In der Visualisierung oder im Objektbaum „Maximale Netzbelastung“ in Watt setzen und „Netzbegrenzung aktiv“ einschalten. Ein Grenzwert von 0 W deaktiviert die Begrenzung."
+        },
+        {
+          "type": "Label",
+          "label": "Bei 10.000 W Grenzwert und 1.500 W Reserve beträgt das Regelziel 8.500 W Netzbezug. Mit 0 W Reserve gilt der eingestellte Grenzwert als Regelziel."
         }
       ]
     },

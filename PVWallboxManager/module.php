@@ -113,6 +113,7 @@ class PVWallboxManager extends IPSModule
             'PhaseSwitchTimeout'     => ['type'=>'integer', 'default'=>60],
             'InvertNetzleistung'     => ['type'=>'boolean', 'default'=>false],
             'GridMeasurementMaxAge'  => ['type'=>'integer', 'default'=>120],
+            'GridPowerReserveWatt'    => ['type'=>'integer', 'default'=>0],
             'NetzleistungID'         => ['type'=>'integer', 'default'=>0],
             'NetzleistungEinheit'    => ['type'=>'string',  'default'=>'W'],
             'NetzlimitStartAktiv'    => ['type'=>'boolean', 'default'=>false],
@@ -1605,7 +1606,8 @@ class PVWallboxManager extends IPSModule
 
     private function applyMaxGridLoadLimit(int $ampere, int &$anzPhasen): int
     {
-        if (!$this->GetValue('NetzlimitAktiv') || (int)$this->GetValue('MaxNetzbezugWatt') <= 0) return $ampere;
+        $limit = (int)$this->GetValue('MaxNetzbezugWatt');
+        if (!$this->GetValue('NetzlimitAktiv') || $limit <= 0) return $ampere;
         $grid = $this->readGridPower();
         if ($grid === null) {
             $this->LogStateOnce('invalid_grid', 'error', 'Netzbegrenzung sperrt Ladung', $this->GetNoChargeReason());
@@ -1613,7 +1615,9 @@ class PVWallboxManager extends IPSModule
         }
         $this->ResetStateLog('invalid_grid');
         $power = $this->chargerSnapshot !== null ? (float)$this->chargerSnapshot['nrg'][11] : (float)$this->GetValue('Leistung');
-        $budget = max(0,$power) + (int)$this->GetValue('MaxNetzbezugWatt') - $grid;
+        $reserve = max(0, $this->ReadPropertyInteger('GridPowerReserveWatt'));
+        $target = max(0, $limit - $reserve);
+        $budget = max(0, $power) + $target - $grid;
         $minimum = max(6,$this->ReadPropertyInteger('MinAmpere'));
         $anzPhasen = $anzPhasen === 3 ? 3 : 1;
         if ($budget < 230 * $minimum * $this->vehiclePhaseCount($anzPhasen) && $budget >= 230 * $minimum) $anzPhasen = 1;
