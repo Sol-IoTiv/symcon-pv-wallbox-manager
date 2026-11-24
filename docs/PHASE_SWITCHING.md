@@ -13,6 +13,8 @@ Stillstand: frc=1, alw=false, car nicht ladend, Gesamtleistung höchstens 30 W, 
 
 HTTP 200 allein genügt nicht: Die JSON-Antwort muss für den Parameter true enthalten. Danach muss psm den Zielmodus bestätigen. psm beschreibt die Einstellung, nicht die vom Fahrzeug genutzten Phasen. Erst ein neuer Regelzyklus entscheidet über den Wiederanlauf.
 
+Reicht das Netzbudget nach Quittierung des Phasenbefehls durch die API nicht mehr für den Mindestladestrom oder fehlt ein gültiger Netzmesswert, läuft die Prüfung des Zielmodus im Stillstand bis zur Bestätigung oder zum Timeout weiter. Ein neuer Regelzyklus prüft das Netzbudget, bevor er Ladestrom oder Ladefreigabe setzt.
+
 Während des Cooldowns bleibt der bestätigte Modus erhalten, soweit ein zulässiger Strom möglich ist. Andernfalls Stop. Reduzieren/Stoppen wartet nie auf den Cooldown.
 
 Timeout, Ablehnung, Kommunikationsverlust im Übergang oder Abbruch nach unbestätigtem Phasenbefehl sperren die Wiederfreigabe. ApplyChanges während eines Übergangs erfordert Quittierung. Eine neue PHP-Ausführung allein verliert den Auftrag nicht.

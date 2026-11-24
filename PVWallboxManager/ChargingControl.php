@@ -182,15 +182,19 @@ trait ChargingControl
         }
         if ($this->vehicleSocInvalid()) { $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig'); return $this->stopCharging(); }
         if ($this->targetSocReached()) { $this->SetNoChargeReason('Ziel-SoC erreicht'); return $this->stopCharging(); }
-        $phases = $this->phaseModeToPhaseCount($phaseMode);
-        $ampere = $this->clampAmpere($ampere);
-        $ampere = $this->applyMaxGridLoadLimit($ampere, $phases);
-        if ($ampere < max(6, $this->ReadPropertyInteger('MinAmpere'))) {
-            if ($this->GetNoChargeReason() === '') $this->SetNoChargeReason('Kein zulässiger Ladestrom');
-            return $this->stopCharging();
-        }
-        $phaseMode = $phases === 3 ? self::PHASE_MODE_3P : self::PHASE_MODE_1P;
         $state = $this->phaseState();
+        // An issued phase command must be confirmed while stopped, even if the current grid budget vanishes.
+        // After confirmation a new cycle checks the budget before sending any current or release command.
+        if ($state !== 'confirming') {
+            $phases = $this->phaseModeToPhaseCount($phaseMode);
+            $ampere = $this->clampAmpere($ampere);
+            $ampere = $this->applyMaxGridLoadLimit($ampere, $phases);
+            if ($ampere < max(6, $this->ReadPropertyInteger('MinAmpere'))) {
+                if ($this->GetNoChargeReason() === '') $this->SetNoChargeReason('Kein zulässiger Ladestrom');
+                return $this->stopCharging();
+            }
+            $phaseMode = $phases === 3 ? self::PHASE_MODE_3P : self::PHASE_MODE_1P;
+        }
         if (in_array($state, ['stopping','confirming'], true)) {
             if ($this->now() >= $this->ReadAttributeInteger('PhaseTransitionDeadline')) return $this->phaseFault('Zeitüberschreitung bei ' . $state);
             if ($this->now() - $this->ReadAttributeInteger('PhaseTransitionSampleTime') < 2) return false;

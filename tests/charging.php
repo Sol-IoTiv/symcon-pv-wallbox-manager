@@ -85,6 +85,53 @@ $tests['phase change waits for stop and readback'] = function () {
     expect(!in_array(['frc',2],$m->commands,true),'Completion does not immediately resume');
     $m->plan(2,6); expect(end($m->commands)===['frc',2],'New cycle may resume');
 };
+$tests['load spike during phase confirmation keeps charger stopped and recovers'] = function () {
+    $m=new SimulatedManager();
+    $m->properties['CarMaxPhases']=2;
+    $m->status['psm']=2;
+    $m->status['amp']=8;
+    $m->grid(8234,10000);
+    for ($i=0; $i<3; $i++) {
+        $m->clock+=2;
+        $m->UpdateStatus();
+    }
+    expect($m->commands===[['psm',1]],'Available budget authorizes a switch to one phase');
+    expect($m->attributes['PhaseTransitionState']==='confirming','Wait for phase readback');
+
+    $m->status['psm']=1;
+    $m->clock+=2;
+    $m->grid(8622,10000);
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseTransitionState']==='confirming','A load spike cannot cancel phase readback');
+    expect($m->attributes['PhaseTransitionSamples']===1,'A single reading cannot confirm the switch');
+
+    $m->clock+=2;
+    $m->grid(8663,10000);
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseTransitionState']==='idle','Two stopped readings confirm the switch under low budget');
+    expect($m->commands===[['psm',1]],'Confirmation cannot write current, release charging or repeat the phase command');
+
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1]],'A new cycle still requires enough budget to charge');
+
+    $m->clock+=2;
+    $m->grid(8300,10000);
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1],['amp',7],['frc',2]],'Charging restarts within the fresh budget without a reset');
+};
+$tests['low budget cannot clear an unconfirmed phase command'] = function () {
+    $m=new SimulatedManager();
+    $m->plan(2,6); $m->plan(2,6); $m->plan(2,6);
+    $m->grid(9000,10000);
+    $m->plan(2,6);
+    expect($m->attributes['PhaseTransitionState']==='confirming','Keep waiting when the phase has not changed');
+    expect($m->attributes['PhaseTransitionSamples']===0,'The previous phase is not a confirmation');
+    $m->clock=$m->attributes['PhaseTransitionDeadline'];
+    $m->plan(2,6);
+    expect($m->attributes['PhaseTransitionState']==='fault','Missing phase confirmation still times out');
+    expect($m->commands===[['psm',2]],'No repeat or release after an unconfirmed phase command');
+};
 $tests['HTTP 200 API error prevents release'] = function () {
     $m=new SimulatedManager(); $m->reject='amp'; $m->plan(1,16);
     expect($m->attributes['PhaseTransitionState']==='fault','API rejection must latch fault');
