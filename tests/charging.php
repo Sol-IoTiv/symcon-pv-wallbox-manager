@@ -132,6 +132,139 @@ $tests['low budget cannot clear an unconfirmed phase command'] = function () {
     expect($m->attributes['PhaseTransitionState']==='fault','Missing phase confirmation still times out');
     expect($m->commands===[['psm',2]],'No repeat or release after an unconfirmed phase command');
 };
+function confirmedOnePhaseAfterGridDrop(): SimulatedManager {
+    $m=new SimulatedManager();
+    $m->properties['ModeAfterUnplug']=2;
+    $m->SetValue('ManuellPhasen',2);
+    $m->status['psm']=2;
+    $m->status['amp']=7;
+    $m->grid(8396,10000);
+    for ($i=0; $i<3; $i++) {
+        $m->clock+=2;
+        $m->UpdateStatus();
+    }
+    $m->status['psm']=1;
+    $m->status['car']=4;
+    for ($i=0; $i<2; $i++) {
+        $m->clock+=2;
+        $m->UpdateStatus();
+    }
+    expect($m->commands===[['psm',1]],'Confirmation cannot release charging in the same cycle');
+    expect($m->attributes['PhaseTransitionState']==='idle','Two stopped readings confirm the new phase');
+    return $m;
+}
+$tests['confirmed phase can restart while cooldown defers the return switch'] = function () {
+    $m=confirmedOnePhaseAfterGridDrop();
+    $m->grid(5731,10000);
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1],['amp',16],['frc',2]],'November 23 replay can release on the confirmed phase');
+    expect($m->attributes['PhaseResumePending']===true,'An accepted command is not proof of charging');
+
+    $m->status['frc']=2;
+    $m->status['amp']=16;
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect(count($m->commands)===3,'Do not revoke or repeat the release while the car is starting');
+
+    $m->status['car']=2;
+    $m->status['alw']=true;
+    $m->status['nrg'][4]=15;
+    $m->status['nrg'][11]=3450;
+    $m->grid(9181,10000);
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseResumePending']===false,'Observed charging completes the restart');
+    expect(count($m->commands)===3,'Keep charging on the same phase during cooldown');
+};
+$tests['restart on the confirmed phase always rechecks the grid budget'] = function () {
+    $m=confirmedOnePhaseAfterGridDrop();
+    $m->grid(5731,10000);
+    $m->clock+=121;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1]],'Stale grid readings cannot authorize restart');
+    $m->grid(9000,10000);
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1]],'Insufficient grid budget cannot authorize restart');
+    $m->grid(5731,10000);
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1],['amp',16],['frc',2]],'The next valid budget allows a restart');
+    $m->status['amp']=16;
+    $m->status['frc']=2;
+    $m->grid(9000,10000);
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect(end($m->commands)===['frc',1],'Revoke the release immediately if budget is lost during startup');
+};
+$tests['unplug after phase confirmation cancels the restart and replug plans anew'] = function () {
+    $m=confirmedOnePhaseAfterGridDrop();
+    $m->status['car']=1;
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseResumePending']===false,'An unplug clears the previous session even when the charger was stopped');
+    expect($m->commands===[['psm',1]],'An unplug cannot release or switch phases');
+
+    $m->status['car']=3;
+    $m->grid(5731,10000);
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1]],'A fresh connection waits for the requested phase during cooldown');
+
+    $m->clock+=180;
+    $m->grid(5731,10000);
+    for ($i=0; $i<3; $i++) {
+        $m->clock+=2;
+        $m->UpdateStatus();
+    }
+    expect($m->commands===[['psm',1],['psm',2]],'A new phase command follows the newly evaluated plan');
+    $m->status['psm']=2;
+    for ($i=0; $i<2; $i++) {
+        $m->clock+=2;
+        $m->UpdateStatus();
+    }
+    expect(count($m->commands)===2,'Wait for readback before releasing the reconnected car');
+
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect(array_slice($m->commands,-2)===[['amp',6],['frc',2]],'The reconnected car starts normally at the safe current');
+    $m->status['car']=2;
+    $m->status['frc']=2;
+    $m->status['alw']=true;
+    $m->status['amp']=6;
+    $m->status['nrg'][4]=5.8;
+    $m->status['nrg'][5]=5.8;
+    $m->status['nrg'][11]=2600;
+    $m->grid(8331,10000);
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect((float)$m->GetValue('Leistung')===2600.0 && $m->attributes['PhaseTransitionState']==='idle','The new session reports charging without a fault');
+};
+$tests['replug can start immediately when its new plan fits the current phase'] = function () {
+    $m=confirmedOnePhaseAfterGridDrop();
+    $m->status['car']=1;
+    $m->clock+=2;
+    $m->UpdateStatus();
+    $m->status['car']=3;
+    $m->grid(8300,10000);
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1],['frc',2]],'No switch or wait is needed for a fresh 7 A plan on the current phase');
+    expect($m->attributes['PhaseResumePending']===false,'Changing plugs must not carry over the old restart');
+};
+$tests['PV mode can resume a confirmed phase while a return decision settles'] = function () {
+    $m=confirmedOnePhaseAfterGridDrop();
+    $m->SetValue('LademodusAuswahl',1);
+    $m->properties['PVErzeugungID']=43;
+    $m->properties['Phasen3Limit']=5;
+    SetValue(43,8000.0);
+    $m->attributes['LastChargingCurrent']=6;
+    $m->grid(5731,10000);
+    $m->clock+=16;
+    $m->UpdateStatus();
+    expect($m->commands===[['psm',1],['amp',8],['frc',2]],'Wait for the return decision while allowing safe charging on the confirmed phase');
+};
 $tests['HTTP 200 API error prevents release'] = function () {
     $m=new SimulatedManager(); $m->reject='amp'; $m->plan(1,16);
     expect($m->attributes['PhaseTransitionState']==='fault','API rejection must latch fault');

@@ -15,7 +15,7 @@ HTTP 200 allein genügt nicht: Die JSON-Antwort muss für den Parameter true ent
 
 Reicht das Netzbudget nach Quittierung des Phasenbefehls durch die API nicht mehr für den Mindestladestrom oder fehlt ein gültiger Netzmesswert, läuft die Prüfung des Zielmodus im Stillstand bis zur Bestätigung oder zum Timeout weiter. Ein neuer Regelzyklus prüft das Netzbudget, bevor er Ladestrom oder Ladefreigabe setzt.
 
-Während des Cooldowns bleibt der bestätigte Modus erhalten, soweit ein zulässiger Strom möglich ist. Andernfalls Stop. Reduzieren/Stoppen wartet nie auf den Cooldown.
+Während des Cooldowns darf die Ladung nach einer bestätigten Umschaltung in der bestätigten Phase anlaufen, wenn Ladeplan und aktuelle Messwerte einen zulässigen Strom erlauben. Die Regelung hält die Freigabe auch während der Startwartezeit des Fahrzeugs, solange die Voraussetzungen erfüllt sind. Sinkt das Netzbudget unter den Mindeststrom, wird im selben Regelzyklus gestoppt. Beim Abstecken endet der Wiederanlaufauftrag. Nach erneutem Anstecken plant das Modul mit frischen Messwerten und berücksichtigt weiterhin den Mindestabstand zum letzten Phasenwechsel.
 
 Timeout, Ablehnung, Kommunikationsverlust im Übergang oder Abbruch nach unbestätigtem Phasenbefehl sperren die Wiederfreigabe. ApplyChanges während eines Übergangs erfordert Quittierung. Eine neue PHP-Ausführung allein verliert den Auftrag nicht.
 

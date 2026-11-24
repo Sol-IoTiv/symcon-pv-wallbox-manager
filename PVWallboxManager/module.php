@@ -710,6 +710,13 @@ class PVWallboxManager extends IPSModule
         $this->desiredPhaseMode = $data['psm'] === 2 ? 2 : 1;
         $vars = $this->extractChargerVariables($data);
         $this->syncChargerVariables($vars, $phasen);
+        if ($data['car'] === 1) {
+            if ($this->phaseState() === 'stopping') {
+                $this->clearTransition();
+            } else {
+                $this->WriteAttributeBoolean('PhaseResumePending', false);
+            }
+        }
         if ($data['car'] === 1 || $data['frc'] !== 2) $this->WriteAttributeBoolean('ChargingPowerObserved', false);
         $this->LogTemplate('debug', 'Laderegelung Rückmeldung', sprintf(
             'car=%d, frc=%d, alw=%s, psm=%d, amp=%d A, Leistung=%.0f W, Ströme=%.2f/%.2f/%.2f A',
@@ -1594,7 +1601,7 @@ class PVWallboxManager extends IPSModule
     {
         $enabled = $overrideFRC !== null ? $overrideFRC === 2 : $pvUeberschuss >= $this->ReadPropertyInteger('MinLadeWatt');
         $status = $this->chargerSnapshot;
-        if ($enabled && $this->phaseDecisionPending && $status !== null
+        if ($enabled && $this->phaseDecisionPending && $status !== null && !$this->awaitingConfirmedPhaseResume($status)
             && ($status['car'] !== 2 || !$status['alw'] || (float)$status['nrg'][11] <= 30)) {
             $this->SetNoChargeReason('Ladestart wartet auf stabile Phasenentscheidung');
             $this->stopCharging();

@@ -164,6 +164,21 @@ trait ChargingControl
         return max(30, min(1800, $this->ReadPropertyInteger('PhaseSwitchCooldown')));
     }
 
+    private function phaseCooldownActive(): bool
+    {
+        $last = $this->ReadAttributeInteger('LetztePhasenUmschaltung');
+        return $last > 0 && $this->now() - $last < $this->configuredPhaseCooldown();
+    }
+
+    private function awaitingConfirmedPhaseResume(array $data): bool
+    {
+        return $this->phaseState() === 'idle'
+            && $this->ReadAttributeBoolean('PhaseResumePending')
+            && in_array($data['psm'], [1,2], true)
+            && $data['psm'] === $this->ReadAttributeInteger('PhaseTransitionTarget')
+            && $this->phaseCooldownActive();
+    }
+
     private function executeChargingPlan(int $phaseMode, int $ampere, bool $enable): bool
     {
         if ($this->recoverReleaseStop()) return false;
@@ -183,6 +198,7 @@ trait ChargingControl
         if ($this->vehicleSocInvalid()) { $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig'); return $this->stopCharging(); }
         if ($this->targetSocReached()) { $this->SetNoChargeReason('Ziel-SoC erreicht'); return $this->stopCharging(); }
         $state = $this->phaseState();
+        $resumePending = $this->awaitingConfirmedPhaseResume($data);
         // An issued phase command must be confirmed while stopped, even if the current grid budget vanishes.
         // After confirmation a new cycle checks the budget before sending any current or release command.
         if ($state !== 'confirming') {
@@ -191,7 +207,7 @@ trait ChargingControl
             $ampere = $this->applyMaxGridLoadLimit($ampere, $phases);
             if ($ampere < max(6, $this->ReadPropertyInteger('MinAmpere'))) {
                 if ($this->GetNoChargeReason() === '') $this->SetNoChargeReason('Kein zulässiger Ladestrom');
-                return $this->stopCharging();
+                return $this->stopCharging(!$resumePending);
             }
             $phaseMode = $phases === 3 ? self::PHASE_MODE_3P : self::PHASE_MODE_1P;
         }
@@ -223,19 +239,21 @@ trait ChargingControl
             // Re-evaluate the complete plan on the next normal cycle before resuming.
             return false;
         }
+        $charging = $data['car'] === 2 && $data['alw'] && (float)$data['nrg'][11] > 30;
+        $keepResumePending = $resumePending && !$charging;
         if ($data['psm'] !== $phaseMode) {
-            $last = $this->ReadAttributeInteger('LetztePhasenUmschaltung');
-            if ($last > 0 && $this->now() - $last < $this->configuredPhaseCooldown()) {
+            if ($this->phaseCooldownActive()) {
                 $this->SetNoChargeReason('Cooldown nach Phasenumschaltung aktiv');
-                if ($data['car'] !== 2 || !$data['alw'] || (float)$data['nrg'][11] <= 30) return $this->stopCharging();
-                // Keep the observed phase, but never increase the requested power budget.
+                // A confirmed restart may be waiting for the vehicle with zero power.
+                if (!$charging && (!$resumePending || ($data['frc'] !== 2 && !$this->chargerStopped($data)))) return $this->stopCharging();
+                // Keep the current phase within both the charging plan and the fresh grid budget.
                 if (!in_array($data['psm'], [1,2], true)) return $this->stopCharging();
                 $actualPhases = $this->phaseModeToPhaseCount($data['psm']);
                 $actualAmpere = (int)floor($ampere * $this->vehiclePhaseCount($phases) / $this->vehiclePhaseCount($actualPhases));
                 $boundedPhases = $actualPhases;
                 $actualAmpere = $this->applyMaxGridLoadLimit($actualAmpere, $boundedPhases);
-                if ($boundedPhases !== $actualPhases || $actualAmpere < max(6,$this->ReadPropertyInteger('MinAmpere'))) return $this->stopCharging();
-                return $this->startAtCurrentPhase($data, $actualAmpere);
+                if ($boundedPhases !== $actualPhases || $actualAmpere < max(6,$this->ReadPropertyInteger('MinAmpere'))) return $this->stopCharging(!$resumePending);
+                return $this->startAtCurrentPhase($data, $actualAmpere, $keepResumePending);
             }
             $this->WriteAttributeInteger('PhaseTransitionTarget', $phaseMode);
             $this->WriteAttributeInteger('PhaseTransitionSamples', 0);
@@ -248,10 +266,10 @@ trait ChargingControl
             if (!$this->stopCharging(false)) return $this->handlePhaseStopFailure();
             return false;
         }
-        return $this->startAtCurrentPhase($data, $ampere);
+        return $this->startAtCurrentPhase($data, $ampere, $keepResumePending);
     }
 
-    private function startAtCurrentPhase(array $data, int $ampere): bool
+    private function startAtCurrentPhase(array $data, int $ampere, bool $keepResumePending): bool
     {
         if ($this->ReadAttributeInteger('ReleaseFailures') > 0) {
             // Fresh readback can confirm a command whose HTTP acknowledgement was lost.
@@ -311,7 +329,7 @@ trait ChargingControl
             $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
             $this->WriteAttributeInteger('LastManualStartTimestamp', $this->now());
         }
-        $this->WriteAttributeBoolean('PhaseResumePending', false);
+        $this->WriteAttributeBoolean('PhaseResumePending', $keepResumePending);
         if ((float)$data['nrg'][11] < 300 && !$this->ReadAttributeBoolean('ChargingPowerObserved')) {
             $this->SetNoChargeReason('Ladefreigabe angefordert – warte auf Leistungsaufnahme des Fahrzeugs');
         }
