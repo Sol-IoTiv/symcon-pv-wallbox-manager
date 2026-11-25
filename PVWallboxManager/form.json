@@ -191,53 +191,53 @@
           "type": "Button",
           "caption": "Phasen-/Ladefreigabefehler nach Stillstand zurücksetzen",
           "onClick": "if (!PVWM_ResetPhaseFault($id)) { echo \"Zurücksetzen nicht möglich: Erst Stillstand und Kommunikation prüfen.\"; }"
-        }
-      ]
-    },
-    {
-      "type": "ExpansionPanel",
-      "caption": "PV-Phasenwahl – erweitert",
-      "expanded": false,
-      "items": [
-        {
-          "type": "Label",
-          "caption": "Diese Schwellen und Zähler gelten für Nur PV, PV-Anteil und die PV-Regelung im Hybridmodus."
         },
         {
-          "type": "RowLayout",
+          "type": "ExpansionPanel",
+          "caption": "PV-Phasenwahl – erweitert",
+          "expanded": false,
           "items": [
             {
-              "type": "NumberSpinner",
-              "name": "Phasen1Schwelle",
-              "caption": "Schwelle auf 1-phasig (W)"
-            },
-            {
               "type": "Label",
-              "caption": "    "
+              "caption": "Diese Schwellen und Zähler gelten für Nur PV, PV-Anteil und die PV-Regelung im Hybridmodus."
             },
             {
-              "type": "NumberSpinner",
-              "name": "Phasen1Limit",
-              "caption": "Zählerlimit für Umschaltung zu 1-phasig"
-            }
-          ]
-        },
-        {
-          "type": "RowLayout",
-          "items": [
-            {
-              "type": "NumberSpinner",
-              "name": "Phasen3Schwelle",
-              "caption": "Schwelle auf 3-phasig (W)"
+              "type": "RowLayout",
+              "items": [
+                {
+                  "type": "NumberSpinner",
+                  "name": "Phasen1Schwelle",
+                  "caption": "Schwelle auf 1-phasig (W)"
+                },
+                {
+                  "type": "Label",
+                  "caption": "    "
+                },
+                {
+                  "type": "NumberSpinner",
+                  "name": "Phasen1Limit",
+                  "caption": "Zählerlimit für Umschaltung zu 1-phasig"
+                }
+              ]
             },
             {
-              "type": "Label",
-              "caption": "    "
-            },
-            {
-              "type": "NumberSpinner",
-              "name": "Phasen3Limit",
-              "caption": "Zählerlimit für Umschaltung zu 3-phasig"
+              "type": "RowLayout",
+              "items": [
+                {
+                  "type": "NumberSpinner",
+                  "name": "Phasen3Schwelle",
+                  "caption": "Schwelle auf 3-phasig (W)"
+                },
+                {
+                  "type": "Label",
+                  "caption": "    "
+                },
+                {
+                  "type": "NumberSpinner",
+                  "name": "Phasen3Limit",
+                  "caption": "Zählerlimit für Umschaltung zu 3-phasig"
+                }
+              ]
             }
           ]
         }

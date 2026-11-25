@@ -6,7 +6,7 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 ## [Unreleased]
 
 ### 🔧 Konfiguration, 1.4.11b Build 2
-- Die vier bestehenden Schwellen und Zähler der PV-Phasenwahl stehen im aufklappbaren Bereich „PV-Phasenwahl – erweitert“. Mindestabstand, Bestätigungsfrist und Fehlerreset stehen gemeinsam unter „Phasenumschaltung“.
+- Die vier bestehenden Schwellen und Zähler stehen unter „Phasenumschaltung“ im aufklappbaren Unterbereich „PV-Phasenwahl – erweitert“. Mindestabstand, Bestätigungsfrist und Fehlerreset stehen direkt im Hauptabschnitt.
 
 ### Ladebetrieb, 1.4.11b Build 2
 - Die aktuelle Phase bleibt bei Lastschwankungen aktiv, solange das Ladebudget reicht. Nach erstem Laden benötigt der Wechsel auf 3P mindestens 90 Sekunden mit mindestens 700 W Mehrleistung. Beim Wechsel auf 1P genügen zwei frische Messwerte. Sobald ein Wechsel bestätigt ist, prüft ein kurzer Folgezyklus den Wiederanlauf.
