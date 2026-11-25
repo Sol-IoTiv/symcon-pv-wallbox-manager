@@ -8,6 +8,7 @@ class SimulatedManager extends PVWallboxManager {
     public $reject = null;
     public $rejectEnable = false;
     public $status;
+    public $statusResponse = null;
     public $offline = false;
     public $prices = null;
     public $stopOnAmp = false;
@@ -21,7 +22,7 @@ class SimulatedManager extends PVWallboxManager {
     protected function simpleCurlGet($url) {
         if (strpos($url,'/api/status')!==false) {
             $this->requests++;
-            return ['result'=>$this->offline ? false : json_encode($this->status),'httpcode'=>$this->offline ? 503 : 200,'error'=>''];
+            return $this->statusResponse ?? ['result'=>$this->offline ? false : json_encode($this->status),'httpcode'=>$this->offline ? 503 : 200,'error'=>''];
         }
         if (strpos($url,'/api/set?')!==false) {
             parse_str(parse_url($url,PHP_URL_QUERY),$args);
@@ -55,6 +56,46 @@ $tests['start writes current before enabling'] = function () {
     $m=new SimulatedManager(); $m->plan(1,16);
     expect($m->commands===[['amp',16],['frc',2]],'Current must precede enable');
     expect($m->requests===1,'Exactly one status request per control cycle');
+};
+$tests['invalid charger status logs cause and still stops then resumes'] = function () {
+    $m = new SimulatedManager();
+    $m->status['car'] = 4;
+    $m->status['amp'] = 16;
+    $missing = $m->status;
+    unset($missing['err']);
+    $negative = $m->status;
+    $negative['nrg'][11] = -1;
+
+    $cases = [
+        [0, 28, false, 'Transportfehler'],
+        [503, 0, '{private-test-value', 'Unerwarteter HTTP-Status'],
+        [200, 0, '', 'Leere Statusantwort'],
+        [200, 0, '{private-test-value', 'JSON=Syntax error'],
+        [200, 0, 'null', 'JSON enthält keine Statusfelder'],
+        [200, 0, json_encode($missing), 'Feld err fehlt'],
+        [200, 0, json_encode(array_replace($m->status, ['err' => 'private-test-value'])), 'Feld err: string statt Integer'],
+        [200, 0, json_encode(array_replace($m->status, ['car' => 6])), 'Feld car: unerwarteter Wert 6'],
+        [200, 0, json_encode($negative), 'Feld nrg[11]: negative Wirkleistung']
+    ];
+    $m->properties['DebugLogging'] = false;
+    foreach ($cases as [$httpCode, $errno, $body, $problem]) {
+        $m->statusResponse = ['result' => $body, 'httpcode' => $httpCode, 'errno' => $errno, 'durationMs' => 125];
+        $m->commands = [];
+        $GLOBALS['logMessages'] = [];
+        $m->UpdateStatus();
+        $log = implode("\n", $GLOBALS['logMessages']);
+        $detail = "Wallboxstatus ungültig | HTTP=$httpCode, cURL=$errno, Dauer=125 ms | $problem";
+        expect(str_contains($log, $detail), 'Include the cause without debug logging: ' . $detail);
+        expect(!str_contains($log, 'private-test-value'), 'Do not include response text');
+        expect($m->commands === [['frc', 1]], 'An invalid status must still request a stop');
+    }
+
+    $m->statusResponse = null;
+    $m->commands = [];
+    $GLOBALS['logMessages'] = [];
+    $m->UpdateStatus();
+    expect($m->commands === [['frc', 2]], 'A valid status should allow charging again');
+    expect(!str_contains(implode("\n", $GLOBALS['logMessages']), 'Wallboxstatus ungültig'), 'A valid status must not log an error');
 };
 $tests['negative grid power still limits requested load'] = function () {
     $m=new SimulatedManager(); $m->grid(-500); $m->plan(2,16);
@@ -430,7 +471,7 @@ $tests['deactivation during active current change requests stop'] = function () 
 $tests['sanitized user V4 firmware 60.6 snapshot is accepted without assuming stop confirmation'] = function () {
     $m=new SimulatedManager();
     $m->status=json_decode(file_get_contents(__DIR__.'/fixtures/go-e-v4-60.6-sanitized.json'),true,512,JSON_THROW_ON_ERROR);
-    expect(invoke($m,'validChargerStatus',$m->status),'Actual field types must be accepted');
+    expect(invoke($m,'chargerStatusProblem',$m->status)===null,'Actual field types must be accepted');
     expect(invoke($m,'getHardwareMaxAmpereFromStatus',$m->status)===16,'11 kW variant maps to 16 A');
     expect(invoke($m,'determinePhases',$m->status)===0,'No measured charging current');
     expect(!invoke($m,'chargerStopped',$m->status),'frc=0 is not an acknowledged frc=1 stop');

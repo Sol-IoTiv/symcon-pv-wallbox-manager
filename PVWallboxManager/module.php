@@ -1800,10 +1800,29 @@ class PVWallboxManager extends IPSModule
         $ip = trim($this->ReadPropertyString('WallboxIP'));
         if (!filter_var($ip, FILTER_VALIDATE_IP) || $ip === '0.0.0.0') return false;
         $response = $this->simpleCurlGet('http://' . $ip . '/api/status');
-        $data = is_string($response['result']) ? json_decode($response['result'], true) : null;
-        if ((int)$response['httpcode'] !== 200 || !is_array($data) || !$this->validChargerStatus($data)) {
+        $httpCode = (int)$response['httpcode'];
+        $curlError = (int)($response['errno'] ?? 0);
+        $body = $response['result'];
+        $data = null;
+        if ($httpCode === 0 || ($curlError !== 0 && !is_string($body))) {
+            $problem = 'Transportfehler';
+        } elseif ($httpCode !== 200) {
+            $problem = 'Unerwarteter HTTP-Status';
+        } elseif (!is_string($body) || $body === '') {
+            $problem = 'Leere Statusantwort';
+        } else {
+            $data = json_decode($body, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                $problem = 'JSON=' . json_last_error_msg();
+            } else {
+                $problem = is_array($data) ? $this->chargerStatusProblem($data) : 'JSON enthält keine Statusfelder';
+            }
+        }
+        if ($problem !== null) {
             $this->WriteAttributeString('VehiclePhaseObservation', '{}');
-            $this->LogTemplate('error', 'Wallboxstatus ungültig', 'HTTP, Pflichtfelder oder Messwerte fehlerhaft');
+            $duration = isset($response['durationMs']) ? $response['durationMs'] . ' ms' : 'unbekannt';
+            $this->LogTemplate('error', 'Wallboxstatus ungültig',
+                'HTTP=' . $httpCode . ', cURL=' . $curlError . ', Dauer=' . $duration . ' | ' . $problem);
             return false;
         }
         $this->observeVehiclePhases($data, $ip);
@@ -1823,12 +1842,16 @@ class PVWallboxManager extends IPSModule
         $result = curl_exec($ch);
         $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
+        $errno = curl_errno($ch);
+        $durationMs = (int)round(curl_getinfo($ch, CURLINFO_TOTAL_TIME) * 1000);
         curl_close($ch);
 
         return [
-            'result'   => $result,
-            'httpcode' => $httpcode,
-            'error'    => $error
+            'result'     => $result,
+            'httpcode'   => $httpcode,
+            'error'      => $error,
+            'errno'      => $errno,
+            'durationMs' => $durationMs
         ];
     }
 

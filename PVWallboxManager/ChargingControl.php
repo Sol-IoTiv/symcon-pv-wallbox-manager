@@ -68,18 +68,30 @@ trait ChargingControl
         return $ok;
     }
 
-    private function validChargerStatus(array $data): bool
+    private function chargerStatusProblem(array $data): ?string
     {
-        foreach (['car','psm','frc','amp','err'] as $key) {
-            if (!isset($data[$key]) || !is_int($data[$key])) return false;
+        foreach (['car', 'psm', 'frc', 'amp', 'err'] as $key) {
+            if (!array_key_exists($key, $data)) return 'Feld ' . $key . ' fehlt';
+            if (!is_int($data[$key])) return 'Feld ' . $key . ': ' . gettype($data[$key]) . ' statt Integer';
         }
-        if (!in_array($data['car'], [1,2,3,4], true) || !in_array($data['psm'], [0,1,2], true)
-            || !in_array($data['frc'], [0,1,2], true) || $data['amp'] < 6 || $data['amp'] > 32) return false;
-        if (!isset($data['alw']) || !is_bool($data['alw']) || !isset($data['nrg']) || !is_array($data['nrg'])) return false;
-        foreach ([4,5,6,11] as $index) {
-            if (!isset($data['nrg'][$index]) || !is_numeric($data['nrg'][$index]) || !is_finite((float)$data['nrg'][$index])) return false;
+        foreach (['car' => [1, 2, 3, 4], 'psm' => [0, 1, 2], 'frc' => [0, 1, 2]] as $key => $allowed) {
+            if (!in_array($data[$key], $allowed, true)) return 'Feld ' . $key . ': unerwarteter Wert ' . $data[$key];
         }
-        return (float)$data['nrg'][11] >= 0;
+        if ($data['amp'] < 6 || $data['amp'] > 32) return 'Feld amp: ' . $data['amp'] . ' außerhalb 6–32 A';
+        if (!array_key_exists('alw', $data)) return 'Feld alw fehlt';
+        if (!is_bool($data['alw'])) return 'Feld alw: ' . gettype($data['alw']) . ' statt Boolean';
+        if (!array_key_exists('nrg', $data)) return 'Feld nrg fehlt';
+        if (!is_array($data['nrg'])) return 'Feld nrg: ' . gettype($data['nrg']) . ' statt Array';
+
+        foreach ([4, 5, 6, 11] as $index) {
+            $field = 'Feld nrg[' . $index . ']';
+            if (!array_key_exists($index, $data['nrg'])) return $field . ' fehlt';
+            $value = $data['nrg'][$index];
+            if (!is_numeric($value)) return $field . ': ' . gettype($value) . ' statt Messwert';
+            if (!is_finite((float)$value)) return $field . ': Messwert nicht endlich';
+        }
+        if ((float)$data['nrg'][11] < 0) return 'Feld nrg[11]: negative Wirkleistung';
+        return null;
     }
 
     private function chargerStopped(array $data): bool
