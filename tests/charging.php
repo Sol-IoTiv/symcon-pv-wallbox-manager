@@ -44,6 +44,11 @@ class SimulatedManager extends PVWallboxManager {
         $this->properties['NetzleistungID']=42; SetValue(42,$watts);
         $GLOBALS['metadata'][42]=['VariableType'=>2,'VariableUpdated'=>$this->clock,'VariableProfile'=>'','VariableCustomProfile'=>''];
     }
+    public function updateWithGrid(int $watts, int $seconds=16): void {
+        $this->clock+=$seconds;
+        $this->grid($watts,10000);
+        $this->UpdateStatus();
+    }
 }
 $tests=[];
 $tests['start writes current before enabling'] = function () {
@@ -640,9 +645,103 @@ $tests['actual completed charging still applies configured end mode'] = function
     $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->properties['ModeAfterUnplug']=2;
     $m->properties['PVErzeugungID']=43; SetValue(43,3000.0);
     $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['nrg'][11]=2000;
-    $m->UpdateStatus(); $m->status['car']=4; $m->status['alw']=false; $m->status['nrg'][11]=0;
-    for($i=0;$i<4;$i++) { $m->clock+=30; $m->UpdateStatus(); }
+    $m->UpdateStatus(); $m->status['car']=4; $m->status['nrg'][11]=0;
+    for($i=0;$i<7;$i++) { $m->clock+=30; $m->UpdateStatus(); }
     expect($m->GetValue('LademodusAuswahl')===2,'Confirmed charging followed by completion applies configured mode');
+    expect($m->attributes['ChargeEndConfirmed']===true,'The mode change must not restart the completed session');
+};
+$tests['manual charge end freezes the phase and a replug starts a new session'] = function () {
+    $m=new SimulatedManager();
+    $m->properties['ModeAfterUnplug']=2;
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['amp']=16;
+    $m->status['nrg'][4]=15; $m->status['nrg'][11]=3450;
+    $m->updateWithGrid(5500);
+    $m->SetValue('ManuellPhasen',2);
+    $m->status['car']=4; $m->status['nrg']=array_fill(0,12,0);
+    for ($i=0; $i<12; $i++) $m->updateWithGrid(800);
+    expect($m->commands===[],'Do not switch phase or toggle release during the observation');
+    expect($m->attributes['ChargeEndConfirmed']===false,'Allow at least three minutes to draw power again');
+    $m->updateWithGrid(800);
+    expect($m->commands===[['frc',1]],'After confirmation issue only a stop command');
+    expect($m->attributes['ChargeEndConfirmed']===true,'Remember the charge end for this plug session');
+
+    $m->status['frc']=1; $m->status['alw']=false;
+    $m->updateWithGrid(2000);
+    expect($m->commands===[['frc',1]],'Fresh budget cannot reopen a completed session');
+    $m->status['car']=1;
+    $m->updateWithGrid(2000);
+    expect($m->attributes['ChargeEndConfirmed']===false,'Unplug clears the session result');
+    $m->status['car']=3;
+    $m->SetValue('ManuellPhasen',1);
+    $m->updateWithGrid(800);
+    expect($m->commands===[['frc',1],['frc',2]],'Replug starts normally on the available phase');
+};
+$tests['budget loss interrupts the charge end check and allows normal phase planning'] = function () {
+    $m=new SimulatedManager();
+    $m->status['psm']=2; $m->SetValue('ManuellPhasen',2);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['amp']=6;
+    $m->status['nrg'][4]=6; $m->status['nrg'][5]=6; $m->status['nrg'][11]=2700;
+    $m->updateWithGrid(8500);
+    $m->status['car']=4; $m->status['nrg']=array_fill(0,12,0);
+    $m->updateWithGrid(4000);
+    expect($m->attributes['ChargeEndObservedSince']>0,'Valid release and sufficient budget start the check');
+    $m->updateWithGrid(8200);
+    expect(end($m->commands)===['frc',1],'Stop promptly when the current phase cannot sustain its minimum');
+    expect($m->attributes['ChargeEndObservedSince']===0 && !$m->attributes['ChargeEndConfirmed'],'An own grid stop clears the check');
+    $m->status['frc']=1; $m->status['alw']=false;
+    $m->updateWithGrid(8200);
+    $m->updateWithGrid(8200);
+    expect($m->attributes['PhaseTransitionState']==='stopping','After stable low budget normal planning can switch to 1P');
+};
+$tests['automatic upshift waits for sustained and useful additional power'] = function () {
+    $m=new SimulatedManager();
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['amp']=16;
+    $m->status['nrg'][4]=15; $m->status['nrg'][11]=3450;
+    $m->updateWithGrid(5500);
+    $m->SetValue('ManuellPhasen',2);
+    for ($i=0; $i<7; $i++) $m->updateWithGrid(9200);
+    expect($m->commands===[],'A possible gain of 460 W cannot justify an upshift');
+    for ($i=0; $i<5; $i++) $m->updateWithGrid(5500);
+    expect($m->commands===[],'Keep charging during an insufficiently long surplus');
+    $m->updateWithGrid(9200);
+    for ($i=0; $i<6; $i++) $m->updateWithGrid(5500);
+    expect($m->commands===[],'A drop in the gain resets the observation');
+    $m->updateWithGrid(5500);
+    expect($m->commands===[['frc',1]],'After 90 s of sufficient gain begin switching with a stop');
+    expect($m->attributes['PhaseTransitionState']==='stopping','Stillstand must be confirmed before the phase command');
+};
+$tests['temporary grid drop keeps the phase and a lasting drop uses fresh samples'] = function () {
+    $m=new SimulatedManager();
+    $m->status['psm']=2; $m->SetValue('ManuellPhasen',2);
+    $m->status['car']=2; $m->status['frc']=2; $m->status['alw']=true; $m->status['amp']=6;
+    $m->status['nrg'][4]=6; $m->status['nrg'][5]=6; $m->status['nrg'][11]=2700;
+    $m->updateWithGrid(8500);
+    $m->updateWithGrid(10900);
+    expect($m->commands===[['frc',1]],'The grid safeguard takes effect on the first low budget');
+    $m->clock+=2;
+    $m->UpdateStatus();
+    expect($m->attributes['PhaseTransitionState']==='idle','Reading the same grid sample cannot qualify a switch');
+    expect(count(array_filter($m->commands, fn($command)=>$command!==['frc',1]))===0,'Only stop may be requested while waiting for fresh data');
+
+    $m->status['car']=4; $m->status['frc']=1; $m->status['alw']=false;
+    $m->status['nrg']=array_fill(0,12,0);
+    $m->commands=[];
+    $m->updateWithGrid(5700);
+    expect($m->commands===[['frc',2]],'After a short dip restart in the original phase');
+    expect($m->attributes['PhaseTransitionState']==='idle','No phase change is necessary');
+
+    $m->updateWithGrid(8200);
+    expect($m->attributes['PhaseTransitionState']==='idle','Wait for a second fresh measurement');
+    $m->updateWithGrid(8200);
+    expect($m->attributes['PhaseTransitionState']==='stopping','A stable drop warrants the switch');
+    for ($i=0; $i<2; $i++) $m->updateWithGrid(8200,2);
+    expect(end($m->commands)===['psm',1],'The actual phase command still requires two standstill readings');
+    $m->status['psm']=1;
+    for ($i=0; $i<2; $i++) $m->updateWithGrid(8200,2);
+    expect($m->timers['PVWM_PhaseTransition']===2000,'Schedule a fresh cycle promptly after confirmation');
+    $m->clock+=2;
+    $m->UpdateStatus('phase');
+    expect($m->timers['PVWM_PhaseTransition']===0 && end($m->commands)===['frc',2],'One fresh cycle resumes and ends the phase timer');
 };
 $tests['temporary low charging power is not completion'] = function () {
     $m=new SimulatedManager(); $m->SetValue('LademodusAuswahl',1); $m->properties['ModeAfterUnplug']=2;

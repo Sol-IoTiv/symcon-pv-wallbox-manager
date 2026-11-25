@@ -17,10 +17,11 @@ class PVWallboxManager extends IPSModule
     private const PHASE_MODE_3P = 2;
 
     private const NO_POWER_THRESHOLD_W = 300;
-    private const NO_POWER_COUNTER_LIMIT = 3;
+    private const CHARGE_END_MIN_SAMPLES = 3;
+    private const CHARGE_END_OBSERVATION_S = 180;
+    private const PHASE_UP_STABILITY_S = 90;
+    private const PHASE_UP_MIN_GAIN_W = 700;
     private const STOP_SETTLE_SECONDS = 15;
-    private const CURRENT_CHANGE_COOLDOWN_S = 10;
-    private const MANUAL_START_GRACE_S = 90;
 
 
     // =========================================================================
@@ -45,6 +46,11 @@ class PVWallboxManager extends IPSModule
             'HausverbrauchAbzWallboxLast'    => 0.0,
             'NoPowerCounter'                 => 0,
             'ChargingPowerObserved'          => false,
+            'SessionPowerObserved'           => false,
+            'ChargeEndObservedSince'         => 0,
+            'ChargeEndObservedLast'          => 0,
+            'ChargeEndConfirmed'             => false,
+            'PhaseDecisionObservation'       => '{}',
             'LastTimerStatus'                => -1,
             'NeutralModeUntil'               => 0,
             'LetztePhasenUmschaltung'        => 0,
@@ -54,7 +60,6 @@ class PVWallboxManager extends IPSModule
             'LastChargingCurrent'            => 0,
             'LastChargingCurrentChange'      => 0,
             'LastSentChargingCurrent'        => 0,
-            'LastManualStartTimestamp'       => 0,
             'SmoothedSurplus'                => 0.0,
             'LastCarConnected'               => false,
             'StartupTimestamp'               => 0,
@@ -238,6 +243,8 @@ class PVWallboxManager extends IPSModule
         $this->WriteAttributeInteger('LastSentChargingCurrent', 0);
         $this->WriteAttributeInteger('LastChargingCurrent', 0);
         $this->WriteAttributeBoolean('LastCarConnected', false);
+        $this->resetNoPowerCounter();
+        $this->resetPhaseDecisionObservation();
 
         if ($aktiv) {
             $this->WriteAttributeInteger('StartupTimestamp', $this->now());
@@ -620,6 +627,7 @@ class PVWallboxManager extends IPSModule
         $oldSelection = $this->getCurrentModeSelection();
         $newSelection = $this->mapModeToSelection($mode);
 
+        $this->resetConfirmedChargeEnd();
         if ($oldSelection === $newSelection) {
             $this->SetTimerNachModusUndAuto();
             $this->UpdateStatus($mode);
@@ -679,6 +687,9 @@ class PVWallboxManager extends IPSModule
 
     private function updateStatusControlled(string $triggerMode): void
     {
+        if ($triggerMode === 'phase' && $this->phaseState() === 'idle') {
+            $this->SetTimerInterval('PVWM_PhaseTransition', 0);
+        }
         // Recovery runs before mode selection and unavailable-status early returns.
         if ($this->recoverReleaseStop()) {
             $this->UpdateStatusAnzeige();
@@ -711,13 +722,22 @@ class PVWallboxManager extends IPSModule
         $vars = $this->extractChargerVariables($data);
         $this->syncChargerVariables($vars, $phasen);
         if ($data['car'] === 1) {
+            $this->resetConfirmedChargeEnd();
+            $this->WriteAttributeBoolean('SessionPowerObserved', false);
+            $this->resetPhaseDecisionObservation();
             if ($this->phaseState() === 'stopping') {
                 $this->clearTransition();
             } else {
                 $this->WriteAttributeBoolean('PhaseResumePending', false);
             }
         }
-        if ($data['car'] === 1 || $data['frc'] !== 2) $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        if ($data['car'] === 1 || $data['frc'] !== 2) {
+            $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        } elseif ($data['car'] === 2 && $data['alw'] && $data['nrg'][11] >= self::NO_POWER_THRESHOLD_W) {
+            $this->WriteAttributeBoolean('ChargingPowerObserved', true);
+            $this->WriteAttributeBoolean('SessionPowerObserved', true);
+        }
+        if (!$this->isChargeEndCandidate($data)) $this->resetNoPowerCounter();
         $this->LogTemplate('debug', 'Laderegelung Rückmeldung', sprintf(
             'car=%d, frc=%d, alw=%s, psm=%d, amp=%d A, Leistung=%.0f W, Ströme=%.2f/%.2f/%.2f A',
             $data['car'], $data['frc'], $data['alw'] ? 'true' : 'false', $data['psm'], $data['amp'],
@@ -1290,195 +1310,83 @@ class PVWallboxManager extends IPSModule
 
     private function resetNoPowerCounter(): void
     {
+        if ($this->ReadAttributeInteger('ChargeEndObservedSince') === 0 && $this->ReadAttributeInteger('NoPowerCounter') === 0) return;
         $this->WriteAttributeInteger('NoPowerCounter', 0);
+        $this->WriteAttributeInteger('ChargeEndObservedSince', 0);
+        $this->WriteAttributeInteger('ChargeEndObservedLast', 0);
     }
 
-    private function applySafeIdleState(): void
+    private function resetConfirmedChargeEnd(): void
     {
+        if ($this->ReadAttributeBoolean('ChargeEndConfirmed')) {
+            $this->WriteAttributeBoolean('ChargeEndConfirmed', false);
+            $this->WriteAttributeBoolean('ChargingPowerObserved', false);
+        }
+        $this->resetNoPowerCounter();
+    }
+
+    private function isChargeEndCandidate(array $data): bool
+    {
+        if ($data['car'] !== 4 || $data['frc'] !== 2 || !$data['alw'] || $data['err'] !== 0
+            || (float)$data['nrg'][11] > 30 || !in_array($data['psm'], [1,2], true)
+            || !$this->ReadAttributeBoolean('ChargingPowerObserved')
+            || $this->phaseState() !== 'idle' || $this->ReadAttributeBoolean('PhaseResumePending')) return false;
+        foreach ([4,5,6] as $index) {
+            if (abs((float)$data['nrg'][$index]) > 0.2) return false;
+        }
+        return true;
+    }
+
+    private function observeChargeEnd(): bool
+    {
+        $now = $this->now();
+        $since = $this->ReadAttributeInteger('ChargeEndObservedSince');
+        $last = $this->ReadAttributeInteger('ChargeEndObservedLast');
+        $samples = $this->ReadAttributeInteger('NoPowerCounter');
+        $maxGap = max(30, 2 * $this->ReadPropertyInteger('RefreshInterval') + 5);
+        if ($since <= 0 || $now < $last || $now - $last > $maxGap) {
+            $since = $now;
+            $last = 0;
+            $samples = 0;
+            $this->WriteAttributeInteger('ChargeEndObservedSince', $since);
+        }
+        if ($now - $last >= 2) {
+            $this->WriteAttributeInteger('ChargeEndObservedLast', $now);
+            $samples = min(self::CHARGE_END_MIN_SAMPLES, $samples + 1);
+            $this->WriteAttributeInteger('NoPowerCounter', $samples);
+        }
+        if ($samples < self::CHARGE_END_MIN_SAMPLES || $now - $since < self::CHARGE_END_OBSERVATION_S) return false;
+
+        $this->WriteAttributeBoolean('ChargeEndConfirmed', true);
         $this->stopCharging();
+        $this->ResetModiNachLadeende();
+        $this->SetNoChargeReason('Fahrzeug fordert keine Ladung an');
+        $this->LogTemplate('stop', 'Ladeende erkannt', 'Nach vorheriger Ladung keine Stromaufnahme trotz Freigabe und verfügbarem Ladebudget');
+        return true;
     }
 
-    private function isChargeEndFallbackBlocked(): bool
-    {
-        $cooldownSeconds = $this->now() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
-
-        if ($cooldownSeconds < self::STOP_SETTLE_SECONDS) {
-            $this->resetNoPowerCounter();
-            $this->LogTemplate(
-                'debug',
-                'Fallback gesperrt',
-                "{$cooldownSeconds}s seit Phasenumschaltung < " . self::STOP_SETTLE_SECONDS . 's'
-            );
-            return true;
-        }
-
-        $lastCurrentChange  = $this->ReadAttributeInteger('LastChargingCurrentChange');
-        $sinceCurrentChange = $this->now() - $lastCurrentChange;
-
-        if ($sinceCurrentChange < self::CURRENT_CHANGE_COOLDOWN_S) {
-            $this->resetNoPowerCounter();
-            $this->LogTemplate(
-                'debug',
-                'Fallback gesperrt',
-                "{$sinceCurrentChange}s seit Stromänderung < " . self::CURRENT_CHANGE_COOLDOWN_S . 's'
-            );
-            return true;
-        }
-
-        return false;
-    }
-
-    private function PruefeLadeendeAutomatisch()
+    private function PruefeLadeendeAutomatisch(): bool
     {
         if ($this->vehicleSocInvalid()) {
             $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig');
             $this->stopCharging();
             return true;
         }
-        $currentFRC = $this->GetValue('AccessStateV2');
-        $modeKey    = $this->getCurrentModeKey();
-
-        $this->LogTemplate(
-            'debug',
-            'PruefeLadeendeAutomatisch',
-            "FRC={$currentFRC}, Modus={$modeKey}"
-        );
-
-        $socID       = $this->ReadPropertyInteger('CarSOCID');
-        $socTargetID = $this->ReadPropertyInteger('CarTargetSOCID');
-        $socAktuell  = ($socID > 0 && IPS_VariableExists($socID)) ? GetValue($socID) : null;
-        $socZiel     = ($socTargetID > 0 && IPS_VariableExists($socTargetID)) ? GetValue($socTargetID) : null;
-
-        $loadActive = in_array($modeKey, ['pvonly', 'pv2car', 'manuell', 'hybrid'], true);
-
-        $this->LogTemplate(
-            'debug',
-            'Ladefreigabe/Modus aktiv',
-            $loadActive ? 'ja' : 'nein'
-        );
-
-        if ($loadActive && $socAktuell !== null && $socZiel !== null) {
-            if ($socAktuell >= $socZiel) {
-                $this->SetNoChargeReason('Ziel-SoC erreicht');
-
-                $this->LogStateOnce(
-                    'target_soc_reached',
-                    'stop',
-                    'Ziel-SOC erreicht',
-                    "{$socAktuell}% ≥ {$socZiel}%"
-                );
-
-                $this->applySafeIdleState();
-                $this->ResetModiNachLadeende();
-                $this->resetNoPowerCounter();
-
-                return true;
-            }
-
-            $this->ResetStateLog('target_soc_reached');
-
-            $this->LogTemplate(
-                'debug',
-                'SOC-Ziel noch nicht erreicht',
-                "{$socAktuell}% < {$socZiel}%"
-            );
+        if (!in_array($this->getCurrentModeKey(), ['pvonly', 'pv2car', 'manuell', 'hybrid'], true)) return false;
+        if ($this->targetSocReached()) {
+            $this->SetNoChargeReason('Ziel-SoC erreicht');
+            $this->LogStateOnce('target_soc_reached', 'stop', 'Ziel-SOC erreicht');
+            $this->stopCharging();
+            $this->ResetModiNachLadeende();
+            return true;
         }
-        if ($this->phaseState() !== 'idle' || $this->ReadAttributeBoolean('PhaseResumePending')) return false;
-        if ($modeKey === 'manuell') {
-            $lastManualStart = $this->ReadAttributeInteger('LastManualStartTimestamp');
-
-            if ($lastManualStart > 0) {
-                $sinceManualStart = $this->now() - $lastManualStart;
-
-                if ($sinceManualStart < self::MANUAL_START_GRACE_S) {
-                    $this->resetNoPowerCounter();
-                    $this->LogTemplate(
-                        'debug',
-                        'Fallback gesperrt',
-                        "{$sinceManualStart}s seit manuellem Start < " . self::MANUAL_START_GRACE_S . 's'
-                    );
-
-                    return false;
-                }
-            }
-
-            $this->resetNoPowerCounter();
-            $this->LogTemplate(
-                'debug',
-                'Fallback übersprungen',
-                'manueller Modus aktiv'
-            );
-
-            return false;
+        $this->ResetStateLog('target_soc_reached');
+        // Retain the session result until disconnect or an explicit start.
+        if ($this->ReadAttributeBoolean('ChargeEndConfirmed') && $this->phaseState() !== 'fault') {
+            $this->SetNoChargeReason('Fahrzeug fordert keine Ladung an');
+            $this->stopCharging();
+            return true;
         }
-
-        if ($loadActive && $currentFRC === 2) {
-            if ((int)$this->GetValue('Status') === 2 && (float)$this->GetValue('Leistung') >= self::NO_POWER_THRESHOLD_W) {
-                $this->WriteAttributeBoolean('ChargingPowerObserved', true);
-            }
-            // Release alone is not evidence of a started session. car=4 can persist during restart.
-            if (!$this->ReadAttributeBoolean('ChargingPowerObserved') || (int)$this->GetValue('Status') !== 4) {
-                $this->resetNoPowerCounter();
-                return false;
-            }
-            if ($this->isChargeEndFallbackBlocked()) {
-                return false;
-            }
-
-            $leistung  = intval(round($this->GetValue('Leistung')));
-            $cntVorher = $this->ReadAttributeInteger('NoPowerCounter');
-
-            $this->LogTemplate(
-                'debug',
-                'Fallback-Pfad',
-                "Leistung={$leistung} W, NoPowerCounter={$cntVorher}"
-            );
-
-            if ($leistung < self::NO_POWER_THRESHOLD_W) {
-                $sincePhaseSwitch = $this->now() - $this->ReadAttributeInteger('LetztePhasenUmschaltung');
-
-                if ($sincePhaseSwitch >= 0 && $sincePhaseSwitch < 90) {
-                    $this->resetNoPowerCounter();
-                    $this->LogTemplate(
-                        'debug',
-                        'NoPowerCounter unterdrückt',
-                        "{$sincePhaseSwitch}s seit Phasenumschaltung"
-                    );
-                    return false;
-                }
-
-                $cnt = $cntVorher + 1;
-                $this->WriteAttributeInteger('NoPowerCounter', $cnt);
-                $this->LogTemplate('debug', 'NoPowerCounter erhöht', (string) $cnt);
-
-                if ($cnt >= self::NO_POWER_COUNTER_LIMIT) {
-                    $this->LogTemplate(
-                        'stop',
-                        'Ladeende erkannt',
-                        'Ladeleistung < ' . self::NO_POWER_THRESHOLD_W . " W nach {$cnt} Updates"
-                    );
-
-                    $this->applySafeIdleState();
-                    $this->ResetModiNachLadeende();
-                    $this->resetNoPowerCounter();
-
-                    return true;
-                }
-
-            } else {
-                $this->resetNoPowerCounter();
-                $this->LogTemplate(
-                    'debug',
-                    'NoPowerCounter zurückgesetzt',
-                    'Ladeleistung ≥ ' . self::NO_POWER_THRESHOLD_W . ' W'
-                );
-            }
-
-        } else {
-            $this->resetNoPowerCounter();
-            $this->LogTemplate('debug', 'Fallback übersprungen', 'kein aktiver Lademodus oder keine Freigabe');
-        }
-
         return false;
     }
 
@@ -1601,7 +1509,8 @@ class PVWallboxManager extends IPSModule
     {
         $enabled = $overrideFRC !== null ? $overrideFRC === 2 : $pvUeberschuss >= $this->ReadPropertyInteger('MinLadeWatt');
         $status = $this->chargerSnapshot;
-        if ($enabled && $this->phaseDecisionPending && $status !== null && !$this->awaitingConfirmedPhaseResume($status)
+        if ($enabled && $this->phaseDecisionPending && $status !== null
+            && !$this->awaitingConfirmedPhaseResume($status) && !$this->isChargeEndCandidate($status)
             && ($status['car'] !== 2 || !$status['alw'] || (float)$status['nrg'][11] <= 30)) {
             $this->SetNoChargeReason('Ladestart wartet auf stabile Phasenentscheidung');
             $this->stopCharging();
@@ -1953,6 +1862,7 @@ class PVWallboxManager extends IPSModule
         return $this->controlled(function () use ($state) {
             if ($state === 1) return $this->stopCharging();
             // Enabling always re-evaluates the selected mode and its constraints.
+            $this->resetConfirmedChargeEnd();
             $this->UpdateStatus('external');
             return $this->chargerSnapshot !== null && $this->phaseState() !== 'fault' && $this->ReadPropertyBoolean('ModulAktiv');
         });

@@ -8,6 +8,7 @@ trait ChargingControl
     private $desiredPhaseMode = null;
     private $phaseDecisionPending = false;
     private $energySnapshot = null;
+    private $gridSampleTime = null;
     private $commandTransportFailed = false;
 
     protected function now(): int { return time(); }
@@ -23,12 +24,14 @@ trait ChargingControl
         $this->controlDepth++;
         $this->chargerSnapshot = null;
         $this->energySnapshot = null;
+        $this->gridSampleTime = null;
         try { return $operation(); }
         finally {
             $this->chargerSnapshot = null;
             $this->desiredPhaseMode = null;
             $this->phaseDecisionPending = false;
             $this->energySnapshot = null;
+            $this->gridSampleTime = null;
             $this->controlDepth--;
             IPS_SemaphoreLeave($key);
         }
@@ -99,6 +102,7 @@ trait ChargingControl
     {
         $this->WriteAttributeBoolean('ChargingPowerObserved', false);
         $this->resetNoPowerCounter();
+        if ($cancel) $this->resetPhaseDecisionObservation();
         $this->WriteAttributeString('VehiclePhaseObservation', '{}');
         if ($cancel && $this->phaseState() === 'confirming') return $this->phaseFault('Umschaltung vor Bestätigung abgebrochen');
         if ($cancel && $this->phaseState() !== 'fault') $this->clearTransition();
@@ -109,6 +113,7 @@ trait ChargingControl
 
     private function phaseFault(string $reason): bool
     {
+        $this->resetPhaseDecisionObservation();
         $this->WriteAttributeString('PhaseTransitionState', 'fault');
         $this->WriteAttributeString('PhaseTransitionError', $reason);
         $this->SetNoChargeReason('Phasensteuerung gesperrt: ' . $reason);
@@ -179,6 +184,46 @@ trait ChargingControl
             && $this->phaseCooldownActive();
     }
 
+    private function resetPhaseDecisionObservation(): void
+    {
+        if ($this->ReadAttributeString('PhaseDecisionObservation') !== '{}') {
+            $this->WriteAttributeString('PhaseDecisionObservation', '{}');
+        }
+    }
+
+    private function phaseChangeIsStable(int $phaseMode, int $targetWatts, int $currentWatts): bool
+    {
+        if ($phaseMode === self::PHASE_MODE_3P && $targetWatts - $currentWatts < self::PHASE_UP_MIN_GAIN_W) {
+            $this->resetPhaseDecisionObservation();
+            return false;
+        }
+
+        $sample = $this->gridSampleTime ?? $this->now();
+        $previous = json_decode($this->ReadAttributeString('PhaseDecisionObservation'), true) ?: [];
+        $last = $previous['last'] ?? 0;
+        $maxGap = max(30, 2 * $this->ReadPropertyInteger('RefreshInterval') + 5);
+        if (($previous['target'] ?? 0) !== $phaseMode || $sample < $last || $sample - $last > $maxGap) {
+            $previous = ['target'=>$phaseMode, 'since'=>$sample, 'last'=>$sample, 'samples'=>1];
+        } elseif ($sample <= $last) {
+            return false;
+        } else {
+            $previous['last'] = $sample;
+            $previous['samples'] = min(2, $previous['samples'] + 1);
+        }
+        $this->WriteAttributeString('PhaseDecisionObservation', json_encode($previous));
+        return $previous['samples'] >= 2
+            && ($phaseMode === self::PHASE_MODE_1P || $sample - $previous['since'] >= self::PHASE_UP_STABILITY_S);
+    }
+
+    private function currentPhaseAmpere(int $currentPhases, int $plannedPhases, int $ampere): int
+    {
+        $plannedWatts = $ampere * $this->vehiclePhaseCount($plannedPhases) * 230;
+        $currentAmpere = $this->clampAmpere((int)floor($plannedWatts / (230 * $this->vehiclePhaseCount($currentPhases))));
+        $boundedPhases = $currentPhases;
+        $currentAmpere = $this->applyMaxGridLoadLimit($currentAmpere, $boundedPhases);
+        return $boundedPhases === $currentPhases ? $currentAmpere : 0;
+    }
+
     private function executeChargingPlan(int $phaseMode, int $ampere, bool $enable): bool
     {
         if ($this->recoverReleaseStop()) return false;
@@ -197,15 +242,21 @@ trait ChargingControl
         }
         if ($this->vehicleSocInvalid()) { $this->SetNoChargeReason('Fahrzeug-SoC oder Ziel-SoC ungültig'); return $this->stopCharging(); }
         if ($this->targetSocReached()) { $this->SetNoChargeReason('Ziel-SoC erreicht'); return $this->stopCharging(); }
+        if ($this->ReadAttributeBoolean('ChargeEndConfirmed')) {
+            $this->SetNoChargeReason('Fahrzeug fordert keine Ladung an');
+            return $this->stopCharging();
+        }
         $state = $this->phaseState();
         $resumePending = $this->awaitingConfirmedPhaseResume($data);
+        $minimum = max(6, $this->ReadPropertyInteger('MinAmpere'));
         // An issued phase command must be confirmed while stopped, even if the current grid budget vanishes.
         // After confirmation a new cycle checks the budget before sending any current or release command.
         if ($state !== 'confirming') {
             $phases = $this->phaseModeToPhaseCount($phaseMode);
             $ampere = $this->clampAmpere($ampere);
             $ampere = $this->applyMaxGridLoadLimit($ampere, $phases);
-            if ($ampere < max(6, $this->ReadPropertyInteger('MinAmpere'))) {
+            if ($ampere < $minimum) {
+                $this->resetPhaseDecisionObservation();
                 if ($this->GetNoChargeReason() === '') $this->SetNoChargeReason('Kein zulässiger Ladestrom');
                 return $this->stopCharging(!$resumePending);
             }
@@ -234,6 +285,7 @@ trait ChargingControl
             }
             $this->WriteAttributeInteger('LetztePhasenUmschaltung', $this->now());
             $this->clearTransition(true);
+            $this->SetTimerInterval('PVWM_PhaseTransition', 2000);
             $this->resetNoPowerCounter();
             $this->LogTemplate('ok', 'Phasenwechsel bestätigt', (string)$data['psm']);
             // Re-evaluate the complete plan on the next normal cycle before resuming.
@@ -241,20 +293,33 @@ trait ChargingControl
         }
         $charging = $data['car'] === 2 && $data['alw'] && (float)$data['nrg'][11] > 30;
         $keepResumePending = $resumePending && !$charging;
+        if ($this->isChargeEndCandidate($data)) {
+            $this->resetPhaseDecisionObservation();
+            $actualPhases = $this->phaseModeToPhaseCount($data['psm']);
+            $actualAmpere = $this->currentPhaseAmpere($actualPhases, $phases, $ampere);
+            if ($actualAmpere < $minimum) return $this->stopCharging();
+            if ($this->observeChargeEnd()) return false;
+            $this->SetNoChargeReason('Prüfe Ladeende bei unveränderter Phase');
+            return $this->startAtCurrentPhase($data, min($data['amp'], $actualAmpere), false);
+        }
         if ($data['psm'] !== $phaseMode) {
-            if ($this->phaseCooldownActive()) {
-                $this->SetNoChargeReason('Cooldown nach Phasenumschaltung aktiv');
-                // A confirmed restart may be waiting for the vehicle with zero power.
-                if (!$charging && (!$resumePending || ($data['frc'] !== 2 && !$this->chargerStopped($data)))) return $this->stopCharging();
-                // Keep the current phase within both the charging plan and the fresh grid budget.
-                if (!in_array($data['psm'], [1,2], true)) return $this->stopCharging();
-                $actualPhases = $this->phaseModeToPhaseCount($data['psm']);
-                $actualAmpere = (int)floor($ampere * $this->vehiclePhaseCount($phases) / $this->vehiclePhaseCount($actualPhases));
-                $boundedPhases = $actualPhases;
-                $actualAmpere = $this->applyMaxGridLoadLimit($actualAmpere, $boundedPhases);
-                if ($boundedPhases !== $actualPhases || $actualAmpere < max(6,$this->ReadPropertyInteger('MinAmpere'))) return $this->stopCharging(!$resumePending);
+            $cooldown = $this->phaseCooldownActive();
+            $knownPhase = in_array($data['psm'], [1,2], true);
+            $stabilize = $knownPhase && $this->ReadAttributeBoolean('SessionPowerObserved');
+            $actualPhases = $this->phaseModeToPhaseCount($data['psm']);
+            $actualAmpere = $knownPhase && ($cooldown || $stabilize) ? $this->currentPhaseAmpere($actualPhases, $phases, $ampere) : 0;
+            $targetWatts = $ampere * $this->vehiclePhaseCount($phases) * 230;
+            $currentWatts = $actualAmpere >= $minimum ? $actualAmpere * $this->vehiclePhaseCount($actualPhases) * 230 : 0;
+            $waitForStability = $stabilize && !$this->phaseChangeIsStable($phaseMode, $targetWatts, $currentWatts);
+            if ($cooldown || $waitForStability) {
+                $this->SetNoChargeReason($cooldown ? 'Cooldown nach Phasenumschaltung aktiv' : 'Warte auf stabiles Ladebudget für Phasenwechsel');
+                $canRestart = ($resumePending || $stabilize) && ($data['frc'] === 2 || $this->chargerStopped($data));
+                if ((!$charging && !$canRestart) || $actualAmpere < $minimum) {
+                    return $this->stopCharging(!$resumePending && !$stabilize);
+                }
                 return $this->startAtCurrentPhase($data, $actualAmpere, $keepResumePending);
             }
+            $this->resetPhaseDecisionObservation();
             $this->WriteAttributeInteger('PhaseTransitionTarget', $phaseMode);
             $this->WriteAttributeInteger('PhaseTransitionSamples', 0);
             $this->WriteAttributeInteger('PhaseTransitionSampleTime', $this->now());
@@ -266,6 +331,7 @@ trait ChargingControl
             if (!$this->stopCharging(false)) return $this->handlePhaseStopFailure();
             return false;
         }
+        $this->resetPhaseDecisionObservation();
         return $this->startAtCurrentPhase($data, $ampere, $keepResumePending);
     }
 
@@ -327,10 +393,9 @@ trait ChargingControl
             }
             $this->WriteAttributeInteger('ReleaseFailures', 0);
             $this->WriteAttributeInteger('ReleaseRetryAfter', 0);
-            $this->WriteAttributeInteger('LastManualStartTimestamp', $this->now());
         }
         $this->WriteAttributeBoolean('PhaseResumePending', $keepResumePending);
-        if ((float)$data['nrg'][11] < 300 && !$this->ReadAttributeBoolean('ChargingPowerObserved')) {
+        if ((float)$data['nrg'][11] < self::NO_POWER_THRESHOLD_W && !$this->ReadAttributeBoolean('ChargingPowerObserved')) {
             $this->SetNoChargeReason('Ladefreigabe angefordert – warte auf Leistungsaufnahme des Fahrzeugs');
         }
         return true;
@@ -440,6 +505,8 @@ trait ChargingControl
 
     private function holdForHouseMeasurement(array $data): void
     {
+        $this->resetNoPowerCounter();
+        $this->resetPhaseDecisionObservation();
         $mode = $this->getCurrentModeKey();
         $houseSoc = $this->ReadPropertyInteger('HausakkuSOCID');
         if (($mode === 'pv2car' && (int)$this->GetValue('PVAnteil') === 0)
@@ -488,6 +555,7 @@ trait ChargingControl
         $maxAge = max(10, $this->ReadPropertyInteger('GridMeasurementMaxAge'));
         $age = $this->now() - (int)$meta['VariableUpdated'];
         if ($age < 0 || $age > $maxAge) { $this->SetNoChargeReason('Netzlimit: Messwert veraltet'); return null; }
+        $this->gridSampleTime = (int)$meta['VariableUpdated'];
         $watts = (float)$value * ($this->ReadPropertyString('NetzleistungEinheit') === 'kW' ? 1000 : 1);
         return $this->ReadPropertyBoolean('InvertNetzleistung') ? -$watts : $watts;
     }

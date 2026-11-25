@@ -5,6 +5,13 @@ Alle Änderungen, Features & Fixes des Moduls werden hier dokumentiert.
 
 ## [Unreleased]
 
+### 🔧 Konfiguration, 1.4.11b Build 2
+- Die vier bestehenden Schwellen und Zähler der PV-Phasenwahl stehen im aufklappbaren Bereich „PV-Phasenwahl – erweitert“. Mindestabstand, Bestätigungsfrist und Fehlerreset stehen gemeinsam unter „Phasenumschaltung“.
+
+### Ladebetrieb, 1.4.11b Build 2
+- Die aktuelle Phase bleibt bei Lastschwankungen aktiv, solange das Ladebudget reicht. Nach erstem Laden benötigt der Wechsel auf 3P mindestens 90 Sekunden mit mindestens 700 W Mehrleistung. Beim Wechsel auf 1P genügen zwei frische Messwerte. Sobald ein Wechsel bestätigt ist, prüft ein kurzer Folgezyklus den Wiederanlauf.
+- Die Ladeende-Prüfung funktioniert in allen Modi ohne Fahrzeug-SoC. Bei durchgehender Freigabe und verfügbarem Ladebudget bestätigt das Modul ausbleibende Stromaufnahme in der aktuellen Phase. Abstecken oder ein bewusster Neustart hebt den Zustand für die nächste Ladung auf.
+
 ### 🐛 Stop vor Phasenwechsel und Fehlerreset
 - Transport-Timeouts beim Stop vor oder während eines Phasenwechsels werden begrenzt nachgeprüft: höchstens drei Stop-/Statusprüfungen in 120 Sekunden mit mindestens 30 Sekunden Abstand. Bis zwei aufeinanderfolgende frische Stillstandsbestätigungen vorliegen, bleiben Phasenbefehle und Ladefreigabe gesperrt. Danach wird der alte Phasenplan verworfen und erst in einem späteren Zyklus neu geprüft. Echte Ablehnungen, Wallboxfehler und ausgeschöpfte Prüfungen bleiben quittierungspflichtig.
 - Jeder Phasenfehler-Reset protokolliert Aufruf mit Instanz und bisherigem Fehler sowie Erfolg, Ablehnung mit Statuswerten oder nicht ausgeführte Aktion – auch bei ausgeschaltetem Debug-Logging.
